@@ -39,6 +39,12 @@ service cloud.firestore {
       }
     }
 
+    // Permite ao painel administrativo consultar todas as subcoleções
+    // "reservations" com collectionGroup(), independentemente do passeio.
+    match /{path=**}/reservations/{reservationId} {
+      allow read: if isAdmin();
+    }
+
     match /expenses/{expenseId} {
       allow read, write: if isAdmin();
     }
