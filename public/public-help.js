@@ -27,7 +27,7 @@
     btn.type='button';btn.className='fieldHelpBtn';btn.setAttribute('aria-label','Ver ajuda deste campo');btn.textContent='?';
     const box=document.createElement('div');
     box.className='fieldHelpBox';box.hidden=true;box.textContent=text||helpByKey[key]||'Preencha este campo conforme as informações da sua reserva.';
-    btn.onclick=e=>{e.preventDefault();e.stopPropagation();const open=!box.hidden;document.querySelectorAll('.fieldHelpBox:not([hidden])').forEach(x=>x.hidden=true);box.hidden=open;btn.classList.toggle('open',!open)};
+    btn.onclick=e=>{e.preventDefault();e.stopPropagation();const willOpen=box.hidden;document.querySelectorAll('.fieldHelpBox:not([hidden])').forEach(x=>x.hidden=true);document.querySelectorAll('.fieldHelpBtn.open').forEach(x=>x.classList.remove('open'));box.hidden=!willOpen;btn.classList.toggle('open',willOpen)};
     span.appendChild(btn);label.appendChild(box);
   }
 
@@ -43,24 +43,26 @@
   function decorateParticipants(){
     document.querySelectorAll('#participants .participant').forEach((card,i)=>{
       const head=card.querySelector('.participantHead');
-      if(head){head.textContent=i===0?'Participante 1 • Responsável':`Participante ${i+1} • Acompanhante`}
-      const nameLabel=card.querySelector('label:has([data-pname])');
-      const cpfLabel=card.querySelector('label:has([data-pcpf])');
-      addHelp(nameLabel,'participant_name',i===0?'Este é o nome do responsável pela reserva. Ele é preenchido automaticamente com o nome informado no início do cadastro.':helpByKey.participant_name);
-      addHelp(cpfLabel,'participant_cpf',i===0?'Este é o CPF do responsável pela reserva. Ele é preenchido automaticamente com o CPF informado no início do cadastro.':helpByKey.participant_cpf);
+      if(head)head.textContent=i===0?'Participante 1 • Responsável':`Participante ${i+1} • Acompanhante`;
+      const nameInput=card.querySelector('[data-pname]');
+      const cpfInput=card.querySelector('[data-pcpf]');
+      addHelp(nameInput?.closest('label'),'participant_name',i===0?'Este é o nome do responsável pela reserva. Ele é preenchido automaticamente com o nome informado no início do cadastro.':helpByKey.participant_name);
+      addHelp(cpfInput?.closest('label'),'participant_cpf',i===0?'Este é o CPF do responsável pela reserva. Ele é preenchido automaticamente com o CPF informado no início do cadastro.':helpByKey.participant_cpf);
     });
   }
 
   function decorateForm(){
-    const form=document.querySelector('#reg');if(!form||form.dataset.guided==='1'&&document.body.dataset.decorating==='1')return;
+    const form=document.querySelector('#reg');
+    if(!form||document.body.dataset.decorating==='1')return;
     document.body.dataset.decorating='1';
     form.dataset.guided='1';form.classList.add('guidedForm');
 
-    const firstTitle=form.closest('.publicFormCard')?.querySelector('.sectionTitle');
-    if(firstTitle&&!form.querySelector('.fillGuide')){
+    const card=form.closest('.publicFormCard');
+    const firstTitle=card?.querySelector('.sectionTitle');
+    if(firstTitle&&!card.querySelector('.fillGuide')){
       const guide=document.createElement('div');guide.className='fillGuide';
       guide.innerHTML='<div class="fillGuideIcon">i</div><div><strong>Como preencher</strong><p>Informe os dados do responsável e escolha quantas vagas foram compradas. Se forem 2, 3 ou mais vagas, o formulário abrirá automaticamente os dados de todos os acompanhantes.</p></div>';
-      firstTitle.parentElement.insertBefore(guide,firstTitle);
+      card.insertBefore(guide,firstTitle);
     }
 
     const name=form.querySelector('input[name="name"]')?.closest('label');
@@ -74,11 +76,10 @@
     document.querySelectorAll('[data-regopt]').forEach(el=>{
       const key=el.dataset.regopt||'extra';addHelp(el.closest('label'),key,helpByKey[key]||helpByKey.extra);
     });
-    const obs=document.querySelector('#regObservation')?.closest('label');addHelp(obs,'observation');
+    addHelp(document.querySelector('#regObservation')?.closest('label'),'observation');
     decorateParticipants();
 
-    const titles=[...document.querySelectorAll('.publicFormCard .sectionTitle h2')];
-    titles.forEach(t=>{
+    [...document.querySelectorAll('.publicFormCard .sectionTitle h2')].forEach(t=>{
       const tx=t.textContent.trim().toLowerCase();
       if(tx.includes('dados da reserva'))addSectionHelp(t,'Aqui você informa quem é o responsável pela compra, o passeio e quantas vagas foram adquiridas.');
       else if(tx.includes('informações do passeio'))addSectionHelp(t,'Estas opções mudam conforme o passeio. Selecione exatamente o que foi comprado ou combinado com a organização.');
@@ -86,7 +87,7 @@
       else if(tx.includes('política'))addSectionHelp(t,'Leia as condições de cancelamento e marque o aceite somente depois de conferir o texto.');
     });
 
-    const check=form.querySelector('input[name="accepted"]')?.closest('label');addHelp(check,'policy');
+    addHelp(form.querySelector('input[name="accepted"]')?.closest('label'),'policy');
     document.body.dataset.decorating='0';
   }
 
@@ -100,7 +101,11 @@
     if(document.querySelector('#reg'))requestAnimationFrame(decorateForm);
   });
   observer.observe(document.documentElement,{childList:true,subtree:true});
+
   document.addEventListener('click',e=>{
-    if(!e.target.closest('.fieldHelpBtn')&&!e.target.closest('.fieldHelpBox'))document.querySelectorAll('.fieldHelpBox:not([hidden])').forEach(x=>x.hidden=true);
+    if(!e.target.closest('.fieldHelpBtn')&&!e.target.closest('.fieldHelpBox')){
+      document.querySelectorAll('.fieldHelpBox:not([hidden])').forEach(x=>x.hidden=true);
+      document.querySelectorAll('.fieldHelpBtn.open').forEach(x=>x.classList.remove('open'));
+    }
   });
 })();
