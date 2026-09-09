@@ -45,7 +45,10 @@ service cloud.firestore {
           request.resource.data.status == 'active';
         allow read: if canViewReservations() || (signedIn() && reservationId == request.auth.uid);
         allow update: if canManage() ||
-          (roleIs('finance') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paid_amount','refunded_amount','payment_method','payment_status','admin_notes','updated_at'])) ||
+          (roleIs('finance') && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'paid_amount','refunded_amount','payment_method','payment_status','admin_notes','updated_at',
+            'installment_total','installments','next_due_date'
+          ])) ||
           (
             signedIn() && reservationId == request.auth.uid &&
             resource.data.status == 'active' &&
@@ -75,6 +78,12 @@ service cloud.firestore {
 
     match /expenses/{expenseId} {
       allow read, write: if canFinance();
+    }
+
+    // Documento público mínimo usado apenas para o botão de suporte no cadastro/Minha Viagem.
+    match /settings/public {
+      allow read: if true;
+      allow write: if canManage();
     }
 
     match /settings/{settingId} {
