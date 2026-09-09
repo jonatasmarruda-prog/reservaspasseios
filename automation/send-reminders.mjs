@@ -15,7 +15,7 @@ admin.initializeApp({credential:admin.credential.cert(service)});
 const db=admin.firestore();
 const FieldValue=admin.firestore.FieldValue;
 const TZ='America/Cuiaba';
-const APP_URL='https://trilheiros-reservas.web.app';
+const GOOGLE_REVIEW_URL='https://g.page/r/CcB9GU8M5QY6EAE/review';
 
 function isoInTZ(date){
   const parts=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
@@ -25,8 +25,12 @@ function isoInTZ(date){
 function brDate(iso){if(!iso)return'';const [y,m,d]=String(iso).slice(0,10).split('-');return `${d}/${m}/${y}`}
 function escHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
 function renderTemplate(text,vars){let out=String(text||'');for(const [k,v] of Object.entries(vars))out=out.replaceAll(`{{${k}}}`,String(v??''));return out}
+function linkify(text){
+  const escaped=escHtml(text).replaceAll('\n','<br>');
+  return escaped.replace(/https:\/\/g\.page\/r\/CcB9GU8M5QY6EAE\/review/g,`<a href="${GOOGLE_REVIEW_URL}" target="_blank" style="display:inline-block;margin:16px 0 6px;padding:14px 20px;border-radius:12px;background:#0d513d;color:#fff;text-decoration:none;font-weight:800">⭐ Avaliar os Trilheiros no Google</a>`);
+}
 function htmlLayout(text,title='Trilheiros de Rondonópolis'){
-  const body=escHtml(text).replaceAll('\n','<br>');
+  const body=linkify(text);
   return `<div style="margin:0;padding:24px;background:#f2f7f4;font-family:Arial,Helvetica,sans-serif;color:#173a2f"><div style="max-width:680px;margin:auto;background:#fff;border-radius:22px;overflow:hidden;border:1px solid #dce8e2;box-shadow:0 14px 40px rgba(8,47,36,.08)"><div style="padding:24px;background:linear-gradient(135deg,#06291f,#0f523e);color:#fff"><div style="font-size:12px;font-weight:800;letter-spacing:.08em">TRILHEIROS DE RONDONÓPOLIS</div><div style="font-size:24px;font-weight:800;margin-top:8px">${escHtml(title)}</div></div><div style="padding:28px;font-size:15px;line-height:1.7">${body}</div><div style="padding:16px 28px;background:#f7faf8;color:#71867e;font-size:11px">Aqui ninguém vai só. 💚 • Trilheiros de Rondonópolis</div></div></div>`;
 }
 
@@ -37,8 +41,8 @@ const defaults={
   reminder_1d_subject:'⛰️ É AMANHÃ! {{passeio}} te espera 🥾',
   reminder_1d_body:'Oi, {{nome}}! 😄\n\nÉ AMANHÃ! 🥾⛰️\nChegou a hora de separar a roupa, carregar o celular e preparar a animação porque {{passeio}} está logo ali!\n\n📅 Data: {{data}}\n📍 Destino: {{destino}}\n🕒 Saída: {{saida}}\n👥 Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Último recado: {{lembrete_extra}}\n🔖 Protocolo: {{protocolo}}\n\nConfira tudo hoje para amanhã ser só colocar o tênis e ir. 😄\n\nDinheiro volta, tempo não. Viva essa experiência! 💚\nTrilheiros de Rondonópolis',
   post_trip_enabled:false,
-  post_trip_subject:'💚 E aí, como foi {{passeio}}?',
-  post_trip_body:'Oi, {{nome}}! 😄\n\nEsperamos que {{passeio}} tenha rendido boas histórias e fotos incríveis.\n\nConta pra gente como foi sua experiência. Sua opinião ajuda muito a melhorar os próximos passeios:\n{{avaliacao_link}}\n\nObrigado por caminhar com a gente! 🌿\nTrilheiros de Rondonópolis'
+  post_trip_subject:'⭐ Como foi {{passeio}}? Conta pra gente no Google!',
+  post_trip_body:'Oi, {{nome}}! 😄\n\nEsperamos que {{passeio}} tenha rendido boas histórias, fotos incríveis e aquela sensação boa de ter vivido algo diferente. 🌿🥾\n\nSe você curtiu a experiência, deixa uma avaliação para os Trilheiros no Google. É rapidinho e ajuda outras pessoas a conhecerem nosso trabalho. 💚\n\n{{avaliacao_link}}\n\nSua opinião faz diferença de verdade. Obrigado por caminhar com a gente!\n\nTrilheiros de Rondonópolis'
 };
 
 const settingsSnap=await db.collection('settings').doc('communications').get();
@@ -67,7 +71,7 @@ for(const target of targets){
       const vars={
         nome:r.responsible_name||'',passeio:trip.name||'',data:brDate(trip.trip_date),destino:trip.destination||'',
         saida:trip.departure_time||'',participantes,levar:trip.what_to_bring||'',lembrete_extra:trip.reminder_notes||'',
-        protocolo:r.protocol||'',politica:r.policy_text||trip.cancellation_policy||'',avaliacao_link:`${APP_URL}/avaliacao/${tripDoc.id}`
+        protocolo:r.protocol||'',politica:r.policy_text||trip.cancellation_policy||'',avaliacao_link:GOOGLE_REVIEW_URL
       };
       const subject=renderTemplate(target.subject,vars);
       const text=renderTemplate(target.body,vars);
