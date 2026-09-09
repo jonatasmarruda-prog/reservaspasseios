@@ -1,0 +1,29 @@
+name: Teste único de e-mails
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/email-test-once.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Enviar 3 e-mails de teste para a reserva mais recente
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: node automation/send-test-latest.mjs
