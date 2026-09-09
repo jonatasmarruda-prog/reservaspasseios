@@ -37,6 +37,19 @@ service cloud.firestore {
         );
         allow delete: if isAdmin();
       }
+
+      match /operations/{operationId} {
+        allow read, write: if isAdmin();
+      }
+
+      match /feedback/{feedbackId} {
+        allow create: if signedIn() && feedbackId == request.auth.uid &&
+          request.resource.data.rating is int &&
+          request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+        allow read: if isAdmin() || (signedIn() && feedbackId == request.auth.uid);
+        allow update: if signedIn() && feedbackId == request.auth.uid;
+        allow delete: if isAdmin();
+      }
     }
 
     match /{path=**}/reservations/{reservationId} {
@@ -48,6 +61,19 @@ service cloud.firestore {
     }
 
     match /settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /audit_logs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /trash/{trashId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /admin_users/{userId} {
       allow read, write: if isAdmin();
     }
 
