@@ -1,4 +1,4 @@
-name: Publicar Trilheiros no Firebase
+name: Publicar Trilheiros no Firebase Spark
 
 on:
   workflow_dispatch:
@@ -15,9 +15,6 @@ jobs:
         with:
           node-version: 20
 
-      - name: Instalar dependências das Functions
-        run: npm --prefix functions install
-
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools
 
@@ -26,11 +23,5 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Configurar remetente
-        run: printf 'EMAIL_FROM=%s\n' "${{ secrets.EMAIL_FROM }}" > functions/.env
-
-      - name: Atualizar segredo do Resend
-        run: printf '%s' "${{ secrets.RESEND_API_KEY }}" | firebase functions:secrets:set RESEND_API_KEY --project trilheiros-reservas --data-file=- --force
-
-      - name: Publicar Firestore, Functions e Hosting
-        run: firebase deploy --project trilheiros-reservas --only firestore,functions,hosting --non-interactive
+      - name: Publicar Firestore e Hosting
+        run: firebase deploy --project trilheiros-reservas --only firestore,hosting --non-interactive
