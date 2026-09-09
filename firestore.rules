@@ -2,23 +2,38 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function isAdmin() {
+    function isOwner() {
       return signedIn() && request.auth.token.email == 'trilheiros.roomt@gmail.com';
     }
+    function staffExists() {
+      return signedIn() && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+    function staffActive() {
+      return staffExists() && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.active == true;
+    }
+    function roleIs(role) {
+      return staffActive() && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == role;
+    }
+    function canManage() { return isOwner() || roleIs('admin'); }
+    function canFinance() { return canManage() || roleIs('finance'); }
+    function canOperate() { return canManage() || roleIs('support'); }
+    function canViewReservations() { return canManage() || roleIs('finance') || roleIs('support'); }
 
     match /trips/{tripId} {
       allow read: if true;
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (
-        signedIn() &&
-        !exists(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
-        existsAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used_spots','remaining_spots','updated_at']) &&
-        request.resource.data.used_spots > resource.data.used_spots &&
-        request.resource.data.remaining_spots >= 0 &&
-        request.resource.data.remaining_spots == resource.data.remaining_spots - (request.resource.data.used_spots - resource.data.used_spots) &&
-        getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - resource.data.used_spots
-      );
+      allow create, delete: if canManage();
+      allow update: if canManage() ||
+        (roleIs('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checklist','updated_at'])) ||
+        (
+          signedIn() &&
+          !exists(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+          existsAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used_spots','remaining_spots','updated_at']) &&
+          request.resource.data.used_spots > resource.data.used_spots &&
+          request.resource.data.remaining_spots >= 0 &&
+          request.resource.data.remaining_spots == resource.data.remaining_spots - (request.resource.data.used_spots - resource.data.used_spots) &&
+          getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - resource.data.used_spots
+        );
 
       match /reservations/{reservationId} {
         allow create: if signedIn() && reservationId == request.auth.uid &&
@@ -28,53 +43,56 @@ service cloud.firestore {
           request.resource.data.participants.size() == request.resource.data.seats &&
           request.resource.data.policy_accepted == true &&
           request.resource.data.status == 'active';
-        allow read: if isAdmin() || (signedIn() && reservationId == request.auth.uid);
-        allow update: if isAdmin() || (
-          signedIn() && reservationId == request.auth.uid &&
-          resource.data.status == 'active' &&
-          request.resource.data.status == 'cancel_requested' &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancel_reason','cancel_requested_at','updated_at'])
-        );
-        allow delete: if isAdmin();
+        allow read: if canViewReservations() || (signedIn() && reservationId == request.auth.uid);
+        allow update: if canManage() ||
+          (roleIs('finance') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paid_amount','refunded_amount','payment_method','payment_status','admin_notes','updated_at'])) ||
+          (
+            signedIn() && reservationId == request.auth.uid &&
+            resource.data.status == 'active' &&
+            request.resource.data.status == 'cancel_requested' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancel_reason','cancel_requested_at','updated_at'])
+          );
+        allow delete: if canManage();
       }
 
       match /operations/{operationId} {
-        allow read, write: if isAdmin();
+        allow read, write: if canOperate();
       }
 
       match /feedback/{feedbackId} {
         allow create: if signedIn() && feedbackId == request.auth.uid &&
           request.resource.data.rating is int &&
           request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
-        allow read: if isAdmin() || (signedIn() && feedbackId == request.auth.uid);
+        allow read: if canViewReservations() || (signedIn() && feedbackId == request.auth.uid);
         allow update: if signedIn() && feedbackId == request.auth.uid;
-        allow delete: if isAdmin();
+        allow delete: if canManage();
       }
     }
 
     match /{path=**}/reservations/{reservationId} {
-      allow read: if isAdmin();
+      allow read: if canViewReservations();
     }
 
     match /expenses/{expenseId} {
-      allow read, write: if isAdmin();
+      allow read, write: if canFinance();
     }
 
     match /settings/{settingId} {
-      allow read, write: if isAdmin();
+      allow read, write: if canManage();
     }
 
     match /audit_logs/{logId} {
-      allow read, create: if isAdmin();
+      allow read, create: if canManage();
       allow update, delete: if false;
     }
 
     match /trash/{trashId} {
-      allow read, write: if isAdmin();
+      allow read, write: if canManage();
     }
 
     match /admin_users/{userId} {
-      allow read, write: if isAdmin();
+      allow read: if isOwner() || (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isOwner();
     }
 
     match /{document=**} {
