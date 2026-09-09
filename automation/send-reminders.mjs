@@ -40,7 +40,7 @@ const defaults={
   reminder_3d_body:'Oi, {{nome}}! 😄\n\nOs Trilheiros passando para dar aquele toque: faltam só 3 dias para {{passeio}}! 🥾🌿\n\nJá está entrando no clima? Dá uma conferida rapidinha:\n✅ Data: {{data}}\n✅ Destino: {{destino}}\n✅ Horário de saída: {{saida}}\n✅ Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Recado do passeio: {{lembrete_extra}}\n\nSe estiver tudo certo, agora é só começar a contagem regressiva. 😄\n\nAqui ninguém vai só. 💚\nTrilheiros de Rondonópolis',
   reminder_1d_subject:'⛰️ É AMANHÃ! {{passeio}} te espera 🥾',
   reminder_1d_body:'Oi, {{nome}}! 😄\n\nÉ AMANHÃ! 🥾⛰️\nChegou a hora de separar a roupa, carregar o celular e preparar a animação porque {{passeio}} está logo ali!\n\n📅 Data: {{data}}\n📍 Destino: {{destino}}\n🕒 Saída: {{saida}}\n👥 Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Último recado: {{lembrete_extra}}\n🔖 Protocolo: {{protocolo}}\n\nConfira tudo hoje para amanhã ser só colocar o tênis e ir. 😄\n\nDinheiro volta, tempo não. Viva essa experiência! 💚\nTrilheiros de Rondonópolis',
-  post_trip_enabled:false,
+  post_trip_enabled:true,
   post_trip_subject:'⭐ Como foi {{passeio}}? Conta pra gente no Google!',
   post_trip_body:'Oi, {{nome}}! 😄\n\nEsperamos que {{passeio}} tenha rendido boas histórias, fotos incríveis e aquela sensação boa de ter vivido algo diferente. 🌿🥾\n\nSe você curtiu a experiência, deixa uma avaliação para os Trilheiros no Google. É rapidinho e ajuda outras pessoas a conhecerem nosso trabalho. 💚\n\n{{avaliacao_link}}\n\nSua opinião faz diferença de verdade. Obrigado por caminhar com a gente!\n\nTrilheiros de Rondonópolis'
 };
@@ -51,9 +51,9 @@ if(settings.enabled===false){console.log('Lembretes automáticos desativados no 
 
 const targets=[
   {days:3,field:'reminder_3d_sent_at',subject:settings.reminder_3d_subject,body:settings.reminder_3d_body,label:'3 dias antes'},
-  {days:1,field:'reminder_1d_sent_at',subject:settings.reminder_1d_subject,body:settings.reminder_1d_body,label:'1 dia antes'}
+  {days:1,field:'reminder_1d_sent_at',subject:settings.reminder_1d_subject,body:settings.reminder_1d_body,label:'1 dia antes'},
+  {days:-1,field:'post_trip_sent_at',subject:settings.post_trip_subject||defaults.post_trip_subject,body:settings.post_trip_body||defaults.post_trip_body,label:'pós-passeio • Google'}
 ];
-if(settings.post_trip_enabled)targets.push({days:-1,field:'post_trip_sent_at',subject:settings.post_trip_subject,body:settings.post_trip_body,label:'pós-passeio'});
 
 let sent=0,skipped=0,failed=0;
 for(const target of targets){
