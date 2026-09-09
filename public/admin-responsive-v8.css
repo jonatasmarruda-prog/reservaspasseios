@@ -1,0 +1,516 @@
+/* Trilheiros Gestão — Responsividade Premium V8
+   Corrige sobreposição do menu lateral e protege layout em celular, tablet e desktop. */
+
+/* Estrutura: sidebar nunca sobrepõe navegação */
+.admin.v7{
+  grid-template-columns:250px minmax(0,1fr);
+  min-height:100dvh;
+  overflow:visible;
+}
+
+.admin.v7 .side{
+  width:250px;
+  height:100dvh;
+  min-height:0;
+  padding:16px 13px 12px;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden !important;
+  overscroll-behavior:contain;
+}
+
+.admin.v7 .side>.brand,
+.admin.v7 .side>.roleBadge,
+.admin.v7 .side>.mobileClose{
+  flex:0 0 auto;
+}
+
+.admin.v7 .side .brand{
+  min-width:0;
+  padding-right:4px;
+}
+
+.admin.v7 .side .brand>div:last-child{
+  min-width:0;
+  overflow:hidden;
+}
+
+.admin.v7 .side .brand small,
+.admin.v7 .side .brand>div:last-child{
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+.admin.v7 .nav{
+  flex:1 1 auto;
+  min-height:0;
+  margin-top:10px;
+  padding:0 4px 14px 0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.25) transparent;
+}
+
+.admin.v7 .nav::-webkit-scrollbar{width:5px}
+.admin.v7 .nav::-webkit-scrollbar-track{background:transparent}
+.admin.v7 .nav::-webkit-scrollbar-thumb{background:rgba(255,255,255,.22);border-radius:999px}
+
+.admin.v7 .navGroup{
+  padding:15px 10px 6px;
+  line-height:1.2;
+}
+
+.admin.v7 .nav button{
+  width:100%;
+  min-height:43px;
+  margin:0 0 4px;
+  padding:10px 11px;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  line-height:1.25;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+/* Rodapé do menu: separado da navegação, sem position absolute */
+.admin.v7 .sideBottom{
+  position:static !important;
+  left:auto !important;
+  right:auto !important;
+  bottom:auto !important;
+  flex:0 0 auto;
+  margin-top:0;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.10);
+  background:linear-gradient(180deg,rgba(6,41,31,.02),rgba(6,41,31,.96) 18%);
+}
+
+.admin.v7 .sideBottom .sync{
+  min-height:38px;
+  margin:0 0 7px;
+  display:flex;
+  align-items:center;
+  line-height:1.25;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+
+.admin.v7 .sideBottom .btn,
+.admin.v7 .sideBottom .sideInstall .btn{
+  width:100%;
+  min-height:43px;
+  margin:0 0 6px;
+  padding:9px 10px;
+  white-space:normal;
+  line-height:1.2;
+}
+
+.admin.v7 .sideInstall{margin:0}
+
+/* Área principal nunca é empurrada além da tela */
+.admin.v7 .adminMain{
+  min-width:0;
+  width:100%;
+  overflow-x:hidden;
+}
+
+.admin.v7 .adminHead{
+  height:auto;
+  min-height:84px;
+  padding:13px 22px;
+  gap:14px;
+  flex-wrap:wrap;
+}
+
+.admin.v7 .adminTitleWrap,
+.admin.v7 .adminV7Tools,
+.admin.v7 .adminV6HeadActions{
+  min-width:0;
+}
+
+.admin.v7 .adminV7Tools,
+.admin.v7 .adminV6HeadActions{
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.admin.v7 .globalSearchWrap{
+  width:clamp(210px,26vw,340px);
+  max-width:100%;
+  flex:1 1 230px;
+}
+
+.admin.v7 .adminContent{
+  width:100%;
+  min-width:0;
+  padding:24px;
+}
+
+.admin.v7 .panel,
+.admin.v7 .metric,
+.admin.v7 .welcomeV7,
+.admin.v7 .dashGridV7,
+.admin.v7 .dayGrid,
+.admin.v7 .settingsGrid{
+  min-width:0;
+}
+
+/* Nenhum texto deve atravessar outro elemento */
+.admin.v7 h1,
+.admin.v7 h2,
+.admin.v7 h3,
+.admin.v7 strong,
+.admin.v7 p,
+.admin.v7 small,
+.admin.v7 span,
+.admin.v7 td,
+.admin.v7 th,
+.admin.v7 button{
+  overflow-wrap:anywhere;
+}
+
+.admin.v7 .panelHead{
+  flex-wrap:wrap;
+  align-items:flex-start;
+}
+
+.admin.v7 .toolbar,
+.admin.v7 .financeTop,
+.admin.v7 .commActions,
+.admin.v7 .successActions{
+  flex-wrap:wrap;
+}
+
+/* Tabelas: rolagem horizontal controlada, sem quebrar a página inteira */
+.admin.v7 .tableWrap{
+  width:100%;
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-x:contain;
+}
+
+.admin.v7 .table{
+  width:100%;
+  min-width:880px;
+}
+
+.admin.v7 .actions{
+  flex-wrap:wrap;
+  min-width:150px;
+}
+
+/* Modais respeitam qualquer tamanho de tela */
+.admin.v7~.modalBack,
+.modalBack{
+  padding:max(10px,env(safe-area-inset-top)) 10px max(10px,env(safe-area-inset-bottom));
+  overflow:auto;
+  align-items:center;
+}
+
+.modalBack .modal{
+  width:min(840px,calc(100vw - 20px));
+  max-width:calc(100vw - 20px);
+  max-height:calc(100dvh - 20px);
+  margin:auto;
+}
+
+.modalBack .modalHead{
+  position:sticky;
+  top:0;
+  z-index:4;
+  background:rgba(255,255,255,.97);
+  backdrop-filter:blur(12px);
+  gap:10px;
+  align-items:flex-start;
+}
+
+.modalBack .modalHead>div{min-width:0;flex:1}
+.modalBack .modalFoot{
+  position:sticky;
+  bottom:0;
+  z-index:4;
+  background:rgba(255,255,255,.97);
+  backdrop-filter:blur(12px);
+  flex-wrap:wrap;
+}
+
+/* Cards complexos */
+.admin.v7 .welcomeV7{flex-wrap:wrap}
+.admin.v7 .welcomeStats{flex-wrap:wrap}
+.admin.v7 .welcomeStats>div{flex:1 1 90px}
+.admin.v7 .premiumMetrics{grid-template-columns:repeat(5,minmax(0,1fr))}
+.admin.v7 .dashGridV7{grid-template-columns:minmax(0,1.45fr) minmax(260px,.75fr)}
+.admin.v7 .dayGrid{grid-template-columns:minmax(0,1fr) minmax(280px,330px)}
+.admin.v7 .dayPerson{grid-template-columns:40px minmax(150px,1fr) minmax(280px,1.2fr)}
+.admin.v7 .dayAlloc{grid-template-columns:minmax(105px,1.2fr) minmax(105px,1.2fr) minmax(75px,.65fr)}
+.admin.v7 .reportCards{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+/* Notebook / tablet grande */
+@media (max-width:1180px) and (min-width:901px){
+  .admin.v7{grid-template-columns:230px minmax(0,1fr)}
+  .admin.v7 .side{width:230px;padding-left:11px;padding-right:11px}
+  .admin.v7 .side .brand>div:last-child{font-size:12px}
+  .admin.v7 .adminContent{padding:18px}
+  .admin.v7 .premiumMetrics{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .admin.v7 .dashGridV7{grid-template-columns:1fr}
+  .admin.v7 .reportCards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin.v7 .dayGrid{grid-template-columns:1fr}
+  .admin.v7 .globalSearchWrap{width:240px}
+}
+
+/* Celular / tablet */
+@media (max-width:900px){
+  .admin.v7{
+    display:block;
+    min-height:100dvh;
+  }
+
+  .admin.v7 .side{
+    position:fixed;
+    top:0;
+    bottom:0;
+    left:calc(-1 * min(88vw,330px) - 18px);
+    width:min(88vw,330px);
+    max-width:330px;
+    height:100dvh;
+    z-index:100;
+    padding:15px 12px 10px;
+    transition:left .22s ease,box-shadow .22s ease;
+    box-shadow:none;
+  }
+
+  .admin.v7 .side.open{
+    left:0;
+    box-shadow:20px 0 60px rgba(0,0,0,.32);
+  }
+
+  .admin.v7 .side .brand{
+    padding-right:45px;
+    min-height:54px;
+  }
+
+  .admin.v7 .side .mark{
+    width:50px;
+    height:50px;
+    flex-basis:50px;
+  }
+
+  .admin.v7 .mobileClose{
+    display:grid;
+    place-items:center;
+    top:14px;
+    right:12px;
+    z-index:5;
+  }
+
+  .admin.v7 .nav{
+    margin-top:5px;
+    padding-bottom:12px;
+  }
+
+  .admin.v7 .navGroup{padding-top:13px}
+  .admin.v7 .nav button{min-height:44px;font-size:13px}
+
+  .admin.v7 .sideBottom{
+    padding-bottom:max(2px,env(safe-area-inset-bottom));
+  }
+
+  .admin.v7 .adminHead{
+    position:sticky;
+    top:0;
+    min-height:70px;
+    padding:10px 12px;
+    align-items:center;
+  }
+
+  .admin.v7 .adminHead h1{
+    font-size:18px;
+    line-height:1.15;
+  }
+
+  .admin.v7 .adminHead .eyebrow{font-size:8px}
+  .admin.v7 .mobileMenu{flex:0 0 auto}
+
+  .admin.v7 .adminV7Tools,
+  .admin.v7 .adminV6HeadActions{
+    width:100%;
+    justify-content:flex-start;
+    gap:7px;
+  }
+
+  .admin.v7 .globalSearchWrap{
+    order:5;
+    flex:1 1 100%;
+    width:100%;
+    height:42px;
+  }
+
+  .admin.v7 .networkBadge{
+    max-width:110px;
+    white-space:nowrap;
+  }
+
+  .admin.v7 .adminContent{
+    padding:12px;
+  }
+
+  .admin.v7 .welcomeV7{
+    padding:20px;
+    border-radius:21px;
+    gap:16px;
+  }
+
+  .admin.v7 .welcomeV7 h2{font-size:24px;line-height:1.1}
+  .admin.v7 .welcomeStats{width:100%}
+  .admin.v7 .premiumMetrics,
+  .admin.v7 .metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin.v7 .dashGridV7,
+  .admin.v7 .dayGrid,
+  .admin.v7 .settingsGrid{grid-template-columns:1fr}
+  .admin.v7 .dayStats{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .admin.v7 .reportCards{grid-template-columns:repeat(2,minmax(0,1fr));padding:12px}
+  .admin.v7 .feedbackList{grid-template-columns:1fr;padding:12px}
+  .admin.v7 .reportTripSelect{padding:14px 14px 0}
+  .admin.v7 .commCard,.admin.v7 .templateHelp{margin-left:12px;margin-right:12px}
+  .admin.v7 .commActions{padding-left:12px;padding-right:12px}
+
+  .admin.v7 .dayPerson{
+    grid-template-columns:40px minmax(0,1fr);
+    align-items:start;
+  }
+
+  .admin.v7 .dayAlloc{
+    grid-column:1/-1;
+    grid-template-columns:1fr 1fr 90px;
+    padding-left:50px;
+  }
+
+  .admin.v7 .pendingItem{
+    grid-template-columns:90px minmax(0,1fr);
+  }
+  .admin.v7 .pendingItem>*:last-child{grid-column:1/-1}
+
+  .admin.v7 .rankList>div{
+    grid-template-columns:28px minmax(100px,1fr) auto;
+  }
+  .admin.v7 .rankBar{grid-column:2/-1}
+
+  .modalBack .modalBody{padding:17px}
+  .modalBack .grid.two,
+  .modalBack .grid.three{grid-template-columns:1fr}
+  .modalBack .modalFoot .btn{flex:1 1 140px}
+}
+
+/* Telefones */
+@media (max-width:560px){
+  .admin.v7 .adminHead{
+    padding:9px 9px;
+  }
+
+  .admin.v7 .adminTitleWrap{
+    width:100%;
+  }
+
+  .admin.v7 .adminV7Tools,
+  .admin.v7 .adminV6HeadActions{
+    display:grid;
+    grid-template-columns:auto auto auto 1fr;
+    align-items:center;
+  }
+
+  .admin.v7 .globalSearchWrap{
+    grid-column:1/-1;
+    grid-row:2;
+  }
+
+  .admin.v7 #newTrip{
+    min-width:0;
+    padding-left:10px;
+    padding-right:10px;
+    font-size:11px;
+  }
+
+  .admin.v7 .installBtn{display:none}
+
+  .admin.v7 .premiumMetrics,
+  .admin.v7 .metrics,
+  .admin.v7 .dayStats{grid-template-columns:1fr}
+
+  .admin.v7 .metric{
+    padding:15px;
+  }
+
+  .admin.v7 .metric strong{font-size:21px}
+
+  .admin.v7 .panel{
+    border-radius:17px;
+  }
+
+  .admin.v7 .panelHead{
+    padding:15px;
+  }
+
+  .admin.v7 .panelHead .toolbar{
+    width:100%;
+  }
+
+  .admin.v7 .panelHead .toolbar .btn{
+    flex:1 1 130px;
+  }
+
+  .admin.v7 .reportCards{grid-template-columns:1fr}
+  .admin.v7 .reportCards button{min-height:125px}
+  .admin.v7 .dayHeader{align-items:stretch;flex-direction:column}
+  .admin.v7 .dayHeader select{max-width:none}
+
+  .admin.v7 .dayAlloc{
+    grid-template-columns:1fr;
+    padding-left:0;
+  }
+
+  .admin.v7 .detailGrid{grid-template-columns:1fr 1fr}
+  .admin.v7 .timelineList>div{grid-template-columns:1fr;gap:4px}
+  .admin.v7 .peopleDetail>div{gap:7px;flex-direction:column}
+  .admin.v7 .financeTop{justify-content:stretch;flex-direction:column}
+  .admin.v7 .financeTop select{max-width:none}
+
+  .modalBack{padding:5px}
+  .modalBack .modal{
+    width:calc(100vw - 10px);
+    max-width:calc(100vw - 10px);
+    max-height:calc(100dvh - 10px);
+    border-radius:18px;
+  }
+  .modalBack .modalHead{padding:15px}
+  .modalBack .modalBody{padding:14px}
+  .modalBack .modalFoot{padding:11px}
+}
+
+/* Aparelhos muito estreitos */
+@media (max-width:380px){
+  .admin.v7 .side{width:92vw;max-width:310px;left:calc(-92vw - 18px)}
+  .admin.v7 .side.open{left:0}
+  .admin.v7 .adminContent{padding:8px}
+  .admin.v7 .detailGrid{grid-template-columns:1fr}
+  .admin.v7 .welcomeV7{padding:16px}
+  .admin.v7 .adminHead h1{font-size:16px}
+  .admin.v7 .adminV7Tools,
+  .admin.v7 .adminV6HeadActions{grid-template-columns:auto auto 1fr}
+  .admin.v7 .notifyBell{width:40px}
+}
+
+/* Modo escuro mantém contraste e legibilidade */
+.adminDark .admin.v7 .adminHead,
+.adminDark .modalBack .modalHead,
+.adminDark .modalBack .modalFoot{
+  backdrop-filter:blur(14px);
+}
+
+/* Respeita usuários que reduzem animação */
+@media (prefers-reduced-motion:reduce){
+  .admin.v7 .side{transition:none}
+}
