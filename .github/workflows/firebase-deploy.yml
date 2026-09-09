@@ -1,0 +1,36 @@
+name: Publicar Trilheiros no Firebase
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependências das Functions
+        run: npm --prefix functions install
+
+      - name: Instalar Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Configurar remetente
+        run: printf 'EMAIL_FROM=%s\n' "${{ secrets.EMAIL_FROM }}" > functions/.env
+
+      - name: Atualizar segredo do Resend
+        run: printf '%s' "${{ secrets.RESEND_API_KEY }}" | firebase functions:secrets:set RESEND_API_KEY --project "${{ secrets.FIREBASE_PROJECT_ID }}" --data-file=- --force
+
+      - name: Publicar Firestore, Functions e Hosting
+        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only firestore,functions,hosting --non-interactive

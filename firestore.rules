@@ -1,0 +1,8 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Segurança: o navegador não acessa o banco diretamente.
+    // Todo acesso passa pelas Cloud Functions (Admin SDK).
+    match /{document=**} { allow read, write: if false; }
+  }
+}
