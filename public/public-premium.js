@@ -3,7 +3,7 @@
   function publicLogo(){
     return `<a class="publicBrand" href="/" aria-label="Trilheiros de Rondonópolis">
       <img src="https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis" class="publicLogo">
-      <div class="publicBrandCopy"><strong>TRILHEIROS</strong><span>de Rondonópolis</span></div>
+      <div class="publicBrandCopy"><strong>TRILHEIROS</strong><span>DE RONDONÓPOLIS</span></div>
     </a>`;
   }
 
@@ -25,19 +25,19 @@
           <span class="publicEyebrow">CONFIRMAÇÃO DE PARTICIPAÇÃO</span>
           <p class="publicKicker">Você está se cadastrando para</p>
           <h1>${esc(name)}</h1>
-          <p class="publicHeroText">Preencha seus dados com atenção para confirmar sua participação e manter sua vaga vinculada corretamente ao passeio.</p>
+          <p class="publicHeroText">Preencha os dados de todas as pessoas que irão participar. Se você comprou mais de uma vaga, informe também nome e CPF de cada acompanhante.</p>
           ${details.length?`<div class="heroInfoGrid">${details.join('')}</div>`:''}
         </div>
         <div class="publicHeroSeal">
           <span class="sealIcon">✓</span>
-          <div><strong>Cadastro seguro</strong><small>Dados organizados para sua viagem</small></div>
+          <div><strong>Cadastro organizado</strong><small>Uma reserva pode incluir você e seus acompanhantes</small></div>
         </div>
       </div>
     </section>`;
   }
 
   registration=async function(id=''){
-    app.innerHTML=`<main class="publicPage"><header class="publicTop"><div class="publicTopInner">${publicLogo()}${id?'':`<a class="publicAdminLink" href="/admin">Área administrativa</a>`}</div></header><div id="publicHeroMount"><section class="publicHero publicHeroLoading"><div class="publicHeroInner"><div class="publicHeroContent"><span class="publicEyebrow">TRILHEIROS DE RONDONÓPOLIS</span><h1>Preparando seu cadastro...</h1></div></div></section></div><section class="card publicFormCard"><div class="empty">Carregando informações do passeio...</div></section><div class="publicTrust"><span>✓ Cadastro organizado</span><span>✓ Controle de vagas</span><span>✓ Dados sincronizados</span></div><footer class="publicFooter"><strong>Trilheiros de Rondonópolis</strong><span>Natureza, segurança e experiências para guardar na memória.</span></footer></main>`;
+    app.innerHTML=`<main class="publicPage"><header class="publicTop"><div class="publicTopInner">${publicLogo()}${id?'':`<a class="publicAdminLink" href="/admin">Área administrativa</a>`}</div></header><div id="publicHeroMount"><section class="publicHero publicHeroLoading"><div class="publicHeroInner"><div class="publicHeroContent"><span class="publicEyebrow">TRILHEIROS DE RONDONÓPOLIS</span><h1>Preparando seu cadastro...</h1></div></div></section></div><section class="card publicFormCard"><div class="empty">Carregando informações do passeio...</div></section><div class="publicTrust"><span>✓ Cadastro organizado</span><span>✓ Controle de vagas</span><span>✓ Você + acompanhantes</span></div><footer class="publicFooter"><strong>Trilheiros de Rondonópolis</strong><span>Natureza, segurança e experiências para guardar na memória.</span></footer></main>`;
     try{
       await ensureAnon();
       let trips;
