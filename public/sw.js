@@ -1,5 +1,5 @@
-const CACHE='trilheiros-admin-v9-20260909';
-const APP_SHELL=['/','/admin','/offline.html','/manifest.webmanifest','/app.css','/premium.css','/features-v2.css','/public-premium.css','/public-flow-v3.css','/public-polish-v5.css','/public-simple-v9.css','/admin-v6.css','/admin-v7.css','/admin-responsive-v8.css','/spark.js','/admin-fix.js','/features-v2.js','/public-premium.js','/public-flow-v4.js','/public-polish-v5.js','/preboot.js','/v7-overrides.js','/public-simple-v9.js','/pwa.js','/admin-v6.js','/admin-v7.js','/admin-v7-access.js','/admin-v7-runtime-fix.js','/app-icon-192.svg','/app-icon-512.svg'];
+const CACHE='trilheiros-admin-v10-20260909';
+const APP_SHELL=['/','/admin','/offline.html','/manifest.webmanifest','/app.css','/premium.css','/features-v2.css','/public-premium.css','/public-flow-v3.css','/public-polish-v5.css','/public-simple-v9.css','/admin-v6.css','/admin-v7.css','/admin-responsive-v8.css','/enhancements-v10.css','/spark.js','/admin-fix.js','/features-v2.js','/public-premium.js','/public-flow-v4.js','/public-polish-v5.js','/preboot.js','/v7-overrides.js','/public-simple-v9.js','/pwa.js','/admin-v6.js','/admin-v7.js','/admin-v7-access.js','/admin-v7-runtime-fix.js','/enhancements-v10.js','/app-icon-192.svg','/app-icon-512.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(APP_SHELL)).then(()=>self.skipWaiting()));
