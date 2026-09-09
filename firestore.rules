@@ -1,8 +1,50 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Segurança: o navegador não acessa o banco diretamente.
-    // Todo acesso passa pelas Cloud Functions (Admin SDK).
-    match /{document=**} { allow read, write: if false; }
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email == 'trilheiros.roomt@gmail.com';
+    }
+
+    match /trips/{tripId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        signedIn() &&
+        !exists(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+        existsAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used_spots','remaining_spots','updated_at']) &&
+        request.resource.data.used_spots > resource.data.used_spots &&
+        request.resource.data.remaining_spots >= 0 &&
+        request.resource.data.remaining_spots == resource.data.remaining_spots - (request.resource.data.used_spots - resource.data.used_spots) &&
+        getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - resource.data.used_spots
+      );
+
+      match /reservations/{reservationId} {
+        allow create: if signedIn() && reservationId == request.auth.uid &&
+          request.resource.data.seats is int &&
+          request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
+          request.resource.data.participants is list &&
+          request.resource.data.participants.size() == request.resource.data.seats &&
+          request.resource.data.policy_accepted == true &&
+          request.resource.data.status == 'active';
+        allow read: if isAdmin() || (signedIn() && reservationId == request.auth.uid);
+        allow update: if isAdmin() || (
+          signedIn() && reservationId == request.auth.uid &&
+          resource.data.status == 'active' &&
+          request.resource.data.status == 'cancel_requested' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancel_reason','cancel_requested_at','updated_at'])
+        );
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }
