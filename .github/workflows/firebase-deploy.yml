@@ -30,7 +30,7 @@ jobs:
         run: printf 'EMAIL_FROM=%s\n' "${{ secrets.EMAIL_FROM }}" > functions/.env
 
       - name: Atualizar segredo do Resend
-        run: printf '%s' "${{ secrets.RESEND_API_KEY }}" | firebase functions:secrets:set RESEND_API_KEY --project "${{ secrets.FIREBASE_PROJECT_ID }}" --data-file=- --force
+        run: printf '%s' "${{ secrets.RESEND_API_KEY }}" | firebase functions:secrets:set RESEND_API_KEY --project trilheiros-reservas --data-file=- --force
 
       - name: Publicar Firestore, Functions e Hosting
-        run: firebase deploy --project "${{ secrets.FIREBASE_PROJECT_ID }}" --only firestore,functions,hosting --non-interactive
+        run: firebase deploy --project trilheiros-reservas --only firestore,functions,hosting --non-interactive
