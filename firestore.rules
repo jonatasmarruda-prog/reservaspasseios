@@ -31,7 +31,13 @@ service cloud.firestore {
       return signedIn() &&
         saleId == request.auth.uid &&
         request.resource.data.claimed_uid == request.auth.uid &&
-        request.resource.data.source == 'public_portal_v25' &&
+        (
+          request.resource.data.source == 'public_portal_v25' ||
+          (
+            request.resource.data.source == 'public_portal_v27' &&
+            request.resource.data.channel == 'canva_reserva_passeios'
+          )
+        ) &&
         request.resource.data.sale_status == 'active' &&
         request.resource.data.registration_status == 'completed' &&
         request.resource.data.payment_status == 'pending' &&
@@ -45,10 +51,33 @@ service cloud.firestore {
         request.resource.data.participants is list &&
         request.resource.data.participants.size() == request.resource.data.seats;
     }
+    function publicPortalTripCreate(tripId) {
+      return signedIn() &&
+        request.resource.data.source == 'public_portal_v27_auto' &&
+        request.resource.data.portal_template_id == tripId &&
+        request.resource.data.name is string &&
+        request.resource.data.destination is string &&
+        request.resource.data.trip_date is string &&
+        request.resource.data.total_spots is int &&
+        request.resource.data.total_spots >= 2 && request.resource.data.total_spots <= 500 &&
+        request.resource.data.used_spots is int &&
+        request.resource.data.used_spots >= 2 &&
+        request.resource.data.used_spots <= request.resource.data.total_spots &&
+        request.resource.data.remaining_spots is int &&
+        request.resource.data.remaining_spots >= 0 &&
+        request.resource.data.remaining_spots == request.resource.data.total_spots - request.resource.data.used_spots &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.special_seat_reserved == true &&
+        request.resource.data.special_seat_counted == true &&
+        request.resource.data.special_seat_count == 1 &&
+        request.resource.data.special_passenger_name == 'Jonatas Marques de Arruda' &&
+        request.resource.data.special_passenger_role == 'GUIA DE TURISMO';
+    }
 
     match /trips/{tripId} {
       allow read: if true;
-      allow create, delete: if canManage();
+      allow create: if canManage() || publicPortalTripCreate(tripId);
+      allow delete: if canManage();
       allow update: if canManage() ||
         (roleIs('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checklist','updated_at'])) ||
         (
@@ -146,6 +175,7 @@ service cloud.firestore {
       allow create: if canFinance() || publicPortalSaleCreate(saleId);
       allow delete: if canFinance();
       allow read: if canFinance() ||
+        (signedIn() && saleId == request.auth.uid) ||
         (
           signedIn() &&
           (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid)
