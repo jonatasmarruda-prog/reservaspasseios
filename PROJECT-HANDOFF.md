@@ -17,164 +17,184 @@ Se o passeio já existir no Gestão, a reserva deve entrar no MESMO passeio. Nun
 
 O guia `Jonatas Marques de Arruda — GUIA DE TURISMO` ocupa a vaga nº 01 e conta fisicamente na lotação.
 
-## Regras de identificação de passeio do portal
+Importante: clicar em PIX/cartão registra intenção, forma e valor, mas NÃO comprova pagamento. A venda só deve ser considerada paga após confirmação manual do operador ou webhook/API bancária validada.
+
+## Passeios do portal
 - `chapada_guimaraes` — 2026-09-26 — Chapada dos Guimarães
 - `salto_nuvens` — 2026-10-10 — Salto das Nuvens
 - `nobres_bom_jardim` — 2026-10-24 — Nobres – Bom Jardim
 - `rio_cristalino` — 2026-11-08 — Rio Cristalino + Aldeia Dom Bosco
 - `jaciara_canyon` — 2026-11-15 — Jaciara – Cânion das Índias
 
-## Estado atual do código
-O `public/index.html` carrega as camadas V28, V29, V30, V31, V32, V33, V34, V35, V36, V37, V40, V41, V42 e V43.
+## Estado atual do front-end
+Para reduzir travamentos, `public/index.html` NÃO carrega mais as camadas financeiras antigas V28–V34 nem V41. As implementações atuais relevantes são:
+- `public/admin-reservation-sync-v35.js` — reserva sincronizada e confirmação de pagamento do Canva;
+- `public/admin-costs-v36.js` — cadastro/edição de passeio e despesas por pessoa/valor total;
+- `public/admin-sales-v37.js` — vendas, recebimentos, edição, cancelamento e exclusão segura;
+- `public/admin-email-controls.js` — status e reenvio de e-mail na tela de Vendas;
+- `public/admin-master-v40.js` — visão executiva e operações gerais;
+- `public/admin-stable-v42.js` — Financeiro Premium, Pendências e relatórios;
+- `public/trip-dedupe-v43.js` — consolidação de passeios duplicados;
+- `public/reservation-portal-v27.js` — portal de reservas corrigido para reutilizar passeio existente.
 
-Arquivos mais recentes importantes:
-- `public/admin-master-v40.js` — visão executiva, DRE simplificada, segurança, lista de espera, fechamento e relatórios.
-- `public/admin-finance-v41.js` — financeiro refinado.
-- `public/admin-stable-v42.js` — camada final estável de Novo Passeio, Financeiro Premium, Pendências e relatórios externos.
-- `public/admin-sales-v37.js` — tela de vendas, recebimentos, edição, cancelamento e exclusão segura de vendas sem pagamento confirmado.
-- `public/trip-dedupe-v43.js` — consolidação de passeios duplicados.
-- `public/reservation-portal-v27.js` — portal de reservas; corrigido sem criar nova versão para sempre reutilizar o passeio existente da mesma viagem/data.
+O Admin limita callbacks de `MutationObserver` legados a no máximo uma execução a cada ~60 ms. O PWA foi ajustado para cache menor e atualização de JS/CSS mais confiável. A logo oficial transparente é exibida maior e sem caixa/fundo visual.
 
-## Problema de passeios duplicados — causa identificada
-Na tela Passeios apareceram dois registros da Chapada na mesma data:
-- `Chapada` — 26/09/2026 — 1/45 — despesas R$ 5.040,00
-- `Chapada dos Guimarães` — 26/09/2026 — 2/40 — despesas R$ 0,00
+## Passeios duplicados
+A V27 foi corrigida para reconhecer aliases como `Chapada`, exigir a data correta, priorizar o cadastro administrativo mais rico e reler `trips` antes de criar um novo documento.
 
-A causa estava no `public/reservation-portal-v27.js`: o portal não reconhecia um cadastro administrativo chamado apenas `Chapada` como o mesmo passeio de `chapada_guimaraes`, mesmo com a data 2026-09-26. Quando a correspondência falhava, `ensureTrip()` verificava somente o documento canônico e podia criar outro passeio.
+A V43 permanece responsável por consolidar duplicados já existentes: migra reservas, vendas e despesas para o passeio canônico, preserva `cost_items`, recalcula vagas e exclui duplicados.
 
-## Correção aplicada em 2026-09-10
-A própria V27 foi corrigida, sem criar V28/V44 desnecessária:
-1. `Chapada` passou a ser alias válido de `chapada_guimaraes`;
-2. a identificação do passeio exige a data correta da viagem;
-3. o portal prioriza o cadastro administrativo mais rico quando encontra mais de um candidato;
-4. `ensureTrip()` relê a coleção `trips` no momento da reserva antes de decidir criar um passeio;
-5. passeio existente em status diferente de `open` também é reconhecido como existente, evitando recriação indevida; nesse caso o portal não libera novas vagas;
-6. `public/reservar.html` usa cache-busting no mesmo arquivo V27 para entregar a correção imediatamente.
-
-Commits principais da correção:
+Commits principais:
 - `be8a88420908d9e5011b0df46f892f2a069be863` — impedir duplicação no portal V27;
-- `f09e6784c2ec18d4a80a79f880b661187b927bff` — atualizar cache do portal;
-- `e22d8e42e7eab3284a3231b3263e8e53a830ab61` — corrigir publicação do Firebase Hosting.
-
-## Consolidação dos duplicados já existentes — V43
-`public/trip-dedupe-v43.js` permanece responsável por:
-1. detectar duplicados dos cinco passeios do portal por template + data;
-2. consolidar reservas, vendas e despesas no ID canônico do passeio;
-3. preservar os dados administrativos mais ricos, inclusive `cost_items`;
-4. recalcular `used_spots` e `remaining_spots` com guia + reservas ativas;
-5. excluir o documento duplicado depois da migração;
-6. bloquear novo cadastro manual de passeio com mesmo nome/data.
-
-O `public/index.html` referencia `/trip-dedupe-v43.js?v=43`.
-
-A V43 está publicada no Firebase Hosting. Para efetivar a consolidação dos documentos já duplicados no Firestore, abrir o Admin autenticado. A rotina automática roda para owner/admin ao carregar o painel. Depois conferir se Chapada 26/09/2026 aparece uma única vez e se reservas, vendas e despesas permanecem vinculadas. Se houver erro, procurar `V43_DEDUPE_ERROR` no Console do navegador.
+- `f09e6784c2ec18d4a80a79f880b661187b927bff` — cache do portal;
+- `e22d8e42e7eab3284a3231b3263e8e53a830ab61` — deploy Hosting sem bloquear no Firestore.
 
 ## Deploy Firebase
-O workflow antigo tentava `firebase deploy --only firestore,hosting` e falhava com HTTP 403 ao consultar `firestore.googleapis.com` no Service Usage.
+`.github/workflows/firebase-deploy.yml` publica apenas Firebase Hosting. O workflow antigo que incluía Firestore falhava com HTTP 403 no Service Usage.
 
-O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 18, commit `55b7b36a5500867738f4f857c0416f8e7e4a989f`, terminou com sucesso após a correção da exclusão de vendas e publicou `https://trilheiros-reservas.web.app`.
+Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Alterações em regras devem ser tratadas separadamente.
 
-Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Mudanças de regra devem ser tratadas separadamente.
+Para mudanças apenas em `public/**`, o push em `main` publica automaticamente o Hosting; normalmente não é necessário usar Cloud Shell.
 
 ## Novo Passeio / Despesas
-A tela `+ Novo passeio` usa `tripModalV36()` via V42.
+A tela `+ Novo passeio` usa `tripModalV36()`.
 
-Cada despesa deve ter:
+Cada custo previsto deve ter:
 - categoria/descrição;
-- tipo `VALOR TOTAL` ou `POR PESSOA`;
+- tipo `VALOR TOTAL` (`fixed`) ou `POR PESSOA` (`per_person`);
 - valor.
 
-Exemplos padrão:
-- Ônibus / Transporte — total
-- Hospedagem — por pessoa
-- Alimentação — por pessoa
-- Camping — por pessoa
-- Entrada / Day Use / Atrativo — por pessoa
-- Seguro — por pessoa
-- Guia / Condutor — total
-- Pedágio / Taxas — total
+Padrões:
+- Ônibus / Transporte — total;
+- Hospedagem — por pessoa;
+- Alimentação — por pessoa;
+- Camping — por pessoa;
+- Entrada / Day Use / Atrativo — por pessoa;
+- Seguro — por pessoa;
+- Guia / Condutor — total;
+- Pedágio / Taxas — total.
 
-Custos por pessoa devem ser multiplicados pela quantidade de clientes. Custos totais entram apenas uma vez.
+Custos por pessoa multiplicam a quantidade de clientes. Custos totais entram uma única vez. Despesas reais ficam vinculadas ao `trip_id` e devem ser exibidas somente dentro do respectivo passeio.
 
-As despesas reais ficam vinculadas ao `trip_id` e são exibidas somente dentro do respectivo passeio. Para lançar/editar uma despesa, abrir Financeiro > Passeios > Abrir despesas. Não manter lista global misturando custos de viagens diferentes.
+## Política de cancelamento automática
+Desde 2026-09-10, todo Novo Passeio ou Editar Passeio abre com política padrão quando o campo estiver vazio. Se o passeio tiver uma política personalizada, ela é preservada.
+
+Política padrão:
+- direito de arrependimento respeitado quando legalmente aplicável;
+- 7 dias ou mais: 90% de reembolso ou 100% de crédito;
+- entre 6 e 3 dias: 50% de reembolso ou 70% de crédito;
+- menos de 72 horas: reembolso pode não ser possível por custos já comprometidos;
+- transferência da vaga pode ser aceita mediante comunicação prévia;
+- no-show no horário/local informado;
+- cancelamento pela organização por segurança, clima, força maior ou motivo operacional gera opções ao participante;
+- custos de terceiros não reembolsáveis podem ser descontados quando aplicável.
+
+Commit principal: `6d1f68d12f22952ed0d72b1e5c5ee452b28d9e82`.
 
 ## Financeiro
-A V42 foi consolidada em 2026-09-10 sem criação de V44. A tela Financeiro passou a usar uma visão executiva Premium com dados de `sales` + `expenses`:
-- faturado no mês;
-- dinheiro realmente recebido;
+A V42 usa `sales` + `expenses` e mostra:
+- faturado;
+- recebido confirmado;
 - despesas pagas;
 - contas a pagar;
 - contas a receber;
-- lucro/resultado de caixa;
+- lucro/caixa;
 - vagas vendidas;
-- gráfico de formas de pagamento (PIX, cartão, PIX parcelado, dinheiro etc.);
-- gráfico de despesas pagas por categoria;
-- desempenho/resultado por passeio;
-- seletor de competência mensal;
-- botão para relatório mensal detalhado.
+- gráfico de formas de pagamento;
+- gráfico de despesas por categoria;
+- resultado por passeio;
+- relatório mensal detalhado.
 
-A lista de passeios permanece abaixo do dashboard. Cada passeio abre somente suas próprias despesas, com custo previsto, pago, a pagar e resultado.
+A lista de passeios fica abaixo do dashboard. Cada passeio abre somente suas próprias despesas.
 
-Commits principais desta consolidação:
-- `0b5e8be969c516d472280749ff73a3efe746053b` — consolidar Financeiro Premium, Pendências e relatórios externos na V42;
-- `28af7663ba5d87adddded43ccc78319a5aeff76b` — alinhar relatório mensal aos dados reais de vendas e despesas;
-- `26df5dccc0f47a486dbd24e5c76398fe039a3ff3` — cache final e publicação pelo Hosting.
+Commits principais:
+- `0b5e8be969c516d472280749ff73a3efe746053b` — Financeiro Premium/Pendências/relatórios na V42;
+- `28af7663ba5d87adddded43ccc78319a5aeff76b` — relatório mensal alinhado a dados reais;
+- `26df5dccc0f47a486dbd24e5c76398fe039a3ff3` — publicação da consolidação.
 
 ## Pendências
-Reservas do Canva mostram automaticamente:
-- nome do responsável e nomes dos participantes disponíveis;
-- passeio;
-- tipo/opção (individual, casal, criança, hospedagem etc.);
-- forma de pagamento;
-- valor total escolhido na reserva;
-- valor já confirmado;
-- próxima parcela quando PIX parcelado;
-- valor a conferir/confirmar.
-
-O operador não redigita valor. Abre a pendência, confere no banco/provedor e confirma. Importante: clicar em PIX/cartão no portal registra método/opção/valor, mas não prova que o dinheiro entrou. Sem webhook/API bancária validada, manter pendente até confirmação manual.
+Reservas do Canva devem mostrar automaticamente nome, participantes, passeio, tipo/opção, forma de pagamento, valor total, valor já confirmado, saldo e próxima parcela quando aplicável. O operador não redigita valores: confere no banco/provedor e confirma.
 
 ## Vendas — exclusão segura
-Em 2026-09-10, `public/admin-sales-v37.js` foi corrigido para diferenciar cancelamento financeiro de exclusão de cadastro:
-- venda sem nenhum valor recebido confirmado mostra botão `Excluir`;
-- ao excluir, apaga o documento de `sales` e a reserva vinculada quando ela existir;
-- se a venda ainda estava ativa, devolve automaticamente as vagas ao passeio e libera também a hospedagem vinculada, quando houver controle de inventário;
-- a exclusão não falha caso a reserva auxiliar não exista exatamente no ID esperado;
-- venda com valor recebido confirmado não pode ser apagada diretamente; deve usar `Cancelar` e registrar o reembolso para manter o histórico financeiro;
-- venda já cancelada e sem saldo financeiro também pode ser excluída definitivamente.
+- venda sem valor recebido confirmado mostra `Excluir`;
+- ao excluir, remove venda/reserva vinculada e devolve vagas quando aplicável;
+- venda com dinheiro confirmado usa `Cancelar`/reembolso para preservar histórico financeiro;
+- venda cancelada sem saldo financeiro pode ser excluída definitivamente.
 
 Commits:
-- `ff909c255dcb2ffb095042897fca0d0e262d9bc1` — exclusão segura e devolução de vagas na V37;
-- `55b7b36a5500867738f4f857c0416f8e7e4a989f` — cache-busting da V37 e deploy final no Hosting.
+- `ff909c255dcb2ffb095042897fca0d0e262d9bc1` — exclusão segura;
+- `55b7b36a5500867738f4f857c0416f8e7e4a989f` — publicação/cache.
+
+## E-mail automático de boas-vindas após quitação
+Arquivos:
+- `automation/send-paid-welcome-emails.mjs`;
+- `.github/workflows/paid-welcome-email.yml`;
+- `public/admin-email-controls.js`.
+
+Regra:
+1. cliente precisa ter e-mail válido;
+2. venda não pode estar cancelada;
+3. pagamento precisa estar totalmente quitado;
+4. reserva do Canva é liberada quando o Admin confirma o saldo final;
+5. venda manual criada como “já paga” é liberada automaticamente depois que o cliente conclui o cadastro e informa o e-mail;
+6. o mesmo envio não é duplicado: `welcome_email_sent_at/status` controlam idempotência;
+7. a tela `Vendas pagas` mostra a coluna `E-mail` com estados `Sem e-mail`, `Após quitação`, `Aguardando envio`, `Enviado` ou `Erro no envio`;
+8. owner/admin/finance pode usar `Enviar agora`, `Reenviar` ou `Tentar novamente` quando aplicável; o navegador apenas coloca o envio na fila, sem expor chave do Resend.
+
+O e-mail é Premium e inclui logo, nome do cliente, passeio, destino, data, participantes, protocolo, pagamento confirmado e botão para falar com Jonatas no WhatsApp `(66) 99692-6174`.
+
+Workflow roda a cada 5 minutos e usa secrets `FIREBASE_SERVICE_ACCOUNT`, `RESEND_API_KEY` e `EMAIL_FROM`. Uma execução de validação em 2026-09-10 terminou com sucesso e não enviou nada indevido quando não havia elegíveis.
+
+Commits principais:
+- `7dadfb12c4e832122b8dea514678bd8cad05f609` — script inicial de boas-vindas;
+- `2cc95a37349b42b0b180c924c33f7e9f8a50cbe6` — workflow inicial;
+- `45d7670f58ca8ad2eb464ca988ce63ba43a229a1` — validação da automação;
+- `8f87581ea5d8ccdca2014f7db032c4e79b56f878` — coluna/status/reenvio em Vendas;
+- `c8be2c46fc357af13da4f18b4f9fe054747045aa` — reforço de segurança do reenvio;
+- `3783495a3e4e380c58364f9c408bf76c99802899` — incluir vendas manuais quitadas após cadastro.
+
+## Lembrete automático um dia antes do passeio
+Arquivos:
+- `automation/send-trip-reminders.mjs`;
+- `.github/workflows/trip-reminder-email.yml`.
+
+O workflow roda diariamente às 12:00 UTC (aproximadamente 08:00 em `America/Cuiaba`) e procura somente passeios cuja `trip_date` é o dia seguinte.
+
+Só envia para venda ativa, totalmente quitada e com e-mail válido. Respeita `trip.email_reminder_enabled`; por padrão novos passeios têm lembrete habilitado. Não duplica o mesmo lembrete para a mesma venda/data.
+
+O e-mail inclui:
+- logo;
+- aviso `SEU PASSEIO É AMANHÃ`;
+- nome/destino/data;
+- horário de saída, quando cadastrado;
+- ponto de saída, quando cadastrado;
+- retorno, quando cadastrado;
+- participantes;
+- `O que levar / orientações` do cadastro do passeio;
+- botão para falar com Jonatas;
+- link do grupo do passeio, quando cadastrado.
+
+A primeira validação do workflow em 2026-09-10 terminou com sucesso e informou que não havia reserva quitada para 2026-09-11, portanto nenhum e-mail de teste foi enviado a cliente.
+
+Commits:
+- `0f9e70457d02aeb90343cb065fb32458aa961e06` — script do lembrete;
+- `8fd1e7bd6ec12fa09f80dd572771b8731d0bcb31` — workflow diário.
 
 ## Relatórios de participantes
 Para PDFs enviados a ônibus/atrativos/hospedagem:
 - mostrar Nº;
-- Nome do participante;
-- Tipo/Opção escolhida;
+- nome do participante;
+- tipo/opção escolhida;
 - não mostrar CPF;
 - não mostrar “Responsável”;
 - guia permanece nº 01 como `GUIA DE TURISMO`.
 
-A V42 sobrescreve os relatórios externos para seguir esse padrão. A lista de transporte acrescenta veículo/assento; o mapa de hospedagem acrescenta quarto, sempre sem CPF. A lista de seguro continua separada e pode conter CPF quando a seguradora exigir.
+Transporte acrescenta veículo/assento; hospedagem acrescenta quarto. Seguro pode conter CPF quando necessário para a seguradora.
 
 ## Relatório financeiro mensal
-O relatório visual e o PDF mensal da V42 usam a mesma base de dados do dashboard (`sales` + `expenses`) e mostram:
-- faturado;
-- recebido;
-- despesas pagas;
-- contas a pagar;
-- lucro/caixa;
-- a receber;
-- vagas vendidas;
-- gráficos de pagamentos e despesas;
-- resultado detalhado por passeio;
-- tabela de tudo que entrou no mês;
-- tabela de despesas pagas.
+A V42 usa a mesma base do dashboard (`sales` + `expenses`) para faturado, recebido, despesas, contas a pagar, lucro/caixa, a receber, vagas, gráficos e resultado por passeio.
 
-A automação `.github/workflows/monthly-finance-report.yml` roda diariamente e o script `automation/send-monthly-finance-report-v2.mjs` somente envia quando for o último dia local do mês (30 ou 31, ou 28/29 em fevereiro), salvo execução manual forçada. Destino: `trilheiros.roomt@gmail.com`. O envio depende dos secrets `FIREBASE_SERVICE_ACCOUNT`, `RESEND_API_KEY` e `EMAIL_FROM` estarem configurados no GitHub Actions.
-
-## Pagamentos
-Importante: clicar em PIX/cartão no Canva registra a intenção/reserva, forma e valor selecionado, mas NÃO prova pagamento bancário concluído. Sem webhook/API validado do provedor, o Gestão deve manter status pendente até confirmação manual. Após confirmação, o pagamento entra no histórico e alimenta o dashboard e o relatório mensal.
+`.github/workflows/monthly-finance-report.yml` roda diariamente; `automation/send-monthly-finance-report-v2.mjs` só envia no último dia local do mês (30/31 ou 28/29 em fevereiro), salvo execução manual forçada. Destino: `trilheiros.roomt@gmail.com`.
 
 ## Diretriz para próximos chats
-Antes de alterar qualquer coisa, ler este arquivo e inspecionar o código atual no GitHub. Não criar nova camada sem necessidade. Priorizar corrigir/consolidar o que já existe e evitar duplicação de versões e de passeios.
+Antes de alterar qualquer coisa, ler este arquivo e inspecionar o código atual no GitHub. Não criar nova camada versionada sem necessidade. Priorizar corrigir/consolidar o que já existe e evitar duplicação de versões e de passeios.
