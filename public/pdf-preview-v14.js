@@ -103,19 +103,32 @@
     return true;
   };
 
-  /* Intercepta o save() do jsPDF: todos os PDFs passam a abrir no visor primeiro. */
+  /* Envolve o construtor do jsPDF para que todo doc.save() abra a prévia, em vez de baixar. */
   function installSaveInterceptor(){
-    const api=window.jspdf?.jsPDF?.API;
-    if(!api||api.__trilheirosPreviewV14)return !!api;
-    const original=api.save;
-    if(typeof original!=='function')return false;
-    api.__trilheirosOriginalSave=original;
-    api.save=function(filename='documento.pdf',options={}){
-      const meta=metaFromFilename(filename);
-      window.openPdfPreviewV14(this,{filename,...meta});
-      return options?.returnPromise?Promise.resolve(this):this;
-    };
-    api.__trilheirosPreviewV14=true;
+    const ns=window.jspdf;
+    const Original=ns?.jsPDF;
+    if(!Original)return false;
+    if(Original.__trilheirosPreviewCtorV14)return true;
+
+    function PreviewJsPDF(...args){
+      const doc=new Original(...args);
+      const originalSave=typeof doc.save==='function'?doc.save.bind(doc):null;
+      if(originalSave){
+        doc.__trilheirosOriginalSave=originalSave;
+        doc.save=function(filename='documento.pdf',options={}){
+          const meta=metaFromFilename(filename);
+          window.openPdfPreviewV14(doc,{filename,...meta});
+          return options?.returnPromise?Promise.resolve(doc):doc;
+        };
+      }
+      return doc;
+    }
+
+    try{Object.setPrototypeOf(PreviewJsPDF,Original)}catch(_){ }
+    try{PreviewJsPDF.prototype=Original.prototype}catch(_){ }
+    PreviewJsPDF.__trilheirosPreviewCtorV14=true;
+    PreviewJsPDF.__trilheirosOriginalCtorV14=Original;
+    ns.jsPDF=PreviewJsPDF;
     return true;
   }
 
