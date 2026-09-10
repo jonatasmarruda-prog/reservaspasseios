@@ -2,7 +2,7 @@
 (function(){
   const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
   const digits=v=>String(v||'').replace(/\D/g,'');
-  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
   const emailOk=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
   function cpfOk(v){
     const n=digits(v);if(n.length!==11||/^(\d)\1{10}$/.test(n))return false;
@@ -59,7 +59,7 @@
     let qty=1;
     let companions=[];
 
-    function maxQty(){return Math.max(1,Math.min(3,Number(current?.remaining_spots||0)))}
+    function maxQty(){return Math.max(1,Math.min(5,Number(current?.remaining_spots||0)))}
     function syncCompanions(){
       const needed=Math.max(0,qty-1);
       while(companions.length<needed)companions.push('');
