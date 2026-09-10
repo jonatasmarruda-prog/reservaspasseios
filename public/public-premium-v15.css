@@ -1,0 +1,193 @@
+/* Trilheiros de Rondonópolis — Cadastro Premium V15
+   Refinamento visual mobile-first sem alterar a lógica de cadastro. */
+
+.simplePublicPage.v15Premium{
+  --v15-green:#07382a;
+  --v15-green-2:#0d5a43;
+  --v15-green-3:#197256;
+  --v15-gold:#d8ad42;
+  --v15-ink:#17362b;
+  --v15-muted:#687f75;
+  --v15-line:#dbe7e1;
+  --v15-soft:#f3f8f5;
+  background:
+    radial-gradient(circle at 4% 0%,rgba(13,90,67,.10),transparent 25%),
+    radial-gradient(circle at 96% 4%,rgba(216,173,66,.11),transparent 20%),
+    linear-gradient(180deg,#fbfdfc 0%,#edf5f1 100%);
+}
+
+/* Marca / topo */
+.v15Premium .simplePublicTop{padding-top:16px;padding-bottom:10px}
+.v15Premium .simplePublicBrand{gap:14px}
+.v15Premium .simplePublicBrand img{width:92px;height:92px;filter:drop-shadow(0 12px 24px rgba(7,50,38,.13))}
+.v15Premium .simplePublicBrand strong{font-size:21px;letter-spacing:.035em}
+.v15Premium .simplePublicBrand span{font-size:11px;letter-spacing:.075em;text-transform:uppercase;color:#638075}
+
+/* Hero do passeio */
+.v15Premium .simpleTripHero{
+  padding:38px 38px 34px;
+  margin-bottom:16px;
+  border-radius:32px;
+  border:1px solid rgba(255,255,255,.09);
+  background:
+    radial-gradient(circle at 88% 8%,rgba(216,173,66,.27),transparent 25%),
+    radial-gradient(circle at 10% 110%,rgba(32,126,92,.35),transparent 35%),
+    linear-gradient(135deg,#05271d 0%,#0a4735 62%,#0d5d45 100%);
+  box-shadow:0 26px 72px rgba(7,50,38,.18);
+}
+.v15Premium .simpleTripHero:before{content:"";position:absolute;left:38px;top:0;width:74px;height:4px;border-radius:0 0 8px 8px;background:linear-gradient(90deg,#e4bf60,#c89928)}
+.v15Premium .simpleTripHero:after{width:300px;height:300px;right:-78px;top:-118px;border-color:rgba(255,255,255,.08)}
+.v15Premium .simpleTripHero .simpleEyebrow{display:inline-flex;align-items:center;gap:7px;color:#e9f4ef;font-size:10px;letter-spacing:.16em}
+.v15Premium .simpleTripHero .simpleEyebrow:before{content:"✓";display:grid;place-items:center;width:21px;height:21px;border-radius:999px;background:rgba(255,255,255,.13);font-size:11px;color:#fff}
+.v15Premium .simpleTripHero h1{margin-top:14px;font-size:clamp(36px,5.5vw,62px);line-height:.98;max-width:860px}
+.v15Premium .simpleTripHero p{margin-top:10px;color:#d9ebe3;font-size:15px;font-weight:650}
+.v15Premium .simpleTripBadges{margin-top:24px;gap:9px}
+.v15Premium .simpleTripBadges span{min-height:40px;padding:9px 13px;background:rgba(255,255,255,.105);border-color:rgba(255,255,255,.15);font-size:12px;backdrop-filter:blur(8px)}
+
+/* Cartão principal */
+.v15Premium .simpleFormCard{
+  position:relative;
+  overflow:visible;
+  padding:34px;
+  border-radius:30px;
+  border:1px solid rgba(7,50,38,.075);
+  background:rgba(255,255,255,.985);
+  box-shadow:0 24px 65px rgba(7,50,38,.085);
+}
+.v15Premium .simpleFormCard:before{content:"";position:absolute;left:28px;right:28px;top:-1px;height:2px;background:linear-gradient(90deg,transparent,rgba(216,173,66,.85),transparent)}
+.v15Premium .simpleFormTitle{padding-bottom:22px}
+.v15Premium .simpleFormTitle h2{font-size:32px;line-height:1.05;color:#102f24}
+.v15Premium .simpleFormTitle p{max-width:650px;color:#677f75;font-size:14.5px}
+.v15Premium .simpleSeatCounter{border-radius:17px;background:linear-gradient(145deg,#eff8f3,#e5f1eb);border-color:#d3e6dc;box-shadow:inset 0 1px 0 #fff}
+.v15Premium .simpleSeatCounter small{color:#688075}
+.v15Premium .simpleSeatCounter strong{font-size:31px}
+
+/* Progresso */
+.v15Progress{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:7px;
+  margin:22px 0 8px;
+  padding:7px;
+  border:1px solid #dce8e2;
+  border-radius:18px;
+  background:#f7faf8;
+}
+.v15ProgressItem{position:relative;min-width:0;display:flex;align-items:center;gap:8px;padding:9px 10px;border-radius:13px;color:#74887f;transition:.18s ease}
+.v15ProgressItem b{flex:0 0 25px;width:25px;height:25px;display:grid;place-items:center;border-radius:999px;background:#e5eee9;color:#547066;font-size:10px}
+.v15ProgressItem span{min-width:0;font-size:10px;font-weight:900;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v15ProgressItem.done{color:#27624d;background:#edf7f2}.v15ProgressItem.done b{background:#2d7659;color:#fff}
+.v15ProgressItem.active{color:#123d2e;background:#fff;box-shadow:0 5px 15px rgba(7,50,38,.07)}.v15ProgressItem.active b{background:#0d5a43;color:#fff}
+
+/* Cabeçalhos de etapa */
+.v15StepHead{display:flex;align-items:flex-start;gap:12px;margin:27px 0 13px}
+.v15StepHeadNumber{flex:0 0 35px;width:35px;height:35px;display:grid;place-items:center;border-radius:12px;background:linear-gradient(145deg,#0c5c45,#08402f);color:#fff;font-size:12px;font-weight:950;box-shadow:0 8px 18px rgba(7,80,59,.14)}
+.v15StepHead div{min-width:0}.v15StepHead h3{margin:1px 0 3px;font-size:18px;line-height:1.2;color:#183a2f}.v15StepHead p{margin:0;color:#73877e;font-size:12.5px;line-height:1.45}
+
+/* Campos */
+.v15Premium #simpleReg{margin-top:0}
+.v15Premium .simpleGrid{gap:14px}
+.v15Premium .simpleField>span{margin-bottom:7px;color:#28493d;font-size:13.5px}
+.v15Premium .simpleField input,.v15Premium .simpleField select{
+  min-height:58px;
+  border-radius:15px;
+  border-color:#d1e0d8;
+  background:#fff;
+  box-shadow:0 4px 12px rgba(7,50,38,.025);
+}
+.v15Premium .simpleField input:hover,.v15Premium .simpleField select:hover{border-color:#b9d2c6}
+.v15Premium .simpleField input:focus,.v15Premium .simpleField select:focus{border-color:#3d8769;box-shadow:0 0 0 4px rgba(61,135,105,.10),0 7px 18px rgba(7,50,38,.045)}
+.v15FieldError{display:flex;align-items:flex-start;gap:6px;margin:6px 3px 0;color:#a54242;font-size:11.5px;font-weight:800;line-height:1.4}.v15FieldError:before{content:"!";flex:0 0 17px;width:17px;height:17px;display:grid;place-items:center;border-radius:999px;background:#fff0f0;font-size:10px}
+
+/* Seletor de vagas */
+.v15Premium .simpleSeatChoiceV11{
+  margin:0;
+  padding:21px 22px;
+  border-radius:21px;
+  border:1px solid #cfe2d8;
+  background:linear-gradient(135deg,#f5fbf8 0%,#ebf6f0 100%);
+  box-shadow:none;
+}
+.v15Premium .simpleSeatChoiceCopyV11>span{color:#46705f}
+.v15Premium .simpleSeatChoiceCopyV11 h3{font-size:21px;color:#12382c}
+.v15Premium .simpleSeatChoiceCopyV11 p{color:#688075}
+.v15Premium .simpleSeatSelectV11 select{min-height:60px;border:1px solid #acd0bf;border-radius:15px;background:#fff;font-weight:900;color:#0d4f3b;box-shadow:0 7px 18px rgba(7,50,38,.045)}
+
+/* Participantes */
+.v15Premium .simpleCompanionSection{margin-top:0;padding-top:0;border-top:0}
+.v15Premium .simpleCompanionSection>.simpleSectionHead{margin:0 0 13px;padding:14px 16px;border:1px solid #e0eae5;border-radius:16px;background:#fafcfb}
+.v15Premium .simpleCompanionSection>.simpleSectionHead h3{font-size:16px}.v15Premium .simpleCompanionSection>.simpleSectionHead p{font-size:12.5px}
+.v15Premium .simpleCompanionCard{padding:18px;border-radius:19px;border-color:#d8e6df;background:#fff;box-shadow:0 9px 24px rgba(7,50,38,.035)}
+.v15Premium .simpleCompanionHead strong{font-size:14px;color:#173c30}.v15Premium .simpleCompanionHead small{font-size:10px}
+.v15Premium .simpleLimitNote{margin:10px 2px 0;color:#657c72;font-weight:750}
+
+/* Extras / resumo / política */
+.v15Premium .simpleExtraSection{margin-top:24px;border-radius:19px;background:#f8fbf9}
+.v15Premium .simpleReviewV10{margin-top:0;padding:20px;border-radius:20px;border-color:#d3e4db;background:linear-gradient(145deg,#f9fcfa,#eef7f2);box-shadow:inset 0 1px 0 #fff}
+.v15Premium .simpleReviewHead h3{font-size:20px}.v15Premium .simpleReviewHead>strong{min-width:85px;min-height:44px;border-radius:13px;background:#0c503c}
+.v15Premium .simpleReviewGrid>div{padding:13px;border-radius:13px;border-color:#dce8e2}.v15Premium .simpleReviewGrid small{color:#71867c}.v15Premium .simpleReviewGrid b{font-size:13px}
+.v15Premium .simplePolicySection{margin-top:23px;padding-top:22px}.v15Premium .simplePolicySection details{border-radius:16px}.v15Premium .simpleAccept{border:1px solid #e0e9e5;background:#f8fbf9}
+
+.v15TrustLine{display:flex;align-items:center;justify-content:center;gap:8px;margin:17px 0 0;padding:11px 14px;border-radius:13px;background:#f5f9f7;color:#647b71;font-size:11.5px;font-weight:750;line-height:1.45;text-align:center}
+.v15TrustLine b{color:#32634f}
+
+.v15Premium .simpleSubmit{
+  min-height:62px;
+  margin-top:13px;
+  border-radius:17px;
+  background:linear-gradient(135deg,#07382a,#0c5b43 72%,#117153);
+  font-size:16px;
+  font-weight:950;
+  letter-spacing:.005em;
+  box-shadow:0 15px 32px rgba(7,72,53,.20);
+  transition:transform .16s ease,box-shadow .16s ease,opacity .16s ease;
+}
+@media(hover:hover) and (pointer:fine){.v15Premium .simpleSubmit:hover{transform:translateY(-2px);box-shadow:0 19px 38px rgba(7,72,53,.24)}}
+.v15Premium .simpleSubmit:active{transform:translateY(0)}
+.v15Premium .simplePrivacy{max-width:760px;margin-top:13px;color:#7c8e87}
+
+/* Sucesso */
+.v15Premium .simpleSuccess{position:relative;overflow:hidden;max-width:790px;padding:42px 38px;border-radius:31px;border-color:#d8e6df;box-shadow:0 28px 76px rgba(7,50,38,.12)}
+.v15Premium .simpleSuccess:before{content:"";position:absolute;left:0;right:0;top:0;height:5px;background:linear-gradient(90deg,#0c5a43,#d8ad42,#0c5a43)}
+.v15Premium .simpleSuccessIcon{width:70px;height:70px;border-radius:23px;background:linear-gradient(145deg,#117050,#084231);font-size:33px}
+.v15Premium .simpleSuccess h1{max-width:620px}
+.v15SuccessBadge{display:inline-flex;align-items:center;gap:7px;margin:2px auto 6px;padding:7px 10px;border-radius:999px;background:#eef7f2;color:#2c7055;font-size:10px;font-weight:900;letter-spacing:.05em}
+.v15Premium .simpleProtocol{border-radius:18px;box-shadow:0 12px 25px rgba(7,50,38,.10)}
+.v15Premium .simpleSuccessActions{gap:10px}.v15Premium .simplePrimaryBtn,.v15Premium .simpleGhostBtn,.v15Premium .simpleWhatsAppBtn{min-height:54px;border-radius:14px;font-size:12.5px}
+
+@media(max-width:760px){
+  .v15Premium .simplePublicTop{padding:9px 13px 5px}
+  .v15Premium .simplePublicBrand img{width:72px;height:72px}
+  .v15Premium .simplePublicBrand strong{font-size:16px;max-width:230px}
+  .v15Premium .simplePublicBrand span{font-size:9.5px}
+  .v15Premium .simpleMainMount{padding:7px 9px 22px}
+  .v15Premium .simpleTripHero{padding:28px 21px 24px;border-radius:24px}
+  .v15Premium .simpleTripHero:before{left:21px;width:62px}
+  .v15Premium .simpleTripHero h1{font-size:clamp(32px,10vw,45px);line-height:1}
+  .v15Premium .simpleTripHero p{font-size:13.5px}
+  .v15Premium .simpleTripBadges{margin-top:18px;gap:6px}.v15Premium .simpleTripBadges span{min-height:35px;padding:7px 9px;font-size:10.5px}
+  .v15Premium .simpleFormCard{padding:21px 15px;border-radius:23px}
+  .v15Premium .simpleFormCard:before{left:18px;right:18px}
+  .v15Premium .simpleFormTitle h2{font-size:27px}.v15Premium .simpleFormTitle p{font-size:13.5px}.v15Premium .simpleSeatCounter{margin-top:13px}
+  .v15Progress{grid-template-columns:repeat(4,1fr);gap:3px;padding:5px;border-radius:15px;margin-top:17px}
+  .v15ProgressItem{justify-content:center;padding:8px 3px;gap:4px}.v15ProgressItem b{width:23px;height:23px;flex-basis:23px}.v15ProgressItem span{display:none}
+  .v15StepHead{margin:23px 0 11px;gap:10px}.v15StepHeadNumber{width:32px;height:32px;flex-basis:32px;border-radius:11px}.v15StepHead h3{font-size:17px}.v15StepHead p{font-size:12px}
+  .v15Premium .simpleField input,.v15Premium .simpleField select{min-height:58px}
+  .v15Premium .simpleSeatChoiceV11{padding:17px 14px;border-radius:17px}.v15Premium .simpleSeatChoiceCopyV11 h3{font-size:19px}.v15Premium .simpleSeatChoiceCopyV11 p{font-size:12.5px}
+  .v15Premium .simpleCompanionSection>.simpleSectionHead{padding:12px 13px}
+  .v15Premium .simpleCompanionCard{padding:14px}
+  .v15Premium .simpleReviewV10{padding:16px}.v15Premium .simpleReviewHead{align-items:center}.v15Premium .simpleReviewHead h3{font-size:18px}.v15Premium .simpleReviewHead>strong{min-width:72px;min-height:40px}
+  .v15TrustLine{font-size:11px;padding:10px 11px}
+  .v15Premium .simpleSubmit{position:relative;min-height:62px;font-size:15.5px}
+  .v15Premium .simpleSuccess{margin:14px 9px 26px;padding:34px 18px 28px;border-radius:24px}.v15Premium .simpleSuccess h1{font-size:32px}
+}
+
+@media(max-width:390px){
+  .v15Premium .simpleTripHero{padding:24px 17px 21px}.v15Premium .simpleTripHero:before{left:17px}
+  .v15Premium .simpleTripHero h1{font-size:31px}
+  .v15Premium .simpleFormCard{padding:19px 12px}
+  .v15StepHead p{font-size:11.5px}
+  .v15Premium .simpleSeatChoiceV11{padding:15px 12px}
+}
+
+@media(prefers-reduced-motion:reduce){.v15Premium *{scroll-behavior:auto!important;transition:none!important}}
