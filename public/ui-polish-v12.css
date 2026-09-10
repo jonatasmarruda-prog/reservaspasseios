@@ -1,0 +1,97 @@
+/* Trilheiros Gestão — UI Polish V12
+   Ajustes conservadores de legibilidade, hierarquia e toque sem alterar fluxos. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+
+/* Cadastro público */
+.simpleEyebrow{font-size:11px;line-height:1.3}
+.simpleTripHero p{font-size:16px;line-height:1.5}
+.simpleTripBadges span{font-size:12px;line-height:1.25}
+.simpleFormTitle p{font-size:15px;line-height:1.65}
+.simpleSeatCounter small{font-size:10px;line-height:1.25}
+.simpleField>span{font-size:14.5px;line-height:1.35}
+.simpleField input,.simpleField select{font-size:16px;line-height:1.35}
+.simpleSectionHead h3{font-size:20px;line-height:1.25}
+.simpleSectionHead p{font-size:13.5px;line-height:1.55}
+.simpleLimitNote{font-size:12.5px;line-height:1.55}
+.simpleCompanionHead strong{font-size:14.5px}
+.simpleCompanionHead small{font-size:10.5px}
+.simplePolicySection summary span{font-size:14.5px}
+.simplePolicySection summary b{font-size:11px}
+.simplePolicyText{font-size:13px;line-height:1.7}
+.simpleAccept span{font-size:13px;line-height:1.55}
+.simpleError{font-size:13px;line-height:1.5}
+.simpleSubmit{font-size:16px}
+.simplePrivacy{font-size:11.5px;line-height:1.6}
+.simpleFooter{font-size:11.5px;line-height:1.5}
+.simpleSuccessPeople span{font-size:13.5px}
+.simpleSuccessPeople small{font-size:11.5px}
+.simplePrimaryBtn,.simpleGhostBtn{font-size:13px}
+
+/* Quantidade de vagas */
+.simpleSeatChoiceCopyV11>span{font-size:10.5px;line-height:1.3}
+.simpleSeatChoiceCopyV11 h3{font-size:22px;line-height:1.18}
+.simpleSeatChoiceCopyV11 p{font-size:14px;line-height:1.6}
+.simpleSeatSelectV11>span{font-size:14px}
+.simpleSeatSelectV11 select{font-size:16px;line-height:1.35}
+
+/* Resumo antes do envio */
+.simpleReviewHead span{font-size:10.5px;line-height:1.3}
+.simpleReviewHead>strong{font-size:13px}
+.simpleReviewGrid small{font-size:10.5px;line-height:1.3}
+.simpleReviewGrid b{font-size:13.5px;line-height:1.5}
+.simpleWhatsAppBtn{font-size:13.5px}
+
+/* Minha viagem */
+.myTripBrand span{font-size:12px;line-height:1.4}
+.myTripHero>span{font-size:10.5px}
+.myTripHero p{font-size:15px;line-height:1.5}
+.myTripStatus b{font-size:11.5px}.myTripStatus small{font-size:11px}
+.myTripMetrics small{font-size:10.5px;line-height:1.3}
+.myTripMetrics strong{font-size:17px}
+.myTripCardHead span{font-size:10.5px}
+.myTripCardHead h2{font-size:19px}
+.myTripCardHead>b{font-size:11.5px}
+.myTripPeople span{font-size:13.5px}.myTripPeople small{font-size:11.5px}
+.myTripAnswers small{font-size:10.5px}.myTripAnswers strong{font-size:13.5px}
+.myTripInstallments span b{font-size:12.5px}.myTripInstallments span small{font-size:10.5px}.myTripInstallments strong{font-size:12.5px}.myTripInstallments em{font-size:10px}
+.myTripInfo b{font-size:13px}.myTripInfo p{font-size:13px;line-height:1.65}
+.myTripPolicy summary{font-size:13px}.myTripPolicy summary b{font-size:10.5px}.myTripPolicy>div{font-size:12.5px;line-height:1.7}
+.myTripNotice{font-size:12.5px;line-height:1.55}
+.myTripPrimary,.myTripGhost{font-size:13px}
+.myTripCancel p{font-size:12.5px;line-height:1.55}.myTripBack{font-size:12.5px}
+
+/* Painel administrativo */
+.admin.v7 .navGroup{font-size:10.5px;letter-spacing:.08em}
+.admin.v7 .nav button{font-size:13.5px;line-height:1.35}
+.admin.v7 .adminHead .eyebrow{font-size:9.5px;line-height:1.3}
+.admin.v7 .panelHead h2,.admin.v7 .panelHead h3{line-height:1.25}
+.admin.v7 .table th{font-size:11.5px;line-height:1.35}
+.admin.v7 .table td{font-size:13px;line-height:1.45}
+.admin.v7 input,.admin.v7 select,.admin.v7 textarea{line-height:1.4}
+.admin.v7 .btn{line-height:1.3}
+
+/* Foco visível para teclado e acessibilidade */
+.simpleSubmit:focus-visible,.simplePrimaryBtn:focus-visible,.simpleGhostBtn:focus-visible,.simpleAddBtn:focus-visible,.admin.v7 button:focus-visible,.admin.v7 input:focus-visible,.admin.v7 select:focus-visible,.admin.v7 textarea:focus-visible{outline:3px solid rgba(46,139,101,.28);outline-offset:2px}
+
+@media(max-width:760px){
+  .simpleEyebrow{font-size:10.5px}
+  .simpleTripHero p{font-size:14px}
+  .simpleTripBadges span{font-size:11.5px}
+  .simpleFormTitle p{font-size:14px}
+  .simpleSeatCounter small{font-size:10px}
+  .simpleSectionHead p{font-size:13px}
+  .simplePrivacy{font-size:11px}
+  .simpleSeatChoiceCopyV11 p{font-size:13.5px}
+  .myTripBrand strong{font-size:16px}
+  .myTripBrand span{font-size:11.5px}
+  .myTripHero p{font-size:14px}
+}
+
+@media(max-width:560px){
+  .admin.v7 .adminHead h1{font-size:20px;line-height:1.2}
+  .admin.v7 .adminHead .eyebrow{font-size:9.5px}
+  .admin.v7 .nav button{font-size:14px}
+  .admin.v7 #newTrip{font-size:12px}
+  .admin.v7 input,.admin.v7 select,.admin.v7 textarea{font-size:16px}
+  .admin.v7 .btn{font-size:12.5px}
+}
