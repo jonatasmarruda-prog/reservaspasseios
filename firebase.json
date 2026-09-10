@@ -3,10 +3,13 @@
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      {"source": "/reservas", "destination": "/reservar.html"},
+      {"source": "/reservar", "destination": "/reservar.html"},
       {"source": "**", "destination": "/index.html"}
     ],
     "headers": [
-      {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
+      {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
     ]
   },
   "firestore": {
