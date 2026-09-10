@@ -1,12 +1,11 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-notify-brand5';
-const OFFICIAL_LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const NOTIFICATION_BADGE=OFFICIAL_LOGO;
+const CACHE='trilheiros-shell-20260910-notify-brand7';
+const OFFICIAL_LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
+const NOTIFICATION_BADGE='/notification-badge.svg?v=20260910-brand7';
 const APP_SHELL=[
   '/offline.html',
-  '/manifest.webmanifest',
-  '/app-icon-192.svg',
-  '/app-icon-512.svg',
+  '/manifest.webmanifest?v=20260910-brand7',
+  '/notification-badge.svg?v=20260910-brand7',
   '/app.css',
   '/premium.css',
   '/admin-v7.css',
@@ -66,13 +65,11 @@ self.addEventListener('fetch',event=>{
     return;
   }
 
-  /* Código e configurações sempre tentam rede primeiro para evitar JS antigo preso no celular. */
   if(/\.(?:js|css|html|webmanifest)$/i.test(url.pathname)||url.pathname.startsWith('/__/firebase/')){
     event.respondWith(networkFirst(request,false));
     return;
   }
 
-  /* Imagens/fontes locais podem abrir instantaneamente do cache e atualizar em paralelo. */
   event.respondWith(staleWhileRevalidate(request));
 });
 
