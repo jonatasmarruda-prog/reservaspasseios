@@ -18,6 +18,11 @@ service cloud.firestore {
     function canFinance() { return canManage() || roleIs('finance'); }
     function canOperate() { return canManage() || roleIs('support'); }
     function canViewReservations() { return canManage() || roleIs('finance') || roleIs('support'); }
+    function saleOwned(saleId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/sales/$(saleId)) &&
+        get(/databases/$(database)/documents/sales/$(saleId)).data.claimed_uid == request.auth.uid;
+    }
 
     match /trips/{tripId} {
       allow read: if true;
@@ -36,14 +41,24 @@ service cloud.firestore {
         );
 
       match /reservations/{reservationId} {
-        allow create: if signedIn() && reservationId == request.auth.uid &&
-          request.resource.data.seats is int &&
-          request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
-          request.resource.data.participants is list &&
-          request.resource.data.participants.size() == request.resource.data.seats &&
-          request.resource.data.policy_accepted == true &&
-          request.resource.data.status == 'active';
-        allow read: if canViewReservations() || (signedIn() && reservationId == request.auth.uid);
+        allow create: if canManage() ||
+          (
+            signedIn() && reservationId == request.auth.uid &&
+            request.resource.data.seats is int &&
+            request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
+            request.resource.data.participants is list &&
+            request.resource.data.participants.size() == request.resource.data.seats &&
+            request.resource.data.policy_accepted == true &&
+            request.resource.data.status == 'active'
+          );
+        allow read: if canViewReservations() ||
+          (signedIn() && reservationId == request.auth.uid) ||
+          (
+            signedIn() &&
+            ('sale_id' in resource.data) &&
+            resource.data.sale_id is string &&
+            saleOwned(resource.data.sale_id)
+          );
         allow update: if canManage() ||
           (roleIs('finance') && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'paid_amount','refunded_amount','payment_method','payment_status','admin_notes','updated_at',
@@ -54,6 +69,27 @@ service cloud.firestore {
             resource.data.status == 'active' &&
             request.resource.data.status == 'cancel_requested' &&
             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancel_reason','cancel_requested_at','updated_at'])
+          ) ||
+          (
+            signedIn() &&
+            ('sale_id' in resource.data) &&
+            resource.data.sale_id is string &&
+            saleOwned(resource.data.sale_id) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'responsible_name','responsible_cpf','email','participants','registration_answers',
+              'accommodation','category','status','registration_status','policy_text','policy_version',
+              'policy_accepted','policy_accepted_at','updated_at'
+            ]) &&
+            request.resource.data.seats == resource.data.seats &&
+            request.resource.data.paid_amount == resource.data.paid_amount &&
+            request.resource.data.refunded_amount == resource.data.refunded_amount &&
+            request.resource.data.payment_method == resource.data.payment_method &&
+            request.resource.data.payment_status == resource.data.payment_status &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.registration_status == 'completed' &&
+            request.resource.data.participants is list &&
+            request.resource.data.participants.size() == resource.data.seats &&
+            request.resource.data.policy_accepted == true
           );
         allow delete: if canManage();
       }
@@ -70,6 +106,30 @@ service cloud.firestore {
         allow update: if signedIn() && feedbackId == request.auth.uid;
         allow delete: if canManage();
       }
+    }
+
+    match /sales/{saleId} {
+      allow create, delete: if canFinance();
+      allow read: if canFinance() ||
+        (
+          signedIn() &&
+          (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid)
+        );
+      allow update: if canFinance() ||
+        (
+          signedIn() &&
+          (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'claimed_uid','customer_name','customer_cpf','customer_email','participants',
+            'accommodation','category','registration_status','registered_at','updated_at'
+          ]) &&
+          request.resource.data.claimed_uid == request.auth.uid &&
+          request.resource.data.trip_id == resource.data.trip_id &&
+          request.resource.data.seats == resource.data.seats &&
+          request.resource.data.paid_amount == resource.data.paid_amount &&
+          request.resource.data.payment_method == resource.data.payment_method &&
+          request.resource.data.payment_status == resource.data.payment_status
+        );
     }
 
     match /{path=**}/reservations/{reservationId} {
