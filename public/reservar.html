@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="description" content="Reserve seus passeios com os Trilheiros de Rondonópolis.">
+  <title>Reserva de Passeios | Trilheiros de Rondonópolis</title>
+  <link rel="preconnect" href="https://i.postimg.cc">
+  <link rel="preload" as="image" href="https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png">
+  <link rel="stylesheet" href="/reservation-portal-v25.css">
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.577.0/dist/umd/lucide.min.js" defer></script>
+  <script src="/__/firebase/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="/__/firebase/10.14.1/firebase-auth-compat.js" defer></script>
+  <script src="/__/firebase/10.14.1/firebase-firestore-compat.js" defer></script>
+  <script src="/__/firebase/init.js" defer></script>
+  <script src="/reservation-portal-v25.js" defer></script>
+</head>
+<body>
+  <div class="portalShell">
+    <section class="hero" id="hero">
+      <div class="heroGlow heroGlowA"></div><div class="heroGlow heroGlowB"></div>
+      <div class="heroInner">
+        <img class="heroLogo" src="https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis">
+        <span class="eyebrow">RESERVA DE PASSEIOS</span>
+        <h1>TRILHEIROS DE<br><em>RONDONÓPOLIS</em></h1>
+        <p>Reserve sua próxima viagem e viva experiências inesquecíveis em meio às trilhas, cachoeiras e paisagens do Centro-Oeste.</p>
+        <div class="heroFeatures"><span>🌿 Explore</span><span>🥾 Aventure-se</span><span>💧 Descubra</span><span>⭐ Viva experiências</span></div>
+        <button class="heroButton" id="goTrips">ESCOLHA SUA PRÓXIMA AVENTURA ↓</button>
+      </div>
+    </section>
+
+    <main class="main">
+      <section id="tripListSection" class="tripListSection">
+        <div class="sectionHead"><span class="eyebrow">PRÓXIMAS EXPERIÊNCIAS</span><h2>Nossos passeios</h2><p>Escolha seu passeio, preencha os dados uma única vez e siga direto para o pagamento.</p></div>
+        <div class="syncNote" id="syncNote"><span class="syncDot"></span><span>Sincronizando vagas com o sistema...</span></div>
+        <div class="tripGrid" id="tripGrid"></div>
+      </section>
+
+      <section id="tripDetail" class="tripDetail" hidden></section>
+    </main>
+  </div>
+  <div id="toast" class="toast" aria-live="polite"></div>
+</body>
+</html>
