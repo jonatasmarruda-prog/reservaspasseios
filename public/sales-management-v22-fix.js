@@ -28,23 +28,29 @@
   }
 
   async function reservationRefForSale(s){
-    const tripRef=db.collection('trips').doc(s.trip_id),exact=tripRef.collection('reservations').doc(s.id);
-    try{const snap=await exact.get();if(snap.exists)return exact}catch(_){ }
     try{
-      const local=(state?.reservations||[]).find(r=>r.trip_id===s.trip_id&&(r.id===s.id||r.sale_id===s.id));
-      if(local?.id)return tripRef.collection('reservations').doc(local.id);
+      const local=(state?.reservations||[]).find(r=>(r.id===s.id)||(r.sale_id===s.id));
+      if(local?.id&&local?.trip_id)return db.collection('trips').doc(local.trip_id).collection('reservations').doc(local.id);
     }catch(_){ }
+    if(s.trip_id){
+      const exact=db.collection('trips').doc(s.trip_id).collection('reservations').doc(s.id);
+      try{const snap=await exact.get();if(snap.exists)return exact}catch(_){ }
+      try{
+        const qs=await db.collection('trips').doc(s.trip_id).collection('reservations').where('sale_id','==',s.id).limit(1).get();
+        if(!qs.empty)return qs.docs[0].ref;
+      }catch(_){ }
+    }
     try{
-      const qs=await tripRef.collection('reservations').where('sale_id','==',s.id).limit(1).get();
+      const qs=await db.collectionGroup('reservations').where('sale_id','==',s.id).limit(1).get();
       if(!qs.empty)return qs.docs[0].ref;
     }catch(_){ }
-    return exact;
+    return s.trip_id?db.collection('trips').doc(s.trip_id).collection('reservations').doc(s.id):null;
   }
 
   function showCancelModal(s,maxRefund){
     document.querySelector('#saleModalV22')?.remove();
     const back=document.createElement('div');back.id='saleModalV22';back.className='saleModalBackV21 saleModalBackV22';
-    back.innerHTML=`<section class="saleModalV21 saleModalV22"><form id="cancelSaleFormV221"><header class="saleModalHeadV21"><div><span>CANCELAR VENDA</span><h2>${esc(s.customer_name||'Cliente')}</h2><p>${esc(s.trip_name||'Passeio')} • ${n(s.seats)} vaga(s)</p></div><button type="button" class="v221Close">✕</button></header><div class="saleModalBodyV21"><div class="saleGridV21"><label class="saleFieldV21"><span>Recebido confirmado</span><input value="${money(n(s.paid_amount))}" disabled></label><label class="saleFieldV21"><span>Valor a reembolsar / estornar</span><input name="refund" type="number" min="0" max="${maxRefund}" step="0.01" value="0" required><small>Máximo disponível: ${money(maxRefund)}</small></label><label class="saleFieldV21 saleFullV21"><span>Motivo / observação</span><textarea name="reason" rows="3" placeholder="Motivo do cancelamento"></textarea></label></div><div class="v22Warning">Ao confirmar, as vagas voltarão ao passeio e o cadastro do cliente será encerrado. Se o reembolso zerar o valor líquido recebido, a opção Excluir ficará disponível depois do cancelamento.</div><div id="cancelSaleMsgV221"></div></div><footer class="saleModalFootV21"><button type="button" class="saleBtnGhostV21 v221Back">Voltar</button><button class="saleBtnDangerV22">Confirmar cancelamento</button></footer></form></section>`;
+    back.innerHTML=`<section class="saleModalV21 saleModalV22"><form id="cancelSaleFormV221"><header class="saleModalHeadV21"><div><span>CANCELAR VENDA</span><h2>${esc(s.customer_name||'Cliente')}</h2><p>${esc(s.trip_name||'Passeio')} • ${n(s.seats)} vaga(s)</p></div><button type="button" class="v221Close">✕</button></header><div class="saleModalBodyV21"><div class="saleGridV21"><label class="saleFieldV21"><span>Recebido confirmado</span><input value="${money(n(s.paid_amount))}" disabled></label><label class="saleFieldV21"><span>Valor a reembolsar / estornar</span><input name="refund" type="number" min="0" max="${maxRefund}" step="0.01" value="0" required><small>Máximo disponível: ${money(maxRefund)}</small></label><label class="saleFieldV21 saleFullV21"><span>Motivo / observação</span><textarea name="reason" rows="3" placeholder="Motivo do cancelamento"></textarea></label></div><div class="v22Warning">Ao confirmar, a venda será cancelada. Quando o passeio vinculado for localizado, as vagas voltarão automaticamente. Se preferir remover o registro por completo, use Excluir na lista de vendas.</div><div id="cancelSaleMsgV221"></div></div><footer class="saleModalFootV21"><button type="button" class="saleBtnGhostV21 v221Back">Voltar</button><button class="saleBtnDangerV22">Confirmar cancelamento</button></footer></form></section>`;
     document.body.appendChild(back);
     const close=()=>back.remove();q('.v221Close',back).onclick=close;q('.v221Back',back).onclick=close;back.addEventListener('click',e=>{if(e.target===back)close()});
     return{back,close,form:q('#cancelSaleFormV221',back)};
@@ -52,11 +58,11 @@
 
   /*
    * V37 chama window.cancelSaleV22. A rotina antiga supunha que
-   * reservations/{reservationId} tivesse sempre o mesmo ID da venda.
-   * Reservas sincronizadas podem usar outro ID; por isso o cancelamento
-   * era interrompido com "Dados não encontrados". Esta implementação
-   * localiza a reserva pelo sale_id e não bloqueia o cancelamento caso
-   * o documento de reserva já não exista.
+   * reservations/{reservationId} tivesse sempre o mesmo ID da venda e
+   * também bloqueava tudo quando o trip_id antigo já não existia.
+   * Esta implementação localiza a reserva pelo sale_id/collectionGroup,
+   * cancela a venda mesmo sem o documento antigo do passeio e só ajusta
+   * vagas quando encontra com segurança o passeio realmente vinculado.
    */
   window.cancelSaleV22=async function(id){
     if(!ownerOrAdmin())return deny();
@@ -71,31 +77,36 @@
         if(refund>maxRefund+0.009)return notify('O reembolso não pode ser maior que o valor recebido ainda não estornado.','error');
         btn.disabled=true;btn.textContent='Cancelando...';if(msg)msg.innerHTML='';
         try{
-          const current=await saleById(id),saleRef=db.collection('sales').doc(id),tripRef=db.collection('trips').doc(current.trip_id),resRef=await reservationRefForSale(current);
-          let newUsed=null,newRemaining=null;
+          const current=await saleById(id),saleRef=db.collection('sales').doc(id),resRef=await reservationRefForSale(current);
+          const linkedTripId=resRef?.parent?.parent?.id||current.trip_id||'';
+          const tripRef=linkedTripId?db.collection('trips').doc(linkedTripId):null;
+          let newUsed=null,newRemaining=null,tripAdjusted=false;
           await db.runTransaction(async tx=>{
-            const [ss,ts,rs]=await Promise.all([tx.get(saleRef),tx.get(tripRef),tx.get(resRef)]);
-            if(!ss.exists)throw Error('Venda não encontrada.');
-            if(!ts.exists)throw Error('Passeio da venda não foi encontrado.');
-            const sd=ss.data(),td=ts.data();
+            const ss=await tx.get(saleRef);if(!ss.exists)throw Error('Venda não encontrada.');
+            const ts=tripRef?await tx.get(tripRef):null;
+            const rs=resRef?await tx.get(resRef):null;
+            const sd=ss.data();
             if(sd.sale_status==='cancelled')throw Error('Esta venda já está cancelada.');
             const paidAmount=n(sd.paid_amount),alreadyRefunded=n(sd.refunded_amount),availableRefund=Math.max(0,paidAmount-alreadyRefunded);
             if(refund>availableRefund+0.009)throw Error(`O máximo disponível para reembolso é ${money(availableRefund)}.`);
-            const seats=n(sd.seats),minUsed=(td.special_seat_reserved===true||td.special_seat_counted===true)?1:0,totalSpots=n(td.total_spots),used=n(td.used_spots),remaining=n(td.remaining_spots);
-            newUsed=Math.max(minUsed,used-seats);
-            newRemaining=totalSpots>0?Math.max(0,totalSpots-newUsed):remaining+seats;
-            const inv=td.accommodation_inventory||{},uAcc={...(td.accommodation_used||{})};
-            if(sd.accommodation&&Object.prototype.hasOwnProperty.call(inv,sd.accommodation))uAcc[sd.accommodation]=Math.max(0,n(uAcc[sd.accommodation])-seats);
             const totalRefund=alreadyRefunded+refund,now=firebase.firestore.FieldValue.serverTimestamp(),pstat=paidAmount>0&&totalRefund+0.009>=paidAmount?'refunded':'cancelled',reason=f.reason.value.trim();
             tx.update(saleRef,{sale_status:'cancelled',payment_status:pstat,refunded_amount:totalRefund,balance_due:0,cancel_reason:reason,cancelled_at:now,updated_at:now});
-            if(rs.exists)tx.update(resRef,{status:'cancelled',payment_status:pstat,refunded_amount:totalRefund,balance_due:0,cancel_reason:reason,cancelled_at:now,updated_at:now});
-            const tu={used_spots:newUsed,remaining_spots:newRemaining,updated_at:now};if(Object.keys(inv).length)tu.accommodation_used=uAcc;tx.update(tripRef,tu);
+            if(rs?.exists)tx.update(resRef,{status:'cancelled',payment_status:pstat,refunded_amount:totalRefund,balance_due:0,cancel_reason:reason,cancelled_at:now,updated_at:now});
+            if(ts?.exists){
+              const td=ts.data(),seats=n(sd.seats),minUsed=(td.special_seat_reserved===true||td.special_seat_counted===true)?1:0,totalSpots=n(td.total_spots),used=n(td.used_spots),remaining=n(td.remaining_spots);
+              newUsed=Math.max(minUsed,used-seats);
+              newRemaining=totalSpots>0?Math.max(0,totalSpots-newUsed):remaining+seats;
+              const inv=td.accommodation_inventory||{},uAcc={...(td.accommodation_used||{})};
+              if(sd.accommodation&&Object.prototype.hasOwnProperty.call(inv,sd.accommodation))uAcc[sd.accommodation]=Math.max(0,n(uAcc[sd.accommodation])-seats);
+              const tu={used_spots:newUsed,remaining_spots:newRemaining,updated_at:now};if(Object.keys(inv).length)tu.accommodation_used=uAcc;
+              tx.update(tripRef,tu);tripAdjusted=true;
+            }
           });
           try{
-            const t=(state?.trips||[]).find(x=>x.id===current.trip_id);if(t){t.used_spots=newUsed;t.remaining_spots=newRemaining}
-            (state?.reservations||[]).filter(r=>r.trip_id===current.trip_id&&(r.id===resRef.id||r.sale_id===id)).forEach(r=>{r.status='cancelled';r.payment_status=refund+0.009>=maxRefund&&maxRefund>0?'refunded':'cancelled'});
+            if(tripAdjusted){const t=(state?.trips||[]).find(x=>x.id===linkedTripId);if(t){t.used_spots=newUsed;t.remaining_spots=newRemaining}}
+            (state?.reservations||[]).filter(r=>r.id===resRef?.id||r.sale_id===id).forEach(r=>{r.status='cancelled';r.payment_status=refund+0.009>=maxRefund&&maxRefund>0?'refunded':'cancelled'});
           }catch(_){ }
-          ui.close();notify('Venda cancelada e vagas devolvidas ao passeio.','success');
+          ui.close();notify(tripAdjusted?'Venda cancelada e vagas devolvidas ao passeio.':'Venda cancelada com sucesso. O vínculo antigo do passeio não impediu a operação.','success');
           if(typeof window.renderSalesPageV37==='function')await window.renderSalesPageV37();else if(typeof window.renderSalesPageV21==='function')await window.renderSalesPageV21();
         }catch(err){console.error('V221_CANCEL_SALE',err);if(msg)msg.innerHTML=`<div class="saleErrorV21">${esc(err.message||'Não foi possível cancelar a venda.')}</div>`;btn.disabled=false;btn.textContent='Confirmar cancelamento'}
       };
