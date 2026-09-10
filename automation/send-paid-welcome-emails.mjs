@@ -23,7 +23,7 @@ const db=admin.firestore();
 const FieldValue=admin.firestore.FieldValue;
 
 const num=v=>Math.max(0,Number(v||0)||0);
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
 const firstName=v=>String(v||'Trilheiro').trim().split(/\s+/)[0]||'Trilheiro';
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(num(v));
@@ -101,13 +101,44 @@ function emailText(sale,trip){
   return `Parabéns, ${firstName(name)}!\n\nSeu pagamento foi confirmado e sua vaga está garantida para ${tripName}.\nData: ${dateRange(trip,sale)}\nParticipante(s): ${names.length?names.join(', '):name}\nProtocolo: ${sale.protocol||'—'}\n\nVai ser incrível ter você com a gente! Se tiver qualquer dúvida, fale com o Jonatas pelo WhatsApp (66) 99692-6174.\n\nTrilheiros de Rondonópolis — Aqui ninguém vai só.`;
 }
 
-const salesSnap=await db.collection('sales').where('payment_status','==','paid').limit(100).get();
+async function sendWelcome(ref,sale,trip,email){
+  const tripName=trip?.name||sale.trip_name||'seu passeio';
+  await ref.set({welcome_email_status:'sending',welcome_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true});
+  const resp=await fetch('https://api.resend.com/emails',{
+    method:'POST',
+    headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json'},
+    body:JSON.stringify({
+      from:emailFrom,
+      to:[email],
+      reply_to:'trilheiros.roomt@gmail.com',
+      subject:`🥾 Sua viagem está confirmada: ${tripName}`,
+      html:emailHtml(sale,trip),
+      text:emailText(sale,trip)
+    })
+  });
+  if(!resp.ok)throw new Error(`Resend ${resp.status}: ${await resp.text()}`);
+  const payload=await resp.json().catch(()=>({}));
+  await ref.set({
+    welcome_email_status:'sent',
+    welcome_email_sent_at:FieldValue.serverTimestamp(),
+    welcome_email_resend_id:payload.id||'',
+    welcome_email_to:email,
+    welcome_email_version:3,
+    welcome_email_error:FieldValue.delete()
+  },{merge:true});
+  return tripName;
+}
+
 const eligible=[];
+const tripCache=new Map();
+
+/* 1) Vendas registradas no painel / fluxos que alimentam a coleção sales. */
+const salesSnap=await db.collection('sales').where('payment_status','==','paid').limit(120).get();
 for(const doc of salesSnap.docs){
   const sale={id:doc.id,...doc.data()};
   const email=String(sale.customer_email||sale.email||'').trim().toLowerCase();
   const manualPaidCompleted=sale.source==='admin_paid_sale'&&sale.registration_status==='completed';
-  const explicitlyQueued=['pending','error'].includes(String(sale.welcome_email_status||''))||!!sale.welcome_email_resend_requested_at;
+  const explicitlyQueued=['pending','queued','payment_updated','error','failed'].includes(String(sale.welcome_email_status||''))||!!sale.welcome_email_resend_requested_at;
   if(sale.sale_status==='cancelled'||sale.welcome_email_sent_at||sale.welcome_email_status==='sent')continue;
   if(!sale.payment_completed_at&&!manualPaidCompleted&&!explicitlyQueued)continue;
   if(num(sale.balance_due)>0.009)continue;
@@ -115,59 +146,70 @@ for(const doc of salesSnap.docs){
     await doc.ref.set({welcome_email_status:'skipped_no_email',welcome_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
     continue;
   }
-  eligible.push({doc,sale,email});
+  let trip=null;
+  if(sale.trip_id){
+    if(tripCache.has(sale.trip_id))trip=tripCache.get(sale.trip_id);
+    else{
+      const snap=await db.collection('trips').doc(sale.trip_id).get();
+      trip=snap.exists?{id:snap.id,...snap.data()}:null;
+      tripCache.set(sale.trip_id,trip);
+    }
+  }
+  eligible.push({ref:doc.ref,sale,email,trip,origin:'sale'});
+}
+
+/* 2) Cadastro feito pelo link interno do próprio passeio.
+   Esse fluxo grava direto em trips/{trip}/reservations e antes não entrava na fila de e-mail. */
+const tripsSnap=await db.collection('trips').limit(120).get();
+for(const tripDoc of tripsSnap.docs){
+  const trip={id:tripDoc.id,...tripDoc.data()};
+  tripCache.set(trip.id,trip);
+  let reservationsSnap;
+  try{
+    reservationsSnap=await tripDoc.ref.collection('reservations').where('source','==','direct_trip_link').limit(120).get();
+  }catch(err){
+    console.warn(`Não foi possível ler cadastros diretos de ${trip.id}:`,String(err?.message||err));
+    continue;
+  }
+  for(const doc of reservationsSnap.docs){
+    const r={id:doc.id,...doc.data()};
+    if(r.status==='cancelled'||r.registration_status!=='completed')continue;
+    if(r.welcome_email_sent_at||r.welcome_email_status==='sent')continue;
+    if(String(r.payment_status||'').toLowerCase()!=='paid'||num(r.balance_due)>0.009)continue;
+    const email=String(r.email||r.customer_email||'').trim().toLowerCase();
+    if(!validEmail(email)){
+      await doc.ref.set({welcome_email_status:'skipped_no_email',welcome_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
+      continue;
+    }
+    const sale={
+      ...r,
+      customer_name:r.responsible_name||r.customer_name||participantNames(r)[0]||'',
+      customer_email:email,
+      trip_id:trip.id,
+      trip_name:trip.name||r.trip_name||'',
+      trip_date:trip.trip_date||r.trip_date||''
+    };
+    eligible.push({ref:doc.ref,sale,email,trip,origin:'direct_trip_link'});
+  }
 }
 
 if(!eligible.length){
-  console.log('Nenhum pagamento quitado aguardando e-mail de boas-vindas.');
+  console.log('Nenhum cadastro quitado aguardando e-mail de boas-vindas.');
   process.exit(0);
 }
 
-const tripCache=new Map();
 let sent=0,failed=0;
-for(const item of eligible.slice(0,30)){
-  const {doc,sale,email}=item;
+for(const item of eligible.slice(0,60)){
+  const {ref,sale,email,trip,origin}=item;
   try{
-    let trip=null;
-    if(sale.trip_id){
-      if(tripCache.has(sale.trip_id))trip=tripCache.get(sale.trip_id);
-      else{
-        const snap=await db.collection('trips').doc(sale.trip_id).get();
-        trip=snap.exists?{id:snap.id,...snap.data()}:null;
-        tripCache.set(sale.trip_id,trip);
-      }
-    }
-    const tripName=trip?.name||sale.trip_name||'seu passeio';
-    await doc.ref.set({welcome_email_status:'sending',welcome_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true});
-    const resp=await fetch('https://api.resend.com/emails',{
-      method:'POST',
-      headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        from:emailFrom,
-        to:[email],
-        reply_to:'trilheiros.roomt@gmail.com',
-        subject:`🥾 Sua viagem está confirmada: ${tripName}`,
-        html:emailHtml(sale,trip),
-        text:emailText(sale,trip)
-      })
-    });
-    if(!resp.ok)throw new Error(`Resend ${resp.status}: ${await resp.text()}`);
-    const payload=await resp.json().catch(()=>({}));
-    await doc.ref.set({
-      welcome_email_status:'sent',
-      welcome_email_sent_at:FieldValue.serverTimestamp(),
-      welcome_email_resend_id:payload.id||'',
-      welcome_email_to:email,
-      welcome_email_version:2,
-      welcome_email_error:FieldValue.delete()
-    },{merge:true});
+    const tripName=await sendWelcome(ref,sale,trip,email);
     sent++;
-    console.log(`Boas-vindas enviado: ${sale.customer_name||email} • ${tripName}`);
+    console.log(`Boas-vindas enviado [${origin}]: ${sale.customer_name||email} • ${tripName}`);
   }catch(err){
     failed++;
     const message=String(err?.message||err).slice(0,900);
-    await doc.ref.set({welcome_email_status:'error',welcome_email_error:message,welcome_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
-    console.error(`Falha no e-mail ${sale.id}:`,message);
+    await ref.set({welcome_email_status:'error',welcome_email_error:message,welcome_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
+    console.error(`Falha no e-mail ${sale.id||email}:`,message);
   }
 }
 
