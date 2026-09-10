@@ -1,5 +1,6 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-perf2';
+const CACHE='trilheiros-shell-20260910-notify-logo';
+const OFFICIAL_LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
 const APP_SHELL=[
   '/offline.html',
   '/manifest.webmanifest',
@@ -84,8 +85,8 @@ function normalizePushPayload(event){
 function notificationOptions(data={}){
   return{
     body:data.body||'Há uma nova atualização no Trilheiros Gestão.',
-    icon:data.icon||'/app-icon-192.svg',
-    badge:data.badge||'/app-icon-192.svg',
+    icon:OFFICIAL_LOGO,
+    badge:OFFICIAL_LOGO,
     tag:data.tag||'trilheiros-gestao',
     renotify:Boolean(data.renotify),
     requireInteraction:Boolean(data.requireInteraction),
