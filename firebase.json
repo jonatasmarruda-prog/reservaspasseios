@@ -5,14 +5,17 @@
     "rewrites": [
       {"source": "/reservas", "destination": "/reservar.html"},
       {"source": "/reservar", "destination": "/reservar.html"},
+      {"source": "/cadastro/**", "destination": "/cadastro.html"},
       {"source": "**", "destination": "/index.html"}
     ],
     "headers": [
       {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/cadastro.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
       {"source": "/reservation-portal-v27.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
       {"source": "/reservation-portal-v27.css", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
       {"source": "/reservation-portal-logo-clean-v27.css", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/admin-email-controls.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/admin-master-v40.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
       {"source": "/admin-master-v40.css", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
     ]
