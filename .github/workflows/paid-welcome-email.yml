@@ -8,6 +8,8 @@ on:
     branches: [main]
     paths:
       - 'automation/send-paid-welcome-emails.mjs'
+      - 'public/admin-reservation-sync-v35.js'
+      - 'public/admin-email-controls.js'
       - '.github/workflows/paid-welcome-email.yml'
 
 permissions:
