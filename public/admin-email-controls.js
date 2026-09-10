@@ -3,10 +3,11 @@
 'use strict';
 if(!location.pathname.startsWith('/admin'))return;
 const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>[...r.querySelectorAll(s)];
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const n=v=>Math.max(0,Number(v||0)||0);
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
+function canManageEmail(){return['owner','admin','finance'].includes(String(state?.role||''))}
 function fullyPaid(s){const total=n(s?.sale_total),paid=n(s?.paid_amount),bal=Math.max(0,n(s?.balance_due));return s?.sale_status!=='cancelled'&&s?.payment_status==='paid'&&bal<=0.009&&(!total||paid>=total-0.009)}
 function emailOf(s){return String(s?.customer_email||s?.email||'').trim()}
 function emailState(s){
@@ -30,6 +31,7 @@ injectStyle();
 async function saleById(id){const snap=await db.collection('sales').doc(id).get();return snap.exists?{id:snap.id,...snap.data()}:null}
 window.requestWelcomeEmailV37=async function(id){
   try{
+    if(!canManageEmail())throw Error('Seu perfil não pode reenviar e-mails de clientes.');
     const s=await saleById(id);if(!s)throw Error('Venda não encontrada.');
     if(!fullyPaid(s))throw Error('O e-mail de boas-vindas só pode ser enviado depois da quitação total.');
     const email=emailOf(s);if(!validEmail(email))throw Error('Esta venda não possui um e-mail válido.');
@@ -52,7 +54,7 @@ async function enhanceSalesEmail(){
     qa('tbody tr',table).forEach(row=>{
       const id=q('[data-v37-open]',row)?.dataset.v37Open||q('[data-v37-pay]',row)?.dataset.v37Pay||q('[data-v37-delete]',row)?.dataset.v37Delete||q('[data-v37-cancel]',row)?.dataset.v37Cancel;
       const s=map.get(id);if(!s)return;const st=emailState(s),actionCell=row.lastElementChild,td=document.createElement('td');td.className='emailControlCell';
-      td.innerHTML=`<span class="emailBadge ${esc(st.key)}">📧 ${esc(st.label)}</span>${emailOf(s)?`<small class="emailAddress" title="${esc(emailOf(s))}">${esc(emailOf(s))}</small>`:''}${st.action?`<button class="emailAction" data-email-action="${esc(id)}">${esc(st.action)}</button>`:''}`;
+      td.innerHTML=`<span class="emailBadge ${esc(st.key)}">📧 ${esc(st.label)}</span>${emailOf(s)?`<small class="emailAddress" title="${esc(emailOf(s))}">${esc(emailOf(s))}</small>`:''}${st.action&&canManageEmail()?`<button class="emailAction" data-email-action="${esc(id)}">${esc(st.action)}</button>`:''}`;
       row.insertBefore(td,actionCell);
     });
     qa('[data-email-action]',table).forEach(b=>b.onclick=e=>{e.preventDefault();e.stopPropagation();window.requestWelcomeEmailV37(b.dataset.emailAction)});
