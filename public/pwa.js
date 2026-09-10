@@ -7,6 +7,36 @@
   let deferredPrompt=null,swRegistration=null,salesUnsub=null,salesBaseline=false,authBound=false,authBindTries=0;
   const saleState=new Map();
 
+  const isStandaloneLaunch=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true||new URLSearchParams(location.search).get('source')==='pwa';
+  function showStartupSplash(){
+    if(!isStandaloneLaunch()||document.getElementById('trilheirosStartupSplash'))return;
+    const style=document.createElement('style');
+    style.id='trilheirosStartupSplashStyle';
+    style.textContent='#trilheirosStartupSplash{position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;background:#fff;opacity:1;transition:opacity .28s ease;overflow:hidden}#trilheirosStartupSplash.hide{opacity:0;pointer-events:none}#trilheirosStartupSplash img{display:block;width:min(58vw,240px);height:auto;max-height:42vh;object-fit:contain;filter:none}';
+    document.head.appendChild(style);
+    const splash=document.createElement('div');
+    splash.id='trilheirosStartupSplash';
+    splash.setAttribute('aria-label','Trilheiros de Rondonópolis');
+    const img=document.createElement('img');
+    img.src=LOGO;
+    img.alt='Trilheiros de Rondonópolis';
+    img.decoding='sync';
+    img.fetchPriority='high';
+    splash.appendChild(img);
+    document.body.appendChild(splash);
+    const started=Date.now();
+    const close=()=>{
+      const wait=Math.max(0,1050-(Date.now()-started));
+      setTimeout(()=>{
+        splash.classList.add('hide');
+        setTimeout(()=>{splash.remove();style.remove()},320);
+      },wait);
+    };
+    if(document.readyState==='complete')close();else window.addEventListener('load',close,{once:true});
+    setTimeout(close,2800);
+  }
+  if(document.body)showStartupSplash();else document.addEventListener('DOMContentLoaded',showStartupSplash,{once:true});
+
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
   const paymentLabel=v=>{
     const s=String(v||'').toLowerCase();
