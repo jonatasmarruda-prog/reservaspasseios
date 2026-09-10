@@ -121,9 +121,12 @@ Reservas do Canva devem mostrar automaticamente nome, participantes, passeio, ti
 - venda com dinheiro confirmado usa `Cancelar`/reembolso para preservar histórico financeiro;
 - venda cancelada sem saldo financeiro pode ser excluída definitivamente.
 
+Correção de 2026-09-10: o cancelamento antigo da V22 supunha que o documento da reserva tivesse sempre o mesmo ID da venda. Reservas sincronizadas podem usar ID diferente, fazendo o botão `Cancelar` falhar com `Dados não encontrados`. `public/sales-management-v22-fix.js` agora localiza a reserva pelo `sale_id`, aceita a ausência de um documento de reserva sem bloquear a venda, cancela a venda, atualiza a reserva quando existir, devolve as vagas ao passeio, corrige limite de hospedagem e respeita a vaga nº 01 do guia. A ação continua restrita a owner/admin. Se o reembolso/estorno zerar o recebido líquido, a V37 passa a oferecer `Excluir` definitivamente.
+
 Commits:
 - `ff909c255dcb2ffb095042897fca0d0e262d9bc1` — exclusão segura;
-- `55b7b36a5500867738f4f857c0416f8e7e4a989f` — publicação/cache.
+- `55b7b36a5500867738f4f857c0416f8e7e4a989f` — publicação/cache;
+- `1c43f52524a184a46100d4552378d12de2bddfe6` — cancelamento robusto para vendas pagas/sincronizadas.
 
 ## E-mail automático de boas-vindas após quitação
 Arquivos:
