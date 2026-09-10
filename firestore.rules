@@ -27,6 +27,24 @@ service cloud.firestore {
           get(/databases/$(database)/documents/sales/$(saleId)).data.sale_status != 'cancelled'
         );
     }
+    function publicPortalSaleCreate(saleId) {
+      return signedIn() &&
+        saleId == request.auth.uid &&
+        request.resource.data.claimed_uid == request.auth.uid &&
+        request.resource.data.source == 'public_portal_v25' &&
+        request.resource.data.sale_status == 'active' &&
+        request.resource.data.registration_status == 'completed' &&
+        request.resource.data.payment_status == 'pending' &&
+        request.resource.data.paid_amount == 0 &&
+        request.resource.data.refunded_amount == 0 &&
+        request.resource.data.seats is int &&
+        request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
+        request.resource.data.trip_id is string &&
+        request.resource.data.customer_name is string &&
+        request.resource.data.customer_email is string &&
+        request.resource.data.participants is list &&
+        request.resource.data.participants.size() == request.resource.data.seats;
+    }
 
     match /trips/{tripId} {
       allow read: if true;
@@ -125,7 +143,8 @@ service cloud.firestore {
     }
 
     match /sales/{saleId} {
-      allow create, delete: if canFinance();
+      allow create: if canFinance() || publicPortalSaleCreate(saleId);
+      allow delete: if canFinance();
       allow read: if canFinance() ||
         (
           signedIn() &&
