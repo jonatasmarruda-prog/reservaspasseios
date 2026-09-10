@@ -1,5 +1,5 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-notify-brand7';
+const CACHE='trilheiros-shell-20260910-bgpush1';
 const OFFICIAL_LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
 const NOTIFICATION_BADGE='/notification-badge.svg?v=20260910-brand7';
 const APP_SHELL=[
@@ -75,7 +75,21 @@ self.addEventListener('fetch',event=>{
 
 function normalizePushPayload(event){
   if(!event.data)return{};
-  try{return event.data.json()||{}}catch(_){
+  try{
+    const raw=event.data.json()||{};
+    const notification=raw.notification||raw?.data?.notification||{};
+    const webpushNotification=raw?.webpush?.notification||{};
+    const data=raw.data||{};
+    return{
+      ...data,
+      ...raw,
+      title:raw.title||notification.title||webpushNotification.title||data.title,
+      body:raw.body||notification.body||webpushNotification.body||data.body,
+      icon:raw.icon||notification.icon||webpushNotification.icon||data.icon,
+      badge:raw.badge||notification.badge||webpushNotification.badge||data.badge,
+      url:raw.url||data.url||raw?.fcmOptions?.link||raw?.webpush?.fcmOptions?.link
+    };
+  }catch(_){
     try{return{body:event.data.text()}}catch(__){return{}}
   }
 }
@@ -83,11 +97,11 @@ function normalizePushPayload(event){
 function notificationOptions(data={}){
   return{
     body:data.body||'Há uma nova atualização no Trilheiros Gestão.',
-    icon:OFFICIAL_LOGO,
-    badge:NOTIFICATION_BADGE,
+    icon:data.icon||OFFICIAL_LOGO,
+    badge:data.badge||NOTIFICATION_BADGE,
     tag:data.tag||'trilheiros-gestao',
-    renotify:Boolean(data.renotify),
-    requireInteraction:Boolean(data.requireInteraction),
+    renotify:data.renotify===true||data.renotify==='true',
+    requireInteraction:data.requireInteraction===true||data.requireInteraction==='true',
     timestamp:Number(data.timestamp||Date.now()),
     vibrate:Array.isArray(data.vibrate)?data.vibrate:[180,80,180],
     data:{url:data.url||'/admin',...(data.data||{})},
