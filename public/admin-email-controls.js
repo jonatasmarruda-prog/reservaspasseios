@@ -29,6 +29,25 @@ function injectStyle(){
 injectStyle();
 
 async function saleById(id){const snap=await db.collection('sales').doc(id).get();return snap.exists?{id:snap.id,...snap.data()}:null}
+async function queuePaidWelcome(id,{silent=false}={}){
+  if(!id||typeof db==='undefined')return false;
+  const ref=db.collection('sales').doc(id),snap=await ref.get();if(!snap.exists)return false;
+  const s={id:snap.id,...snap.data()};
+  if(!fullyPaid(s))return false;
+  if(s.welcome_email_sent_at||s.welcome_email_status==='sent')return false;
+  const stamp=firebase.firestore.FieldValue.serverTimestamp(),patch={};
+  if(!s.payment_completed_at)patch.payment_completed_at=stamp;
+  if(validEmail(emailOf(s))){
+    if(!['pending','sending'].includes(String(s.welcome_email_status||'')))patch.welcome_email_status='pending';
+    if(!s.welcome_email_requested_at)patch.welcome_email_requested_at=stamp;
+  }
+  if(!Object.keys(patch).length)return false;
+  await ref.update(patch);
+  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. E-mail de boas-vindas liberado para envio.','success');
+  return true;
+}
+window.queuePaidWelcomeEmail=queuePaidWelcome;
+
 window.requestWelcomeEmailV37=async function(id){
   try{
     if(!canManageEmail())throw Error('Seu perfil não pode reenviar e-mails de clientes.');
@@ -37,7 +56,7 @@ window.requestWelcomeEmailV37=async function(id){
     const email=emailOf(s);if(!validEmail(email))throw Error('Esta venda não possui um e-mail válido.');
     if((s.welcome_email_sent_at||s.welcome_email_status==='sent')&&!confirm(`Reenviar o e-mail de boas-vindas para ${email}?`))return;
     const stamp=firebase.firestore.FieldValue.serverTimestamp(),del=firebase.firestore.FieldValue.delete();
-    const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
+    const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
     if(!s.payment_completed_at)patch.payment_completed_at=stamp;
     await db.collection('sales').doc(id).update(patch);
     notify('E-mail colocado na fila. O envio ocorre automaticamente em poucos minutos.','success');
@@ -68,14 +87,23 @@ function watchPaymentCompletion(id){
     if(stopped||!snap.exists)return;const s=snap.data()||{};
     if(!fullyPaid(s))return;
     stopped=true;unsub();
-    try{
-      const stamp=firebase.firestore.FieldValue.serverTimestamp(),patch={};
-      if(!s.payment_completed_at)patch.payment_completed_at=stamp;
-      if(validEmail(emailOf(s))&&!s.welcome_email_sent_at&&!['sent','sending','pending'].includes(String(s.welcome_email_status||'')))patch.welcome_email_status='pending';
-      if(Object.keys(patch).length)await ref.update(patch);
-    }catch(e){console.warn('EMAIL_PAYMENT_MARKER',e)}
+    try{await queuePaidWelcome(id,{silent:true})}catch(e){console.warn('EMAIL_PAYMENT_MARKER',e)}
   },()=>{});
   setTimeout(()=>{if(!stopped){stopped=true;unsub()}},10*60*1000);
+}
+
+/* Pendências V35: somente depois da confirmação do operador o e-mail é liberado. */
+const originalConfirm=window.confirmSyncedPaymentV35;
+if(typeof originalConfirm==='function'&&!originalConfirm.__welcomeQueue){
+  const wrappedConfirm=async function(tripId,id,saleId,...args){
+    const sid=saleId||id;
+    const result=await originalConfirm.call(this,tripId,id,saleId,...args);
+    try{await queuePaidWelcome(sid)}catch(e){console.warn('WELCOME_AFTER_PENDING_CONFIRM',e)}
+    return result;
+  };
+  wrappedConfirm.__welcomeQueue=true;
+  window.confirmSyncedPaymentV35=wrappedConfirm;
+  try{globalThis.confirmSyncedPaymentV35=wrappedConfirm}catch(_){ }
 }
 
 const originalPay=window.openPaymentV22;
