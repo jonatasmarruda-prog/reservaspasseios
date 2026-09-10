@@ -1,13 +1,12 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-notify-brand3';
+const CACHE='trilheiros-shell-20260910-notify-brand5';
 const OFFICIAL_LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const NOTIFICATION_BADGE='/notification-badge.svg?v=20260910-brand3';
+const NOTIFICATION_BADGE=OFFICIAL_LOGO;
 const APP_SHELL=[
   '/offline.html',
   '/manifest.webmanifest',
   '/app-icon-192.svg',
   '/app-icon-512.svg',
-  '/notification-badge.svg',
   '/app.css',
   '/premium.css',
   '/admin-v7.css',
