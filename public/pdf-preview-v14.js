@@ -56,7 +56,7 @@
         await navigator.share(data);
         return;
       }
-      say('Seu navegador não permite compartilhar o PDF diretamente. Toque em “Baixar PDF” e anexe o arquivo no WhatsApp ou e-mail.');
+      say('Este navegador não consegue anexar o PDF diretamente. Toque em “Baixar PDF” e depois envie o arquivo pelo WhatsApp ou e-mail.');
     }catch(e){
       if(e?.name==='AbortError')return;
       console.error(e);
@@ -84,12 +84,12 @@
         <button type="button" class="pdfPreviewCloseV14" aria-label="Fechar">✕</button>
       </header>
       <div class="pdfPreviewActionsV14">
-        <button type="button" class="pdfPreviewShareV14">📤 Compartilhar PDF</button>
-        <button type="button" class="pdfPreviewOpenV14">↗ Abrir PDF</button>
+        <button type="button" class="pdfPreviewShareV14">📤 Compartilhar no WhatsApp / E-mail</button>
+        <button type="button" class="pdfPreviewOpenV14">👁 Visualizar PDF</button>
         <button type="button" class="pdfPreviewDownloadV14">⬇ Baixar PDF</button>
       </div>
-      <p class="pdfPreviewHintV14">No celular, toque em <b>Compartilhar PDF</b> e escolha WhatsApp, Gmail ou outro aplicativo. Este documento pode conter nome e CPF; compartilhe apenas com pessoas autorizadas.</p>
-      <div class="pdfPreviewFrameWrapV14"><iframe class="pdfPreviewFrameV14" title="Pré-visualização do PDF"></iframe><div class="pdfPreviewFallbackV14">Se a visualização não aparecer neste aparelho, toque em <b>Abrir PDF</b>.</div></div>
+      <p class="pdfPreviewHintV14">Primeiro confira a lista abaixo. Depois toque em <b>Compartilhar no WhatsApp / E-mail</b>; no Android abrirá a tela de compartilhamento do celular com o PDF anexado. Este documento pode conter nome e CPF.</p>
+      <div class="pdfPreviewFrameWrapV14"><iframe class="pdfPreviewFrameV14" title="Pré-visualização do PDF"></iframe><div class="pdfPreviewFallbackV14">Se a visualização não aparecer neste aparelho, toque em <b>Visualizar PDF</b>.</div></div>
     </section>`;
     document.body.appendChild(back);
     back.querySelector('.pdfPreviewFrameV14').src=currentUrl;
@@ -103,7 +103,6 @@
     return true;
   };
 
-  /* Envolve o construtor do jsPDF para que todo doc.save() abra a prévia, em vez de baixar. */
   function installSaveInterceptor(){
     const ns=window.jspdf;
     const Original=ns?.jsPDF;
@@ -132,7 +131,6 @@
     return true;
   }
 
-  /* Torna mais claro no painel que o clique abre uma visualização, não baixa automaticamente. */
   function patchLabels(){
     document.querySelectorAll('button[title="PDF Premium"]').forEach(b=>b.title='Visualizar PDF');
     document.querySelectorAll('.reportCards button').forEach(b=>{
