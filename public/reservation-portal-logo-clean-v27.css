@@ -1,0 +1,62 @@
+/* Correção visual da logo — sem círculos/anéis. Mantém apenas flutuação e brilho suave. */
+.heroInner::before,
+.heroInner::after,
+.heroLogoWrap::before,
+.heroLogoWrap::after,
+.heroLogoStage::before,
+.heroLogoStage::after{
+  content:none!important;
+  display:none!important;
+  animation:none!important;
+  border:0!important;
+  box-shadow:none!important;
+  background:none!important;
+}
+
+.heroLogoWrap{
+  position:relative!important;
+  display:flex!important;
+  justify-content:center!important;
+  margin-bottom:24px!important;
+  background:none!important;
+  border:0!important;
+  box-shadow:none!important;
+}
+
+.heroLogoStage{
+  position:relative!important;
+  display:grid!important;
+  place-items:center!important;
+  width:max-content!important;
+  padding:0!important;
+  background:none!important;
+  border:0!important;
+  box-shadow:none!important;
+  animation:trilheirosLogoFloatClean 4.8s ease-in-out infinite!important;
+}
+
+.heroLogo{
+  position:relative!important;
+  z-index:2!important;
+  margin:0!important;
+  animation:trilheirosLogoGlowClean 4.8s ease-in-out infinite!important;
+  transform-origin:center center!important;
+}
+
+@keyframes trilheirosLogoFloatClean{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-7px)}
+}
+
+@keyframes trilheirosLogoGlowClean{
+  0%,100%{filter:drop-shadow(0 12px 24px rgba(0,0,0,.32)) drop-shadow(0 0 18px rgba(34,197,94,.20))}
+  50%{filter:drop-shadow(0 14px 28px rgba(0,0,0,.30)) drop-shadow(0 0 30px rgba(34,197,94,.34))}
+}
+
+@media(max-width:640px){
+  .heroLogoStage{padding:0!important}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .heroLogoStage,.heroLogo{animation:none!important}
+}
