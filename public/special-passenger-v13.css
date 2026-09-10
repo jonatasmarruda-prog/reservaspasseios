@@ -1,0 +1,7 @@
+/* Trilheiros Gestão V13 — destaque do passageiro especial */
+.specialPassengerV13{border:1px solid rgba(177,132,35,.34)!important;background:linear-gradient(135deg,#fffdf5,#f7fbf8)!important;box-shadow:0 8px 22px rgba(124,91,22,.06)}
+.specialPassengerV13 .dayPersonMain strong{color:#644d16}
+.specialPassengerV13 .dayPersonMain small{color:#8b6d27;font-weight:900;letter-spacing:.04em}
+.specialPassengerV13 .presenceBtn{border-color:#d9bd76;background:#fff9e8;color:#725819}
+.specialPassengerV13.present .presenceBtn{background:#0d5a43;color:#fff;border-color:#0d5a43}
+@media(max-width:560px){.specialPassengerV13{border-radius:15px}.specialPassengerV13 .dayPersonMain small{font-size:10px}}
