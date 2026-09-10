@@ -3,6 +3,9 @@
   let currentUrl='';
   let currentFile=null;
   let currentMeta=null;
+  let escapeHandler=null;
+
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 
   function say(message,type=''){
     try{if(typeof toast==='function')return toast(message,type)}catch(_){ }
@@ -13,9 +16,19 @@
     return String(v||'documento.pdf').replace(/[\\/:*?"<>|]+/g,'-');
   }
 
+  function metaFromFilename(filename){
+    const n=String(filename||'').toLowerCase();
+    if(n.startsWith('lista-oficial-'))return{title:'Lista oficial de participantes',shareText:'Lista oficial de participantes — Trilheiros de Rondonópolis'};
+    if(n.startsWith('transporte-'))return{title:'Lista de transporte',shareText:'Lista de transporte — Trilheiros de Rondonópolis'};
+    if(n.startsWith('quartos-'))return{title:'Mapa de hospedagem',shareText:'Mapa de hospedagem — Trilheiros de Rondonópolis'};
+    if(n.startsWith('seguro-'))return{title:'Lista para seguro',shareText:'Lista para seguro — Trilheiros de Rondonópolis'};
+    return{title:'Documento PDF',shareText:'Documento — Trilheiros de Rondonópolis'};
+  }
+
   function cleanup(){
     if(currentUrl){try{URL.revokeObjectURL(currentUrl)}catch(_){ }currentUrl=''}
     currentFile=null;currentMeta=null;
+    if(escapeHandler){document.removeEventListener('keydown',escapeHandler);escapeHandler=null}
   }
 
   function closePreview(){
@@ -54,18 +67,20 @@
   window.openPdfPreviewV14=function(doc,options={}){
     closePreview();
     const filename=safeName(options.filename||'documento-trilheiros.pdf');
-    const title=options.title||'Visualizar PDF';
-    const subtitle=options.subtitle||'';
+    const inferred=metaFromFilename(filename);
+    const title=options.title||inferred.title;
+    const subtitle=options.subtitle||'Confira o documento antes de compartilhar.';
+    const shareText=options.shareText||inferred.shareText;
     const blob=doc.output('blob');
     currentUrl=URL.createObjectURL(blob);
-    currentFile=new File([blob],filename,{type:'application/pdf'});
-    currentMeta={...options,filename,title,subtitle};
+    try{currentFile=new File([blob],filename,{type:'application/pdf'})}catch(_){currentFile=blob;currentFile.name=filename}
+    currentMeta={...options,filename,title,subtitle,shareText};
 
     const back=document.createElement('div');
     back.id='pdfPreviewV14';back.className='pdfPreviewBackV14';
-    back.innerHTML=`<section class="pdfPreviewCardV14" role="dialog" aria-modal="true" aria-label="${title.replace(/"/g,'&quot;')}">
+    back.innerHTML=`<section class="pdfPreviewCardV14" role="dialog" aria-modal="true" aria-label="${esc(title)}">
       <header class="pdfPreviewHeadV14">
-        <div><span>DOCUMENTO GERADO</span><h2>${title}</h2>${subtitle?`<p>${subtitle}</p>`:''}</div>
+        <div><span>DOCUMENTO GERADO</span><h2>${esc(title)}</h2><p>${esc(subtitle)}</p></div>
         <button type="button" class="pdfPreviewCloseV14" aria-label="Fechar">✕</button>
       </header>
       <div class="pdfPreviewActionsV14">
@@ -77,15 +92,32 @@
       <div class="pdfPreviewFrameWrapV14"><iframe class="pdfPreviewFrameV14" title="Pré-visualização do PDF"></iframe><div class="pdfPreviewFallbackV14">Se a visualização não aparecer neste aparelho, toque em <b>Abrir PDF</b>.</div></div>
     </section>`;
     document.body.appendChild(back);
-    const frame=back.querySelector('.pdfPreviewFrameV14');frame.src=currentUrl;
+    back.querySelector('.pdfPreviewFrameV14').src=currentUrl;
     back.querySelector('.pdfPreviewCloseV14').onclick=closePreview;
     back.querySelector('.pdfPreviewShareV14').onclick=shareCurrent;
     back.querySelector('.pdfPreviewDownloadV14').onclick=downloadCurrent;
     back.querySelector('.pdfPreviewOpenV14').onclick=()=>window.open(currentUrl,'_blank','noopener');
     back.addEventListener('click',e=>{if(e.target===back)closePreview()});
-    document.addEventListener('keydown',function escOnce(e){if(e.key==='Escape'){document.removeEventListener('keydown',escOnce);closePreview()}},{once:false});
+    escapeHandler=e=>{if(e.key==='Escape')closePreview()};
+    document.addEventListener('keydown',escapeHandler);
     return true;
   };
+
+  /* Intercepta o save() do jsPDF: todos os PDFs passam a abrir no visor primeiro. */
+  function installSaveInterceptor(){
+    const api=window.jspdf?.jsPDF?.API;
+    if(!api||api.__trilheirosPreviewV14)return !!api;
+    const original=api.save;
+    if(typeof original!=='function')return false;
+    api.__trilheirosOriginalSave=original;
+    api.save=function(filename='documento.pdf',options={}){
+      const meta=metaFromFilename(filename);
+      window.openPdfPreviewV14(this,{filename,...meta});
+      return options?.returnPromise?Promise.resolve(this):this;
+    };
+    api.__trilheirosPreviewV14=true;
+    return true;
+  }
 
   /* Torna mais claro no painel que o clique abre uma visualização, não baixa automaticamente. */
   function patchLabels(){
@@ -97,6 +129,10 @@
       if(strong?.textContent.includes('Lista de transporte'))b.title='Visualizar lista de transporte em PDF';
     });
   }
+
+  installSaveInterceptor();
+  const retry=setInterval(()=>{if(installSaveInterceptor())clearInterval(retry)},250);
+  setTimeout(()=>clearInterval(retry),5000);
   new MutationObserver(patchLabels).observe(document.documentElement,{subtree:true,childList:true});
-  window.addEventListener('load',patchLabels);
+  window.addEventListener('load',()=>{installSaveInterceptor();patchLabels()});
 })();
