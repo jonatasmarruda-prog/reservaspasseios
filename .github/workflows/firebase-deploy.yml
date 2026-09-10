@@ -1,4 +1,4 @@
-name: Publicar Trilheiros no Firebase Spark
+name: Publicar Trilheiros no Firebase Hosting
 
 on:
   push:
@@ -6,8 +6,7 @@ on:
     paths:
       - 'public/**'
       - 'firebase.json'
-      - 'firestore*.rules'
-      - 'firestore.indexes.json'
+      - '.github/workflows/firebase-deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -34,5 +33,5 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Publicar Firestore e Hosting
-        run: firebase deploy --project trilheiros-reservas --only firestore,hosting --non-interactive
+      - name: Publicar Hosting
+        run: firebase deploy --project trilheiros-reservas --only hosting --non-interactive
