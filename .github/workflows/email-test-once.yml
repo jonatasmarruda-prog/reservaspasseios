@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/email-test-once.yml'
+      - 'automation/send-test-latest.mjs'
   workflow_dispatch:
 
 permissions:
