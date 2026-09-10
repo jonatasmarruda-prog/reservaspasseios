@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 const raw=process.env.FIREBASE_SERVICE_ACCOUNT||'';
-const minutes=Math.max(15,Number(process.env.PENDING_HOLD_MINUTES||30));
+const minutes=Math.max(15,Number(process.env.PENDING_HOLD_MINUTES||60));
 if(!raw){console.log('FIREBASE_SERVICE_ACCOUNT ausente.');process.exit(0)}
 let service;try{service=JSON.parse(raw)}catch{console.error('FIREBASE_SERVICE_ACCOUNT inválido.');process.exit(1)}
 admin.initializeApp({credential:admin.credential.cert(service)});
@@ -22,15 +22,18 @@ for(const doc of snap.docs){
       const [ss,ts,rs]=await Promise.all([tx.get(saleRef),tx.get(tripRef),tx.get(resRef)]);
       if(!ss.exists||!ts.exists||!rs.exists)return;
       const sd=ss.data(),td=ts.data(),rd=rs.data();
-      if(sd.payment_status!=='pending'||Number(sd.paid_amount||0)>0||sd.sale_status==='expired'||rd.status==='expired')return;
+      if(sd.payment_status!=='pending'||Number(sd.paid_amount||0)>0||sd.sale_status==='cancelled'||rd.status==='cancelled')return;
       const seats=Math.max(0,Number(sd.seats||rd.seats||0));
       const now=FV.serverTimestamp();
-      tx.update(saleRef,{sale_status:'expired',payment_status:'expired',balance_due:0,expired_at:now,updated_at:now,expiration_reason:`Pagamento não confirmado em ${minutes} minutos`});
-      tx.update(resRef,{status:'expired',payment_status:'expired',balance_due:0,expired_at:now,updated_at:now});
-      tx.update(tripRef,{used_spots:Math.max(1,Number(td.used_spots||1)-seats),remaining_spots:Math.max(0,Number(td.remaining_spots||0)+seats),updated_at:now});
+      const guideFloor=td.special_seat_counted===true?1:0;
+      const used=Math.max(guideFloor,Number(td.used_spots||guideFloor)-seats);
+      const remaining=Math.max(0,Number(td.total_spots||0)>0?Number(td.total_spots)-used:Number(td.remaining_spots||0)+seats);
+      tx.update(saleRef,{sale_status:'cancelled',payment_status:'cancelled',balance_due:0,cancel_reason:`Pagamento não confirmado em ${minutes} minutos — vaga liberada automaticamente`,expired_at:now,cancelled_at:now,updated_at:now});
+      tx.update(resRef,{status:'cancelled',payment_status:'cancelled',balance_due:0,cancel_reason:`Pagamento não confirmado em ${minutes} minutos — vaga liberada automaticamente`,expired_at:now,updated_at:now});
+      tx.update(tripRef,{used_spots:used,remaining_spots:remaining,updated_at:now});
     });
     released++;
   }catch(e){failed++;console.error(`Falha ${doc.id}:`,e.message)}
 }
-console.log(`Pendências expiradas: ${released} | ignoradas: ${skipped} | falhas: ${failed}`);
+console.log(`Pendências liberadas: ${released} | ignoradas: ${skipped} | falhas: ${failed}`);
 if(failed)process.exitCode=1;
