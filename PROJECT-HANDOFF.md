@@ -32,16 +32,31 @@ Arquivos mais recentes importantes:
 - `public/admin-finance-v41.js` — financeiro refinado.
 - `public/admin-stable-v42.js` — amarrações estáveis de Novo Passeio, Financeiro e Pendências.
 - `public/trip-dedupe-v43.js` — consolidação de passeios duplicados.
+- `public/reservation-portal-v27.js` — portal de reservas; corrigido sem criar nova versão para sempre reutilizar o passeio existente da mesma viagem/data.
 
-## Último problema reportado
+## Problema de passeios duplicados — causa identificada
 Na tela Passeios apareceram dois registros da Chapada na mesma data:
 - `Chapada` — 26/09/2026 — 1/45 — despesas R$ 5.040,00
 - `Chapada dos Guimarães` — 26/09/2026 — 2/40 — despesas R$ 0,00
 
-Isso é incorreto. Todas as reservas da Chapada de 26/09/2026 devem ficar em UM ÚNICO passeio.
+A causa estava no `public/reservation-portal-v27.js`: o portal não reconhecia um cadastro administrativo chamado apenas `Chapada` como o mesmo passeio de `chapada_guimaraes`, mesmo com a data 2026-09-26. Quando a correspondência falhava, `ensureTrip()` verificava somente o documento canônico e podia criar outro passeio.
 
-## Correção V43
-`public/trip-dedupe-v43.js` foi criado para:
+## Correção aplicada em 2026-09-10
+A própria V27 foi corrigida, sem criar V28/V44 desnecessária:
+1. `Chapada` passou a ser alias válido de `chapada_guimaraes`;
+2. a identificação do passeio exige a data correta da viagem;
+3. o portal prioriza o cadastro administrativo mais rico quando encontra mais de um candidato;
+4. `ensureTrip()` relê a coleção `trips` no momento da reserva antes de decidir criar um passeio;
+5. passeio existente em status diferente de `open` também é reconhecido como existente, evitando recriação indevida; nesse caso o portal não libera novas vagas;
+6. `public/reservar.html` usa cache-busting no mesmo arquivo V27 para entregar a correção imediatamente.
+
+Commits principais da correção:
+- `be8a88420908d9e5011b0df46f892f2a069be863` — impedir duplicação no portal V27;
+- `f09e6784c2ec18d4a80a79f880b661187b927bff` — atualizar cache do portal;
+- `e22d8e42e7eab3284a3231b3263e8e53a830ab61` — corrigir publicação do Firebase Hosting.
+
+## Consolidação dos duplicados já existentes — V43
+`public/trip-dedupe-v43.js` permanece responsável por:
 1. detectar duplicados dos cinco passeios do portal por template + data;
 2. consolidar reservas, vendas e despesas no ID canônico do passeio;
 3. preservar os dados administrativos mais ricos, inclusive `cost_items`;
@@ -49,28 +64,16 @@ Isso é incorreto. Todas as reservas da Chapada de 26/09/2026 devem ficar em UM 
 5. excluir o documento duplicado depois da migração;
 6. bloquear novo cadastro manual de passeio com mesmo nome/data.
 
-O `public/index.html` já referencia `/trip-dedupe-v43.js?v=43`.
+O `public/index.html` referencia `/trip-dedupe-v43.js?v=43`.
 
-## IMPORTANTE — NÃO ESTÁ CONFIRMADO EM PRODUÇÃO
-O push que carregou V43 disparou o workflow `Publicar Trilheiros no Firebase Spark`, mas o run terminou com `failure` justamente no passo `Publicar Firestore e Hosting`.
+A V43 está publicada no Firebase Hosting. Para efetivar a consolidação dos documentos já duplicados no Firestore, abrir o Admin autenticado. A rotina automática roda para owner/admin ao carregar o painel. Depois conferir se Chapada 26/09/2026 aparece uma única vez e se reservas, vendas e despesas permanecem vinculadas. Se houver erro, procurar `V43_DEDUPE_ERROR` no Console do navegador.
 
-Portanto, NÃO assumir que V43 está publicada no Firebase.
+## Deploy Firebase
+O workflow antigo tentava `firebase deploy --only firestore,hosting` e falhava com HTTP 403 ao consultar `firestore.googleapis.com` no Service Usage.
 
-Próxima ação recomendada no Cloud Shell:
-```bash
-cd ~/reservaspasseios
-git pull origin main
-firebase deploy --project trilheiros-reservas --only hosting
-```
+O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 12, disparado pelo commit `e22d8e42e7eab3284a3231b3263e8e53a830ab61`, terminou com sucesso e liberou a nova versão em `https://trilheiros-reservas.web.app`.
 
-Depois:
-1. abrir `https://trilheiros-reservas.web.app/admin`;
-2. fazer `Ctrl + F5`;
-3. aguardar cerca de 2 segundos;
-4. verificar se os dois passeios da Chapada foram consolidados em um único registro;
-5. conferir se reservas, vendas e despesas permaneceram vinculadas.
-
-Se a consolidação falhar, abrir F12 > Console e procurar `V43_DEDUPE_ERROR`.
+Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Mudanças de regra devem ser tratadas separadamente.
 
 ## Novo Passeio / Despesas
 A tela `+ Novo passeio` usa `tripModalV36()` via V42.
