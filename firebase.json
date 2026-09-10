@@ -9,11 +9,13 @@
     ],
     "headers": [
       {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
-      {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
+      {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/reservation-portal-v26.js", "headers": [{"key": "Cache-Control", "value": "no-cache"}]},
+      {"source": "/reservation-portal-v26.css", "headers": [{"key": "Cache-Control", "value": "no-cache"}]}
     ]
   },
   "firestore": {
-    "rules": "firestore.rules",
+    "rules": "firestore-v26.rules",
     "indexes": "firestore.indexes.json"
   }
 }
