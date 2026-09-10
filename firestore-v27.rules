@@ -133,6 +133,7 @@ service cloud.firestore {
 
     match /{path=**}/reservations/{reservationId} { allow read: if canViewReservations(); }
     match /expenses/{expenseId} { allow read, write: if canFinance(); }
+    match /waitlist/{waitId} { allow read, write: if canOperate(); }
     match /settings/public { allow read: if true; allow write: if canManage(); }
     match /settings/{settingId} { allow read, write: if canManage(); }
     match /audit_logs/{logId} { allow read, create: if canManage(); allow update, delete: if false; }
