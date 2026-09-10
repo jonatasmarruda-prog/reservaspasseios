@@ -1,0 +1,25 @@
+name: Liberar reservas pendentes expiradas
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/15 * * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile-pending:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Liberar reservas sem pagamento confirmado
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PENDING_HOLD_MINUTES: '30'
+        run: node automation/reconcile-pending.mjs
