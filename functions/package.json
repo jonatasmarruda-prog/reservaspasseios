@@ -1,7 +1,7 @@
 {
   "name": "trilheiros-gestao-functions",
   "private": true,
-  "main": "index.js",
+  "main": "entry.js",
   "type": "module",
   "engines": {"node": "20"},
   "dependencies": {
