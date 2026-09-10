@@ -106,8 +106,10 @@ const eligible=[];
 for(const doc of salesSnap.docs){
   const sale={id:doc.id,...doc.data()};
   const email=String(sale.customer_email||sale.email||'').trim().toLowerCase();
+  const manualPaidCompleted=sale.source==='admin_paid_sale'&&sale.registration_status==='completed';
+  const explicitlyQueued=['pending','error'].includes(String(sale.welcome_email_status||''))||!!sale.welcome_email_resend_requested_at;
   if(sale.sale_status==='cancelled'||sale.welcome_email_sent_at||sale.welcome_email_status==='sent')continue;
-  if(!sale.payment_completed_at)continue;
+  if(!sale.payment_completed_at&&!manualPaidCompleted&&!explicitlyQueued)continue;
   if(num(sale.balance_due)>0.009)continue;
   if(!validEmail(email)){
     await doc.ref.set({welcome_email_status:'skipped_no_email',welcome_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
@@ -156,7 +158,7 @@ for(const item of eligible.slice(0,30)){
       welcome_email_sent_at:FieldValue.serverTimestamp(),
       welcome_email_resend_id:payload.id||'',
       welcome_email_to:email,
-      welcome_email_version:1,
+      welcome_email_version:2,
       welcome_email_error:FieldValue.delete()
     },{merge:true});
     sent++;
