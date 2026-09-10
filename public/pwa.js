@@ -20,7 +20,7 @@
   async function registerServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
-      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260910-perf2',{updateViaCache:'none'});
+      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260910-notify-logo',{updateViaCache:'none'});
       const update=()=>swRegistration?.update?.().catch(()=>{});
       if('requestIdleCallback' in window)requestIdleCallback(update,{timeout:2500});else setTimeout(update,1200);
       return swRegistration;
@@ -48,7 +48,7 @@
   async function mobileNotify({title='🥾 Trilheiros Gestão',body='',url='/admin',tag='trilheiros-gestao',force=false}={}){
     if(!('Notification' in window)||Notification.permission!=='granted')return false;
     if(!force&&document.visibilityState==='visible')return false;
-    const options={body,icon:LOGO,badge:'/app-icon-192.svg',tag,renotify:true,vibrate:[180,80,180],timestamp:Date.now(),data:{url},actions:[{action:'open',title:'Abrir Gestão'}]};
+    const options={body,icon:LOGO,badge:LOGO,tag,renotify:true,vibrate:[180,80,180],timestamp:Date.now(),data:{url},actions:[{action:'open',title:'Abrir Gestão'}]};
     try{
       const reg=swRegistration||await navigator.serviceWorker?.ready;
       if(reg?.showNotification){await reg.showNotification(title,options);return true}
