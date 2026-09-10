@@ -8,7 +8,10 @@ const n=v=>Math.max(0,Number(v||0)||0);
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
 function canManageEmail(){return['owner','admin','finance'].includes(String(state?.role||''))}
-function fullyPaid(s){const total=n(s?.sale_total),paid=n(s?.paid_amount),bal=Math.max(0,n(s?.balance_due));return s?.sale_status!=='cancelled'&&s?.payment_status==='paid'&&bal<=0.009&&(!total||paid>=total-0.009)}
+function fullyPaid(s){
+  const total=n(s?.sale_total||s?.total_amount||s?.amount),paid=n(s?.paid_amount||s?.amount_paid||s?.received_amount),rawBal=Number(s?.balance_due),bal=Number.isFinite(rawBal)?Math.max(0,rawBal):Math.max(0,total-paid),status=String(s?.payment_status||s?.status||'').toLowerCase(),explicit=['paid','confirmed','approved','completed'].includes(status)||s?.payment_confirmed===true;
+  return s?.sale_status!=='cancelled'&&bal<=0.009&&(explicit||(total>0&&paid>=total-0.009)||!!s?.payment_completed_at);
+}
 function emailOf(s){return String(s?.customer_email||s?.email||'').trim()}
 function emailState(s){
   const email=emailOf(s);
@@ -17,13 +20,13 @@ function emailState(s){
   if(s?.welcome_email_sent_at||s?.welcome_email_status==='sent')return{key:'sent',label:'Enviado',action:'Reenviar'};
   if(s?.welcome_email_status==='error')return{key:'error',label:'Erro no envio',action:'Tentar novamente'};
   if(!fullyPaid(s))return{key:'waiting',label:'Após quitação',action:''};
-  if(s?.welcome_email_status==='sending'||s?.welcome_email_status==='pending')return{key:'pending',label:'Aguardando envio',action:''};
-  return{key:'ready',label:'Pronto para enviar',action:'Enviar agora'};
+  if(s?.welcome_email_status==='sending'||s?.welcome_email_status==='pending')return{key:'pending',label:'Envio automático em até 5 min',action:''};
+  return{key:'ready',label:'Pronto para envio automático',action:'Enviar agora'};
 }
 function injectStyle(){
   if(q('#emailControlStyle'))return;
   const s=document.createElement('style');s.id='emailControlStyle';s.textContent=`
-  .emailControlCell{min-width:150px}.emailBadge{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900;white-space:nowrap}.emailBadge.sent{background:#e2f6eb;color:#17603f}.emailBadge.pending,.emailBadge.ready{background:#fff4d8;color:#785617}.emailBadge.error{background:#ffebe8;color:#a12d24}.emailBadge.waiting,.emailBadge.noemail,.emailBadge.off{background:#edf1ef;color:#60716a}.emailAddress{display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:5px;color:#6d7c76;font-size:10px}.emailAction{margin-top:6px;border:1px solid #bfd2ca;background:#fff;color:#0b523d;border-radius:8px;padding:6px 8px;font-size:10px;font-weight:900;cursor:pointer}.emailAction:hover{background:#eff7f3}
+  .emailControlCell{min-width:170px}.emailBadge{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;font-size:10px;font-weight:900;white-space:nowrap}.emailBadge.sent{background:#e2f6eb;color:#17603f}.emailBadge.pending,.emailBadge.ready{background:#fff4d8;color:#785617}.emailBadge.error{background:#ffebe8;color:#a12d24}.emailBadge.waiting,.emailBadge.noemail,.emailBadge.off{background:#edf1ef;color:#60716a}.emailAddress{display:block;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:5px;color:#6d7c76;font-size:10px}.emailAction{margin-top:6px;border:1px solid #bfd2ca;background:#fff;color:#0b523d;border-radius:8px;padding:6px 8px;font-size:10px;font-weight:900;cursor:pointer}.emailAction:hover{background:#eff7f3}
   `;document.head.appendChild(s);
 }
 injectStyle();
@@ -43,7 +46,7 @@ async function queuePaidWelcome(id,{silent=false}={}){
   }
   if(!Object.keys(patch).length)return false;
   await ref.update(patch);
-  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. E-mail de boas-vindas liberado para envio.','success');
+  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. O e-mail será enviado automaticamente em até 5 minutos.','success');
   return true;
 }
 window.queuePaidWelcomeEmail=queuePaidWelcome;
@@ -59,7 +62,7 @@ window.requestWelcomeEmailV37=async function(id){
     const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
     if(!s.payment_completed_at)patch.payment_completed_at=stamp;
     await db.collection('sales').doc(id).update(patch);
-    notify('E-mail colocado na fila. O envio ocorre automaticamente em poucos minutos.','success');
+    notify('E-mail colocado na fila. O envio ocorre automaticamente em até 5 minutos.','success');
     if(typeof window.renderSalesPageV37==='function')window.renderSalesPageV37();
   }catch(e){notify(e.message||'Não foi possível solicitar o e-mail.','error')}
 };
