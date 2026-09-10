@@ -50,7 +50,7 @@ for(const tripDoc of tripsSnap.docs){
 
 if(!latest){console.error('Nenhuma reserva com e-mail encontrada para testar.');process.exit(1)}
 const {trip,reservation:r}=latest;
-const participants=(r.participants||[]).map(p=>p.full_name).filter(Boolean).join(', ');
+const participantes=(r.participants||[]).map(p=>p.full_name).filter(Boolean).join(', ');
 const vars={
   nome:r.responsible_name||'',passeio:trip.name||'',data:brDate(trip.trip_date),destino:trip.destination||'',
   saida:trip.departure_time||'',participantes,levar:trip.what_to_bring||'',lembrete_extra:trip.reminder_notes||'',
