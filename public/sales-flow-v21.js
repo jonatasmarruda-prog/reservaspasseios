@@ -3,7 +3,7 @@
   const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
   const q=(s,r=document)=>r.querySelector(s);
   const qa=(s,r=document)=>[...r.querySelectorAll(s)];
-  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
+  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
   const digits=v=>String(v||'').replace(/\D/g,'');
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
   const fmtDate=v=>{const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return s||'—';const [y,m,d]=s.split('-');return `${d}/${m}/${y}`};
@@ -138,7 +138,7 @@
     if(nav&&!q('[data-tab="salesV21"]',nav)){
       const finance=q('[data-tab="finance"]',nav),b=document.createElement('button');b.dataset.tab='salesV21';b.innerHTML='💳 Vendas pagas';
       b.onclick=()=>{state.tab='salesV21';renderSalesPageV21()};
-      finance?.after(b)||nav.appendChild(b);
+      if(finance)finance.after(b);else nav.appendChild(b);
     }
   }
 
@@ -200,12 +200,14 @@
     }catch(e){publicFail('Não foi possível abrir o cadastro',e.message||'Solicite um novo link aos Trilheiros.')}
   };
 
+  let routedSaleId='';
   function routeSaleWhenReady(){
-    const m=location.pathname.match(/^\/cadastro-venda\/([^/]+)/);if(!m)return;
+    const m=location.pathname.match(/^\/cadastro-venda\/([^/]+)/);if(!m){routedSaleId='';return}
+    if(routedSaleId===m[1])return;routedSaleId=m[1];
     let tries=0;const timer=setInterval(()=>{tries++;try{if(typeof db!=='undefined'&&db&&typeof auth!=='undefined'&&auth){clearInterval(timer);saleRegistrationV21(m[1])}}catch(_){ }if(tries>100){clearInterval(timer);publicFail('Cadastro indisponível','Recarregue a página e tente novamente.')}},80);
   }
 
-  const observer=new MutationObserver(()=>{injectAdmin();if(state?.tab==='salesV21')setTimeout(renderSalesPageV21,0)});
+  const observer=new MutationObserver(()=>injectAdmin());
   observer.observe(document.documentElement,{subtree:true,childList:true});
   window.addEventListener('load',()=>{injectAdmin();routeSaleWhenReady()});
   window.addEventListener('popstate',routeSaleWhenReady);
