@@ -34,5 +34,5 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM: 'Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>'
         run: node automation/send-paid-welcome-emails.mjs
