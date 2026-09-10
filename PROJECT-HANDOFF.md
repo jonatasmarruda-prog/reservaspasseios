@@ -30,7 +30,7 @@ O `public/index.html` carrega as camadas V28, V29, V30, V31, V32, V33, V34, V35,
 Arquivos mais recentes importantes:
 - `public/admin-master-v40.js` — visão executiva, DRE simplificada, segurança, lista de espera, fechamento e relatórios.
 - `public/admin-finance-v41.js` — financeiro refinado.
-- `public/admin-stable-v42.js` — amarrações estáveis de Novo Passeio, Financeiro e Pendências.
+- `public/admin-stable-v42.js` — camada final estável de Novo Passeio, Financeiro Premium, Pendências e relatórios externos.
 - `public/trip-dedupe-v43.js` — consolidação de passeios duplicados.
 - `public/reservation-portal-v27.js` — portal de reservas; corrigido sem criar nova versão para sempre reutilizar o passeio existente da mesma viagem/data.
 
@@ -71,7 +71,7 @@ A V43 está publicada no Firebase Hosting. Para efetivar a consolidação dos do
 ## Deploy Firebase
 O workflow antigo tentava `firebase deploy --only firestore,hosting` e falhava com HTTP 403 ao consultar `firestore.googleapis.com` no Service Usage.
 
-O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 12, disparado pelo commit `e22d8e42e7eab3284a3231b3263e8e53a830ab61`, terminou com sucesso e liberou a nova versão em `https://trilheiros-reservas.web.app`.
+O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 16, commit `26df5dccc0f47a486dbd24e5c76398fe039a3ff3`, terminou com sucesso após a atualização financeira final e publicou `https://trilheiros-reservas.web.app`.
 
 Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Mudanças de regra devem ser tratadas separadamente.
 
@@ -95,44 +95,72 @@ Exemplos padrão:
 
 Custos por pessoa devem ser multiplicados pela quantidade de clientes. Custos totais entram apenas uma vez.
 
+As despesas reais ficam vinculadas ao `trip_id` e são exibidas somente dentro do respectivo passeio. Para lançar/editar uma despesa, abrir Financeiro > Passeios > Abrir despesas. Não manter lista global misturando custos de viagens diferentes.
+
 ## Financeiro
-Objetivo operacional:
+A V42 foi consolidada em 2026-09-10 sem criação de V44. A tela Financeiro passou a usar uma visão executiva Premium com dados de `sales` + `expenses`:
 - faturado no mês;
 - dinheiro realmente recebido;
 - despesas pagas;
 - contas a pagar;
 - contas a receber;
-- lucro/resultado;
-- PIX, cartão, PIX parcelado, dinheiro e outros;
-- resultado por passeio;
-- custo por pessoa e custo fixo;
-- ponto de equilíbrio;
-- relatório mensal profissional com gráficos.
+- lucro/resultado de caixa;
+- vagas vendidas;
+- gráfico de formas de pagamento (PIX, cartão, PIX parcelado, dinheiro etc.);
+- gráfico de despesas pagas por categoria;
+- desempenho/resultado por passeio;
+- seletor de competência mensal;
+- botão para relatório mensal detalhado.
+
+A lista de passeios permanece abaixo do dashboard. Cada passeio abre somente suas próprias despesas, com custo previsto, pago, a pagar e resultado.
+
+Commits principais desta consolidação:
+- `0b5e8be969c516d472280749ff73a3efe746053b` — consolidar Financeiro Premium, Pendências e relatórios externos na V42;
+- `28af7663ba5d87adddded43ccc78319a5aeff76b` — alinhar relatório mensal aos dados reais de vendas e despesas;
+- `26df5dccc0f47a486dbd24e5c76398fe039a3ff3` — cache final e publicação pelo Hosting.
 
 ## Pendências
-Reservas do Canva devem mostrar automaticamente:
-- nome;
+Reservas do Canva mostram automaticamente:
+- nome do responsável e nomes dos participantes disponíveis;
 - passeio;
 - tipo/opção (individual, casal, criança, hospedagem etc.);
 - forma de pagamento;
-- valor da reserva;
-- próxima parcela quando PIX parcelado.
+- valor total escolhido na reserva;
+- valor já confirmado;
+- próxima parcela quando PIX parcelado;
+- valor a conferir/confirmar.
 
-O operador deve apenas conferir e confirmar o pagamento. Não deve redigitar valores.
+O operador não redigita valor. Abre a pendência, confere no banco/provedor e confirma. Importante: clicar em PIX/cartão no portal registra método/opção/valor, mas não prova que o dinheiro entrou. Sem webhook/API bancária validada, manter pendente até confirmação manual.
 
 ## Relatórios de participantes
 Para PDFs enviados a ônibus/atrativos/hospedagem:
-- mostrar somente Nº, Nome do participante, Tipo/Opção;
+- mostrar Nº;
+- Nome do participante;
+- Tipo/Opção escolhida;
 - não mostrar CPF;
 - não mostrar “Responsável”;
 - guia permanece nº 01 como `GUIA DE TURISMO`.
 
-## E-mail mensal
-Destino do relatório mensal: `trilheiros.roomt@gmail.com`.
-Há automações no repositório para relatório financeiro mensal, lembretes e PIX parcelado, dependentes dos secrets do GitHub (Firebase Admin / Resend).
+A V42 sobrescreve os relatórios externos para seguir esse padrão. A lista de transporte acrescenta veículo/assento; o mapa de hospedagem acrescenta quarto, sempre sem CPF. A lista de seguro continua separada e pode conter CPF quando a seguradora exigir.
+
+## Relatório financeiro mensal
+O relatório visual e o PDF mensal da V42 usam a mesma base de dados do dashboard (`sales` + `expenses`) e mostram:
+- faturado;
+- recebido;
+- despesas pagas;
+- contas a pagar;
+- lucro/caixa;
+- a receber;
+- vagas vendidas;
+- gráficos de pagamentos e despesas;
+- resultado detalhado por passeio;
+- tabela de tudo que entrou no mês;
+- tabela de despesas pagas.
+
+A automação `.github/workflows/monthly-finance-report.yml` roda diariamente e o script `automation/send-monthly-finance-report-v2.mjs` somente envia quando for o último dia local do mês (30 ou 31, ou 28/29 em fevereiro), salvo execução manual forçada. Destino: `trilheiros.roomt@gmail.com`. O envio depende dos secrets `FIREBASE_SERVICE_ACCOUNT`, `RESEND_API_KEY` e `EMAIL_FROM` estarem configurados no GitHub Actions.
 
 ## Pagamentos
-Importante: clicar em PIX/cartão no Canva registra a intenção/reserva, mas NÃO prova pagamento bancário concluído. Sem webhook/API validado do provedor, o Gestão deve manter status pendente até confirmação manual.
+Importante: clicar em PIX/cartão no Canva registra a intenção/reserva, forma e valor selecionado, mas NÃO prova pagamento bancário concluído. Sem webhook/API validado do provedor, o Gestão deve manter status pendente até confirmação manual. Após confirmação, o pagamento entra no histórico e alimenta o dashboard e o relatório mensal.
 
 ## Diretriz para próximos chats
 Antes de alterar qualquer coisa, ler este arquivo e inspecionar o código atual no GitHub. Não criar nova camada sem necessidade. Priorizar corrigir/consolidar o que já existe e evitar duplicação de versões e de passeios.
