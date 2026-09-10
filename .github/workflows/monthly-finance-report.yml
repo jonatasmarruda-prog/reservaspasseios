@@ -1,0 +1,33 @@
+name: Relatório financeiro mensal
+
+on:
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Forçar envio mesmo sem ser o último dia do mês'
+        required: false
+        default: '0'
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  monthly-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Enviar relatório financeiro mensal
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          MONTHLY_REPORT_TO: trilheiros.roomt@gmail.com
+          FORCE_MONTHLY_REPORT: ${{ github.event.inputs.force || '0' }}
+        run: node automation/send-monthly-finance-report.mjs
