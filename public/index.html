@@ -103,6 +103,65 @@ if(location.pathname.startsWith('/admin')&&window.MutationObserver){
 <script src="/admin-master-v40.js?v=40" defer></script>
 <script src="/admin-stable-v42.js?v=42-20260910-perf" defer></script>
 <script src="/trip-dedupe-v43.js?v=43" defer></script>
+<script>
+window.addEventListener('DOMContentLoaded',()=>{
+  if(!location.pathname.startsWith('/admin'))return;
+  const DEFAULT_POLICY=`POLÍTICA DE CANCELAMENTO
+
+• Direito de arrependimento: quando aplicável pela legislação, será respeitado o prazo legal.
+• Cancelamento com 7 dias ou mais de antecedência: 90% de reembolso ou 100% de crédito para outro passeio.
+• Entre 6 e 3 dias de antecedência: 50% de reembolso ou 70% de crédito.
+• Com menos de 72 horas: o reembolso pode não ser possível devido a custos já contratados e comprometidos.
+• A transferência da vaga para outra pessoa poderá ser aceita mediante comunicação prévia.
+• O não comparecimento no horário/local informado caracteriza no-show.
+• Se o passeio for cancelado pela organização por segurança, clima, força maior ou motivo operacional, serão informadas as opções disponíveis.
+• Custos de terceiros já pagos e não reembolsáveis poderão ser descontados quando aplicável.
+
+Ao concluir a reserva, o participante declara que teve acesso e concorda com esta política.`;
+
+  const fillDefaultPolicy=()=>{
+    const field=document.querySelector('#tripFormV36 textarea[name="policy"]');
+    if(field&&!field.value.trim())field.value=DEFAULT_POLICY;
+  };
+  const currentTripModal=window.tripModalV36;
+  if(typeof currentTripModal==='function'&&!currentTripModal.__defaultPolicyReady){
+    const wrapped=function(...args){const out=currentTripModal.apply(this,args);fillDefaultPolicy();return out};
+    wrapped.__defaultPolicyReady=true;
+    window.tripModalV36=wrapped;
+    window.tripModal=wrapped;
+    try{globalThis.tripModal=wrapped}catch(_){ }
+  }
+  document.addEventListener('submit',event=>{
+    if(event.target?.id!=='tripFormV36')return;
+    const field=event.target.querySelector('textarea[name="policy"]');
+    if(field&&!field.value.trim())field.value=DEFAULT_POLICY;
+  },true);
+
+  const currentConfirm=window.confirmSyncedPaymentV35;
+  if(typeof currentConfirm==='function'&&!currentConfirm.__completionMarkerReady){
+    const wrappedConfirm=async function(tripId,id,saleId,...rest){
+      const result=await currentConfirm.call(this,tripId,id,saleId,...rest);
+      try{
+        const sid=saleId||id;
+        if(!sid||typeof db==='undefined')return result;
+        const saleRef=db.collection('sales').doc(sid),saleSnap=await saleRef.get();
+        if(!saleSnap.exists)return result;
+        const sale=saleSnap.data()||{},balance=Math.max(0,Number(sale.balance_due||0)),total=Math.max(0,Number(sale.sale_total||0)),paid=Math.max(0,Number(sale.paid_amount||0));
+        if(sale.payment_status==='paid'&&balance<=0.009&&(!total||paid>=total-0.009)&&!sale.payment_completed_at){
+          const stamp=firebase.firestore.FieldValue.serverTimestamp();
+          await Promise.all([
+            saleRef.update({payment_completed_at:stamp,welcome_email_status:sale.welcome_email_sent_at?'sent':'pending'}),
+            db.collection('trips').doc(tripId).collection('reservations').doc(id).update({payment_completed_at:stamp}).catch(()=>{})
+          ]);
+        }
+      }catch(err){console.warn('WELCOME_EMAIL_COMPLETION_MARKER',err)}
+      return result;
+    };
+    wrappedConfirm.__completionMarkerReady=true;
+    window.confirmSyncedPaymentV35=wrappedConfirm;
+  }
+});
+</script>
 </head>
 <body><div id="app"></div></body>
 </html>
