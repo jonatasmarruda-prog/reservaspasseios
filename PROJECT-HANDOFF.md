@@ -31,6 +31,7 @@ Arquivos mais recentes importantes:
 - `public/admin-master-v40.js` — visão executiva, DRE simplificada, segurança, lista de espera, fechamento e relatórios.
 - `public/admin-finance-v41.js` — financeiro refinado.
 - `public/admin-stable-v42.js` — camada final estável de Novo Passeio, Financeiro Premium, Pendências e relatórios externos.
+- `public/admin-sales-v37.js` — tela de vendas, recebimentos, edição, cancelamento e exclusão segura de vendas sem pagamento confirmado.
 - `public/trip-dedupe-v43.js` — consolidação de passeios duplicados.
 - `public/reservation-portal-v27.js` — portal de reservas; corrigido sem criar nova versão para sempre reutilizar o passeio existente da mesma viagem/data.
 
@@ -71,7 +72,7 @@ A V43 está publicada no Firebase Hosting. Para efetivar a consolidação dos do
 ## Deploy Firebase
 O workflow antigo tentava `firebase deploy --only firestore,hosting` e falhava com HTTP 403 ao consultar `firestore.googleapis.com` no Service Usage.
 
-O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 16, commit `26df5dccc0f47a486dbd24e5c76398fe039a3ff3`, terminou com sucesso após a atualização financeira final e publicou `https://trilheiros-reservas.web.app`.
+O workflow `.github/workflows/firebase-deploy.yml` foi corrigido para publicar apenas o Hosting nas mudanças do front-end. O run 18, commit `55b7b36a5500867738f4f857c0416f8e7e4a989f`, terminou com sucesso após a correção da exclusão de vendas e publicou `https://trilheiros-reservas.web.app`.
 
 Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Mudanças de regra devem ser tratadas separadamente.
 
@@ -131,6 +132,19 @@ Reservas do Canva mostram automaticamente:
 - valor a conferir/confirmar.
 
 O operador não redigita valor. Abre a pendência, confere no banco/provedor e confirma. Importante: clicar em PIX/cartão no portal registra método/opção/valor, mas não prova que o dinheiro entrou. Sem webhook/API bancária validada, manter pendente até confirmação manual.
+
+## Vendas — exclusão segura
+Em 2026-09-10, `public/admin-sales-v37.js` foi corrigido para diferenciar cancelamento financeiro de exclusão de cadastro:
+- venda sem nenhum valor recebido confirmado mostra botão `Excluir`;
+- ao excluir, apaga o documento de `sales` e a reserva vinculada quando ela existir;
+- se a venda ainda estava ativa, devolve automaticamente as vagas ao passeio e libera também a hospedagem vinculada, quando houver controle de inventário;
+- a exclusão não falha caso a reserva auxiliar não exista exatamente no ID esperado;
+- venda com valor recebido confirmado não pode ser apagada diretamente; deve usar `Cancelar` e registrar o reembolso para manter o histórico financeiro;
+- venda já cancelada e sem saldo financeiro também pode ser excluída definitivamente.
+
+Commits:
+- `ff909c255dcb2ffb095042897fca0d0e262d9bc1` — exclusão segura e devolução de vagas na V37;
+- `55b7b36a5500867738f4f857c0416f8e7e4a989f` — cache-busting da V37 e deploy final no Hosting.
 
 ## Relatórios de participantes
 Para PDFs enviados a ônibus/atrativos/hospedagem:
