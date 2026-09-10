@@ -2,11 +2,6 @@ name: Lembrete um dia antes do passeio
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'automation/send-trip-reminders.mjs'
-      - '.github/workflows/trip-reminder-email.yml'
   schedule:
     - cron: '0 12 * * *'
 
