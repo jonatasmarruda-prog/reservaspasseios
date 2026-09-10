@@ -21,7 +21,11 @@ service cloud.firestore {
     function saleOwned(saleId) {
       return signedIn() &&
         exists(/databases/$(database)/documents/sales/$(saleId)) &&
-        get(/databases/$(database)/documents/sales/$(saleId)).data.claimed_uid == request.auth.uid;
+        get(/databases/$(database)/documents/sales/$(saleId)).data.claimed_uid == request.auth.uid &&
+        (
+          !('sale_status' in get(/databases/$(database)/documents/sales/$(saleId)).data) ||
+          get(/databases/$(database)/documents/sales/$(saleId)).data.sale_status != 'cancelled'
+        );
     }
 
     match /trips/{tripId} {
@@ -118,6 +122,7 @@ service cloud.firestore {
       allow update: if canFinance() ||
         (
           signedIn() &&
+          (!('sale_status' in resource.data) || resource.data.sale_status != 'cancelled') &&
           (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid) &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'claimed_uid','customer_name','customer_cpf','customer_email','participants',
@@ -140,7 +145,6 @@ service cloud.firestore {
       allow read, write: if canFinance();
     }
 
-    // Documento público mínimo usado apenas para o botão de suporte no cadastro/Minha Viagem.
     match /settings/public {
       allow read: if true;
       allow write: if canManage();
