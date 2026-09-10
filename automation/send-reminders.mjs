@@ -34,24 +34,34 @@ function htmlLayout(text,title='Trilheiros de Rondonópolis'){
   return `<div style="margin:0;padding:24px;background:#f2f7f4;font-family:Arial,Helvetica,sans-serif;color:#173a2f"><div style="max-width:680px;margin:auto;background:#fff;border-radius:22px;overflow:hidden;border:1px solid #dce8e2;box-shadow:0 14px 40px rgba(8,47,36,.08)"><div style="padding:24px;background:linear-gradient(135deg,#06291f,#0f523e);color:#fff"><div style="font-size:12px;font-weight:800;letter-spacing:.08em">TRILHEIROS DE RONDONÓPOLIS</div><div style="font-size:24px;font-weight:800;margin-top:8px">${escHtml(title)}</div></div><div style="padding:28px;font-size:15px;line-height:1.7">${body}</div><div style="padding:16px 28px;background:#f7faf8;color:#71867e;font-size:11px">Aqui ninguém vai só. 💚 • Trilheiros de Rondonópolis</div></div></div>`;
 }
 
+const LEGACY_3D_SUBJECT='🌿 {{passeio}} é esta semana! Tudo certo por aí?';
+const LEGACY_3D_BODY='Oi, {{nome}}! 😄\n\nOs Trilheiros passando para dar aquele toque: faltam só 3 dias para {{passeio}}! 🥾🌿\n\nJá está entrando no clima? Dá uma conferida rapidinha:\n✅ Data: {{data}}\n✅ Destino: {{destino}}\n✅ Horário de saída: {{saida}}\n✅ Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Recado do passeio: {{lembrete_extra}}\n\nSe estiver tudo certo, agora é só começar a contagem regressiva. 😄\n\nAqui ninguém vai só. 💚\nTrilheiros de Rondonópolis';
+const LEGACY_1D_SUBJECT='⛰️ É AMANHÃ! {{passeio}} te espera 🥾';
+const LEGACY_1D_BODY='Oi, {{nome}}! 😄\n\nÉ AMANHÃ! 🥾⛰️\nChegou a hora de separar a roupa, carregar o celular e preparar a animação porque {{passeio}} está logo ali!\n\n📅 Data: {{data}}\n📍 Destino: {{destino}}\n🕒 Saída: {{saida}}\n👥 Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Último recado: {{lembrete_extra}}\n🔖 Protocolo: {{protocolo}}\n\nConfira tudo hoje para amanhã ser só colocar o tênis e ir. 😄\n\nDinheiro volta, tempo não. Viva essa experiência! 💚\nTrilheiros de Rondonópolis';
+
 const defaults={
   enabled:true,
-  reminder_3d_subject:'🌿 {{passeio}} é esta semana! Tudo certo por aí?',
-  reminder_3d_body:'Oi, {{nome}}! 😄\n\nOs Trilheiros passando para dar aquele toque: faltam só 3 dias para {{passeio}}! 🥾🌿\n\nJá está entrando no clima? Dá uma conferida rapidinha:\n✅ Data: {{data}}\n✅ Destino: {{destino}}\n✅ Horário de saída: {{saida}}\n✅ Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Recado do passeio: {{lembrete_extra}}\n\nSe estiver tudo certo, agora é só começar a contagem regressiva. 😄\n\nAqui ninguém vai só. 💚\nTrilheiros de Rondonópolis',
-  reminder_1d_subject:'⛰️ É AMANHÃ! {{passeio}} te espera 🥾',
-  reminder_1d_body:'Oi, {{nome}}! 😄\n\nÉ AMANHÃ! 🥾⛰️\nChegou a hora de separar a roupa, carregar o celular e preparar a animação porque {{passeio}} está logo ali!\n\n📅 Data: {{data}}\n📍 Destino: {{destino}}\n🕒 Saída: {{saida}}\n👥 Participantes: {{participantes}}\n🎒 O que levar: {{levar}}\n📝 Último recado: {{lembrete_extra}}\n🔖 Protocolo: {{protocolo}}\n\nConfira tudo hoje para amanhã ser só colocar o tênis e ir. 😄\n\nDinheiro volta, tempo não. Viva essa experiência! 💚\nTrilheiros de Rondonópolis',
+  reminder_3d_subject:'🥾 Falta pouco! {{passeio}} está chegando 🌿',
+  reminder_3d_body:'Olá, {{nome}}! Tudo bem? 😊\n\nPassando para lembrar você que o nosso próximo passeio está chegando! 🌿🥾\n\n⛰️ {{passeio}}\n📅 Data: {{data}}\n🕒 Horário de saída: {{saida}}\n👥 Participantes: {{participantes}}\n\nFique atento ao horário e às orientações que serão enviadas no grupo. Organize-se com antecedência para aproveitar o passeio com tranquilidade. 😄\n\nEstamos preparando tudo para viver mais uma experiência incrível, com natureza, aventura e segurança.\n\nNos vemos lá! 💚\nAqui ninguém vai só.\n\nTrilheiros de Rondonópolis',
+  reminder_1d_subject:'⛰️ É AMANHÃ! {{passeio}} — confira os detalhes 🥾',
+  reminder_1d_body:'Olá, {{nome}}! Tudo bem? 😄\n\nÉ AMANHÃ! 🥾⛰️\nEstá chegando a hora de viver {{passeio}} com a gente!\n\n📅 Data: {{data}}\n🕒 Horário de saída: {{saida}}\n👥 Participantes: {{participantes}}\n🔖 Protocolo: {{protocolo}}\n\nFique atento ao grupo e, principalmente, ao horário de saída. Deixe tudo organizado hoje para amanhã chegar tranquilo e curtir a experiência do começo ao fim. 🌿\n\nA gente se encontra em breve. Vamos juntos para mais uma aventura! 💚\n\nAqui ninguém vai só.\nTrilheiros de Rondonópolis',
   post_trip_enabled:true,
   post_trip_subject:'⭐ Como foi {{passeio}}? Conta pra gente no Google!',
   post_trip_body:'Oi, {{nome}}! 😄\n\nEsperamos que {{passeio}} tenha rendido boas histórias, fotos incríveis e aquela sensação boa de ter vivido algo diferente. 🌿🥾\n\nSe você curtiu a experiência, deixa uma avaliação para os Trilheiros no Google. É rapidinho e ajuda outras pessoas a conhecerem nosso trabalho. 💚\n\n{{avaliacao_link}}\n\nSua opinião faz diferença de verdade. Obrigado por caminhar com a gente!\n\nTrilheiros de Rondonópolis'
 };
+
+function migrateTemplate(saved,legacy,fresh){
+  const value=String(saved||'').trim();
+  return !value||value===String(legacy||'').trim()?fresh:saved;
+}
 
 const settingsSnap=await db.collection('settings').doc('communications').get();
 const settings=settingsSnap.exists?{...defaults,...settingsSnap.data()}:{...defaults};
 if(settings.enabled===false){console.log('Lembretes automáticos desativados no painel.');process.exit(0)}
 
 const targets=[
-  {days:3,field:'reminder_3d_sent_at',subject:settings.reminder_3d_subject,body:settings.reminder_3d_body,label:'3 dias antes'},
-  {days:1,field:'reminder_1d_sent_at',subject:settings.reminder_1d_subject,body:settings.reminder_1d_body,label:'1 dia antes'},
+  {days:3,field:'reminder_3d_sent_at',subject:migrateTemplate(settings.reminder_3d_subject,LEGACY_3D_SUBJECT,defaults.reminder_3d_subject),body:migrateTemplate(settings.reminder_3d_body,LEGACY_3D_BODY,defaults.reminder_3d_body),label:'3 dias antes'},
+  {days:1,field:'reminder_1d_sent_at',subject:migrateTemplate(settings.reminder_1d_subject,LEGACY_1D_SUBJECT,defaults.reminder_1d_subject),body:migrateTemplate(settings.reminder_1d_body,LEGACY_1D_BODY,defaults.reminder_1d_body),label:'1 dia antes'},
   {days:-1,field:'post_trip_sent_at',subject:settings.post_trip_subject||defaults.post_trip_subject,body:settings.post_trip_body||defaults.post_trip_body,label:'pós-passeio • Google'}
 ];
 
@@ -70,7 +80,7 @@ for(const target of targets){
       const participants=(r.participants||[]).map(p=>p.full_name).filter(Boolean).join(', ');
       const vars={
         nome:r.responsible_name||'',passeio:trip.name||'',data:brDate(trip.trip_date),destino:trip.destination||'',
-        saida:trip.departure_time||'',participantes,levar:trip.what_to_bring||'',lembrete_extra:trip.reminder_notes||'',
+        saida:trip.departure_time||'',participantes:participants,levar:trip.what_to_bring||'',lembrete_extra:trip.reminder_notes||'',
         protocolo:r.protocol||'',politica:r.policy_text||trip.cancellation_policy||'',avaliacao_link:GOOGLE_REVIEW_URL
       };
       const subject=renderTemplate(target.subject,vars);
