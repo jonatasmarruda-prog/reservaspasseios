@@ -30,4 +30,4 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           MONTHLY_REPORT_TO: trilheiros.roomt@gmail.com
           FORCE_MONTHLY_REPORT: ${{ github.event.inputs.force || '0' }}
-        run: node automation/send-monthly-finance-report.mjs
+        run: node automation/send-monthly-finance-report-v2.mjs
