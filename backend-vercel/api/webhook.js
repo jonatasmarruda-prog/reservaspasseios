@@ -1,7 +1,7 @@
 import {getDb} from './_lib/firebase.js';
 
 const token=()=>process.env.MERCADO_PAGO_ACCESS_TOKEN||'';
-const num=v=>Math.max(0,Number(v||0)||0;
+const num=v=>Math.max(0,Number(v||0)||0);
 const json=(res,status,data)=>res.status(status).setHeader('Content-Type','application/json').end(JSON.stringify(data));
 
 export default async function handler(req,res){
