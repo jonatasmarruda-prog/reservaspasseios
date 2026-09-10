@@ -31,11 +31,12 @@ Para reduzir travamentos, `public/index.html` NÃO carrega mais as camadas finan
 - `public/admin-reservation-sync-v35.js` — reserva sincronizada e confirmação de pagamento do Canva;
 - `public/admin-costs-v36.js` — cadastro/edição de passeio e despesas por pessoa/valor total;
 - `public/admin-sales-v37.js` — vendas, recebimentos, edição, cancelamento e exclusão segura;
-- `public/admin-email-controls.js` — status e reenvio de e-mail na tela de Vendas;
+- `public/admin-email-controls.js` — status, fila e reenvio de e-mail na tela de Vendas/Pendências;
 - `public/admin-master-v40.js` — visão executiva e operações gerais;
 - `public/admin-stable-v42.js` — Financeiro Premium, Pendências e relatórios;
 - `public/trip-dedupe-v43.js` — consolidação de passeios duplicados;
-- `public/reservation-portal-v27.js` — portal de reservas corrigido para reutilizar passeio existente.
+- `public/reservation-portal-v27.js` — portal de reservas corrigido para reutilizar passeio existente;
+- `public/cadastro.html` — fluxo isolado para links diretos `/cadastro/<tripId>`, gravando o participante diretamente no passeio correto.
 
 O Admin limita callbacks de `MutationObserver` legados a no máximo uma execução a cada ~60 ms. O PWA foi ajustado para cache menor e atualização de JS/CSS mais confiável. A logo oficial transparente é exibida maior e sem caixa/fundo visual.
 
@@ -54,7 +55,32 @@ Commits principais:
 
 Não alterar/deployar regras do Firestore automaticamente por esse workflow até que a conta de serviço tenha a permissão necessária. Alterações em regras devem ser tratadas separadamente.
 
-Para mudanças apenas em `public/**`, o push em `main` publica automaticamente o Hosting; normalmente não é necessário usar Cloud Shell.
+Para mudanças apenas em `public/**` e `firebase.json`, o push em `main` publica automaticamente o Hosting; normalmente não é necessário usar Cloud Shell.
+
+## Cadastro direto por link do passeio
+Desde 2026-09-10, links no formato `https://trilheiros-reservas.web.app/cadastro/<tripId>` usam `public/cadastro.html`, isolado do `index.html` e das camadas legadas.
+
+Exemplo: `https://trilheiros-reservas.web.app/cadastro/chapada_guimaraes`.
+
+O formulário:
+- carrega o passeio exato pelo `tripId` da URL;
+- usa autenticação anônima Firebase;
+- coleta responsável, CPF, e-mail, quantidade e nome/CPF de todos os participantes;
+- exige aceite da política de cancelamento;
+- grava em `trips/{tripId}/reservations/{uid}`;
+- grava explicitamente `trip_id`, `trip_name`, `trip_date`, `participants`, `registration_status: completed`, `status: active` e `source: direct_trip_link`;
+- atualiza `used_spots` e `remaining_spots` do mesmo passeio na mesma transação;
+- portanto entra no `collectionGroup('reservations')` já usado pelo Admin e deve aparecer em Participantes daquele passeio.
+
+Quando o passeio estiver configurado com `assumes_payment=true`, esse link é destinado a pessoas que já pagaram e mantém a semântica do fluxo anterior; o preenchimento do formulário, por si só, não substitui a conferência financeira feita no fluxo de Vendas/Pendências.
+
+Importante: essa correção garante os NOVOS envios. Cadastros que foram feitos antes da correção e não aparecem no Admin não devem ser considerados recuperados sem confirmar se chegaram a ser persistidos no Firestore/fluxo antigo.
+
+Commits:
+- `a4be0090f9b81d98845795ea41ff938b9f94ad28` — página isolada de cadastro direto;
+- `ffa40358662fbfb8a882a1760889a5ca47c99d6a` — rewrite `/cadastro/**` para o fluxo sincronizado e cache desabilitado nessa página.
+
+Deploy Hosting run 34 (`34528457594`) concluiu com sucesso para `ffa40358662fbfb8a882a1760889a5ca47c99d6a`.
 
 ## Novo Passeio / Despesas
 A tela `+ Novo passeio` usa `tripModalV36()`.
@@ -138,15 +164,18 @@ Regra:
 1. cliente precisa ter e-mail válido;
 2. venda não pode estar cancelada;
 3. pagamento precisa estar totalmente quitado;
-4. reserva do Canva é liberada quando o Admin confirma o saldo final;
-5. venda manual criada como “já paga” é liberada automaticamente depois que o cliente conclui o cadastro e informa o e-mail;
-6. o mesmo envio não é duplicado: `welcome_email_sent_at/status` controlam idempotência;
-7. a tela `Vendas pagas` mostra a coluna `E-mail` com estados `Sem e-mail`, `Após quitação`, `Aguardando envio`, `Enviado` ou `Erro no envio`;
-8. owner/admin/finance pode usar `Enviar agora`, `Reenviar` ou `Tentar novamente` quando aplicável; o navegador apenas coloca o envio na fila, sem expor chave do Resend.
+4. ao confirmar o SALDO FINAL em Pendências pela `confirmSyncedPaymentV35`, `public/admin-email-controls.js` chama `queuePaidWelcome()` imediatamente depois da confirmação bem-sucedida;
+5. somente nessa condição grava `payment_completed_at`, `welcome_email_requested_at` e `welcome_email_status: pending`; nunca enfileira antes da confirmação/quitação;
+6. venda manual criada como “já paga” é liberada automaticamente depois que o cliente conclui o cadastro e informa o e-mail;
+7. o mesmo envio não é duplicado: `welcome_email_sent_at/status` controlam idempotência;
+8. a tela `Vendas pagas` mostra a coluna `E-mail` com estados `Sem e-mail`, `Após quitação`, `Aguardando envio`, `Enviado` ou `Erro no envio`;
+9. owner/admin/finance pode usar `Enviar agora`, `Reenviar` ou `Tentar novamente` quando aplicável; o navegador apenas coloca o envio na fila, sem expor chave do Resend.
 
 O e-mail é Premium e inclui logo, nome do cliente, passeio, destino, data, participantes, protocolo, pagamento confirmado e botão para falar com Jonatas no WhatsApp `(66) 99692-6174`.
 
-Workflow roda a cada 5 minutos e usa secrets `FIREBASE_SERVICE_ACCOUNT`, `RESEND_API_KEY` e `EMAIL_FROM`. Uma execução de validação em 2026-09-10 terminou com sucesso e não enviou nada indevido quando não havia elegíveis.
+O gatilho do Admin é imediato após a confirmação; a entrega por Resend é processada pelo workflow do GitHub Actions a cada 5 minutos. Portanto, o e-mail pode chegar alguns minutos depois da confirmação, mas nunca deve ser liberado antes dela.
+
+Workflow usa secrets `FIREBASE_SERVICE_ACCOUNT`, `RESEND_API_KEY` e `EMAIL_FROM`. Execuções de validação em 2026-09-10 terminaram com sucesso.
 
 Commits principais:
 - `7dadfb12c4e832122b8dea514678bd8cad05f609` — script inicial de boas-vindas;
@@ -154,7 +183,8 @@ Commits principais:
 - `45d7670f58ca8ad2eb464ca988ce63ba43a229a1` — validação da automação;
 - `8f87581ea5d8ccdca2014f7db032c4e79b56f878` — coluna/status/reenvio em Vendas;
 - `c8be2c46fc357af13da4f18b4f9fe054747045aa` — reforço de segurança do reenvio;
-- `3783495a3e4e380c58364f9c408bf76c99802899` — incluir vendas manuais quitadas após cadastro.
+- `3783495a3e4e380c58364f9c408bf76c99802899` — incluir vendas manuais quitadas após cadastro;
+- `444de9f90ae79a0ed6925032855b51e19c2ffbbb` — enfileirar boas-vindas imediatamente após confirmação final em Pendências.
 
 ## Lembrete automático um dia antes do passeio
 Arquivos:
