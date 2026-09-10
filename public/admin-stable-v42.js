@@ -289,6 +289,62 @@ window.roomsPdfV7=async function(id){
 };
 try{roomsPdfV7=window.roomsPdfV7}catch(_){}
 
+async function monthlyDetailData(month){
+  const [sales,expenses]=await Promise.all([fetchSales(),fetchExpenses()]);
+  const d=monthFinance(sales,expenses,month),active=sales.filter(activeSale);
+  d.payments=[];
+  active.forEach(s=>paymentEntries(s).forEach(x=>{
+    if(x.date.slice(0,7)===month)d.payments.push({...x,name:s.customer_name||'Cliente',trip:(state.trips||[]).find(t=>t.id===s.trip_id)?.name||s.trip_name||'Passeio'});
+  }));
+  d.payments.sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  d.paidExpenseRows=expenses.filter(e=>expensePaid(e)&&iso(e.paid_date||e.expense_date||e.updated_at||e.created_at).slice(0,7)===month).map(e=>({...e,total:expenseAmount(e),trip:(state.trips||[]).find(t=>t.id===e.trip_id)?.name||e.trip_name||'Passeio'}));
+  d.openExpenseRows=expenses.filter(e=>!expensePaid(e)&&iso(e.due_date||e.expense_date||e.created_at).slice(0,7)===month).map(e=>({...e,total:expenseAmount(e),trip:(state.trips||[]).find(t=>t.id===e.trip_id)?.name||e.trip_name||'Passeio'}));
+  return d;
+}
+function monthlyReportHtml(d){
+  return `<div class="modal v34ReportModal" style="max-width:1120px"><div class="modalHead"><div><span class="eyebrow">FECHAMENTO FINANCEIRO MENSAL</span><h2>${esc(monthLabel(d.month))}</h2><p>Relatório consolidado diretamente de vendas, recebimentos e despesas do sistema.</p></div><button class="iconClose" id="v42ReportClose">✕</button></div><div class="modalBody"><div class="v42Kpis" style="margin:0 0 18px;background:#073226;padding:12px;border-radius:18px"><article class="v42Kpi"><span>FATURADO</span><strong>${money(d.billed)}</strong></article><article class="v42Kpi"><span>RECEBIDO</span><strong>${money(d.received)}</strong></article><article class="v42Kpi"><span>DESPESAS PAGAS</span><strong>${money(d.paidOut)}</strong></article><article class="v42Kpi"><span>CONTAS A PAGAR</span><strong>${money(d.toPay)}</strong></article><article class="v42Kpi"><span>LUCRO / CAIXA</span><strong>${money(d.cash)}</strong></article><article class="v42Kpi"><span>A RECEBER</span><strong>${money(d.receivable)}</strong></article><article class="v42Kpi"><span>VAGAS VENDIDAS</span><strong>${d.soldSeats}</strong></article></div><div class="v42Charts"><section class="v42Chart"><span class="eyebrow">FORMAS DE PAGAMENTO</span><h3>Entradas confirmadas</h3>${donut(d.payBreak,d.received)}</section><section class="v42Chart"><span class="eyebrow">DESPESAS</span><h3>Pagas por categoria</h3><div class="v42Bars">${bars(d.expenseCats)}</div></section><section class="v42Chart"><span class="eyebrow">PASSEIOS</span><h3>Resultado por viagem</h3><div class="v42TripPerf">${d.trips.length?d.trips.map(x=>`<div class="v42Perf"><div class="v42PerfHead"><strong>${esc(x.t.name)}</strong><span>${x.seats} pessoa(s)</span></div><div class="v42PerfNums"><span>Vendido ${money(x.sold)}</span><span>Despesas ${money(x.paid+x.open)}</span><b>${money(x.result)}</b></div></div>`).join(''):'<div class="v42Empty">Nenhum passeio no mês.</div>'}</div></section></div><section style="margin-top:20px"><h3>Resultado detalhado por passeio</h3><div class="tableWrap"><table class="table"><thead><tr><th>Passeio</th><th>Data</th><th>Pessoas</th><th>Vendido</th><th>Recebido</th><th>Desp. pagas</th><th>A pagar</th><th>Resultado</th></tr></thead><tbody>${d.trips.length?d.trips.map(x=>`<tr><td><strong>${esc(x.t.name)}</strong></td><td>${brDate(x.t.trip_date)}</td><td>${x.seats}</td><td>${money(x.sold)}</td><td>${money(x.got)}</td><td>${money(x.paid)}</td><td>${money(x.open)}</td><td><strong>${money(x.result)}</strong></td></tr>`).join(''):'<tr><td colspan="8">Nenhum passeio no período.</td></tr>'}</tbody></table></div></section><section style="margin-top:20px"><h3>Tudo que entrou no mês</h3><div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Cliente</th><th>Passeio</th><th>Forma</th><th>Valor recebido</th></tr></thead><tbody>${d.payments.length?d.payments.map(x=>`<tr><td>${brDate(x.date)}</td><td>${esc(x.name)}</td><td>${esc(x.trip)}</td><td>${esc(PAY[x.method]||'OUTROS')}</td><td><strong>${money(x.amount)}</strong></td></tr>`).join(''):'<tr><td colspan="5">Nenhum recebimento confirmado no período.</td></tr>'}</tbody></table></div></section><section style="margin-top:20px"><h3>Despesas pagas no mês</h3><div class="tableWrap"><table class="table"><thead><tr><th>Data</th><th>Passeio</th><th>Despesa</th><th>Tipo</th><th>Valor</th></tr></thead><tbody>${d.paidExpenseRows.length?d.paidExpenseRows.map(e=>`<tr><td>${brDate(e.paid_date||e.expense_date)}</td><td>${esc(e.trip)}</td><td>${esc(e.description||e.category||'Despesa')}</td><td>${expenseMode(e)==='per_person'?'POR PESSOA':'VALOR TOTAL'}</td><td><strong>${money(e.total)}</strong></td></tr>`).join(''):'<tr><td colspan="5">Nenhuma despesa paga no período.</td></tr>'}</tbody></table></div></section></div><div class="modalFoot"><button class="btn ghost" id="v42ReportClose2">Fechar</button><button class="btn primary" id="v42ReportPdf">Gerar PDF profissional</button></div></div>`;
+}
+window.openMonthlyReportV34=async function(month=state.financeMonthV42||monthNow()){
+  q('#v34ReportModal')?.remove();q('#v42MonthlyModal')?.remove();
+  const back=document.createElement('div');back.id='v42MonthlyModal';back.className='modalBack';back.innerHTML='<div class="modal"><div class="modalBody"><div class="v42Empty">Carregando fechamento financeiro...</div></div></div>';document.body.appendChild(back);
+  try{
+    const d=await monthlyDetailData(month);back.innerHTML=monthlyReportHtml(d);
+    q('#v42ReportClose',back).onclick=q('#v42ReportClose2',back).onclick=()=>back.remove();back.onclick=e=>{if(e.target===back)back.remove()};
+    q('#v42ReportPdf',back).onclick=()=>window.generateMonthlyFinancePdfV34(month);
+  }catch(e){back.innerHTML=`<div class="modal"><div class="modalBody"><div class="msg error">${esc(e.message||e)}</div></div><div class="modalFoot"><button class="btn ghost" onclick="document.getElementById('v42MonthlyModal')?.remove()">Fechar</button></div></div>`}
+};
+async function drawPdfBars(doc,title,obj,y){
+  const entries=Object.entries(obj).filter(([,v])=>n(v)>0).sort((a,b)=>n(b[1])-n(a[1])).slice(0,7);
+  doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20,50,40);doc.text(title,14,y);y+=7;
+  if(!entries.length){doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(110);doc.text('Sem movimentação no período.',14,y);return y+9}
+  const max=Math.max(...entries.map(([,v])=>n(v)));
+  entries.forEach(([k,v])=>{doc.setFont('helvetica','normal');doc.setFontSize(7.2);doc.setTextColor(70);doc.text(String(k).slice(0,27),14,y+3);doc.setFillColor(231,239,235);doc.roundedRect(60,y-1,80,5,1,1,'F');doc.setFillColor(11,106,77);doc.roundedRect(60,y-1,80*n(v)/max,5,1,1,'F');doc.setFont('helvetica','bold');doc.setTextColor(20,50,40);doc.text(money(v),195,y+3,{align:'right'});y+=8});
+  return y+3;
+}
+window.generateMonthlyFinancePdfV34=async function(month=state.financeMonthV42||monthNow()){
+  try{
+    if(!await waitPdf())throw Error('Biblioteca PDF indisponível.');
+    const d=await monthlyDetailData(month),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'}),logo=await logoData();
+    doc.setFillColor(7,50,38);doc.rect(0,0,210,51,'F');doc.setFillColor(216,173,66);doc.rect(0,51,210,2,'F');if(logo)try{doc.addImage(logo,'PNG',14,8,29,29)}catch(_){}
+    doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(9.5);doc.text('TRILHEIROS DE RONDONÓPOLIS',logo?50:14,15);doc.setFontSize(19);doc.text('RELATÓRIO FINANCEIRO MENSAL',logo?50:14,27);doc.setFontSize(10);doc.setFont('helvetica','normal');doc.text(monthLabel(month),logo?50:14,38);
+    const cards=[['Faturado',d.billed],['Recebido',d.received],['Despesas pagas',d.paidOut],['A pagar',d.toPay],['Lucro / caixa',d.cash],['A receber',d.receivable]];
+    cards.forEach((x,i)=>{const x0=14+(i%3)*62,y0=62+Math.floor(i/3)*24;doc.setFillColor(244,248,246);doc.roundedRect(x0,y0,58,19,2,2,'F');doc.setTextColor(105);doc.setFontSize(6.7);doc.text(x[0].toUpperCase(),x0+3,y0+6);doc.setTextColor(7,50,38);doc.setFont('helvetica','bold');doc.setFontSize(10.2);doc.text(money(x[1]),x0+3,y0+14);doc.setFont('helvetica','normal')});
+    let y=114;const payObj={};Object.keys(d.payBreak).forEach(k=>payObj[PAY[k]]=d.payBreak[k]);y=await drawPdfBars(doc,'Entradas por forma de pagamento',payObj,y);y=await drawPdfBars(doc,'Despesas pagas por categoria',d.expenseCats,y);
+    if(y>220){doc.addPage();y=18}
+    doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.setTextColor(20,50,40);doc.text('Resultado por passeio',14,y);
+    doc.autoTable({startY:y+5,head:[['Passeio','Pess.','Vendido','Recebido','Desp. pagas','A pagar','Resultado']],body:d.trips.length?d.trips.map(x=>[x.t.name,String(x.seats),money(x.sold),money(x.got),money(x.paid),money(x.open),money(x.result)]):[['Nenhum passeio','—','—','—','—','—','—']],styles:{fontSize:7,cellPadding:2.1},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},margin:{left:14,right:14,bottom:16}});
+    let end=doc.lastAutoTable.finalY+9;if(end>245){doc.addPage();end=18}
+    doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.text('Recebimentos confirmados',14,end);
+    doc.autoTable({startY:end+5,head:[['Data','Cliente','Passeio','Forma','Valor']],body:d.payments.length?d.payments.map(x=>[brDate(x.date),x.name,x.trip,PAY[x.method]||'OUTROS',money(x.amount)]):[['—','Sem recebimentos','—','—','R$ 0,00']],styles:{fontSize:7,cellPadding:2.1},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},margin:{left:14,right:14,bottom:16}});
+    end=doc.lastAutoTable.finalY+9;if(end>245){doc.addPage();end=18}
+    doc.setFont('helvetica','bold');doc.setFontSize(10.5);doc.text('Despesas pagas',14,end);
+    doc.autoTable({startY:end+5,head:[['Data','Passeio','Despesa','Tipo','Valor']],body:d.paidExpenseRows.length?d.paidExpenseRows.map(e=>[brDate(e.paid_date||e.expense_date),e.trip,e.description||e.category||'Despesa',expenseMode(e)==='per_person'?'POR PESSOA':'VALOR TOTAL',money(e.total)]):[['—','—','Sem despesas pagas','—','R$ 0,00']],styles:{fontSize:7,cellPadding:2.1},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},margin:{left:14,right:14,bottom:16}});
+    const pages=doc.internal.getNumberOfPages();for(let i=1;i<=pages;i++){doc.setPage(i);doc.setFontSize(7);doc.setTextColor(120);doc.text(`Fechamento ${monthLabel(month)} • dados do Trilheiros Gestão`,14,289);doc.text(`Página ${i}/${pages}`,196,289,{align:'right'})}
+    const filename=`relatorio-financeiro-${slug(monthLabel(month))}.pdf`;if(typeof window.openPdfPreviewV14==='function')window.openPdfPreviewV14(doc,{filename,title:'Relatório financeiro mensal',subtitle:`${monthLabel(month)} • entradas, despesas e lucro`,shareText:`Relatório financeiro — ${monthLabel(month)}`});else doc.save(filename);
+  }catch(e){console.error('V42 relatório mensal',e);notify(e.message||'Não foi possível gerar o relatório.','error')}
+};
+try{openMonthlyReportV34=window.openMonthlyReportV34;generateMonthlyFinancePdfV34=window.generateMonthlyFinancePdfV34}catch(_){}
+
 function patchReports(){
   if(state.tab!=='reports')return;
   const cards=q('.reportCards');if(!cards)return;
