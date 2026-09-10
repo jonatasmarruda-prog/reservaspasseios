@@ -1,0 +1,267 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isOwner() {
+      return signedIn() && request.auth.token.email == 'trilheiros.roomt@gmail.com';
+    }
+    function staffExists() {
+      return signedIn() && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid));
+    }
+    function staffActive() {
+      return staffExists() && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.active == true;
+    }
+    function roleIs(role) {
+      return staffActive() && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.role == role;
+    }
+    function canManage() { return isOwner() || roleIs('admin'); }
+    function canFinance() { return canManage() || roleIs('finance'); }
+    function canOperate() { return canManage() || roleIs('support'); }
+    function canViewReservations() { return canManage() || roleIs('finance') || roleIs('support'); }
+
+    function saleOwned(saleId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/sales/$(saleId)) &&
+        get(/databases/$(database)/documents/sales/$(saleId)).data.claimed_uid == request.auth.uid &&
+        (
+          !('sale_status' in get(/databases/$(database)/documents/sales/$(saleId)).data) ||
+          get(/databases/$(database)/documents/sales/$(saleId)).data.sale_status != 'cancelled'
+        );
+    }
+
+    function publicPortalSaleCreate(saleId) {
+      return signedIn() &&
+        saleId == request.auth.uid &&
+        request.resource.data.claimed_uid == request.auth.uid &&
+        (
+          request.resource.data.source == 'public_portal_v25' ||
+          request.resource.data.source == 'public_portal_v26'
+        ) &&
+        request.resource.data.sale_status == 'active' &&
+        request.resource.data.registration_status == 'completed' &&
+        request.resource.data.payment_status == 'pending' &&
+        request.resource.data.paid_amount == 0 &&
+        request.resource.data.refunded_amount == 0 &&
+        request.resource.data.seats is int &&
+        request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
+        request.resource.data.trip_id is string &&
+        request.resource.data.customer_name is string &&
+        request.resource.data.customer_email is string &&
+        request.resource.data.participants is list &&
+        request.resource.data.participants.size() == request.resource.data.seats;
+    }
+
+    function portalTemplateValid(tripId) {
+      return
+        (
+          tripId == 'chapada_guimaraes' &&
+          request.resource.data.name == 'Chapada dos Guimarães' &&
+          request.resource.data.trip_date == '2026-09-26' &&
+          request.resource.data.total_spots == 40
+        ) ||
+        (
+          tripId == 'salto_nuvens' &&
+          request.resource.data.name == 'Salto das Nuvens' &&
+          request.resource.data.trip_date == '2026-10-10' &&
+          request.resource.data.total_spots == 45
+        ) ||
+        (
+          tripId == 'nobres_bom_jardim' &&
+          request.resource.data.name == '🌊 Nobres – Bom Jardim' &&
+          request.resource.data.trip_date == '2026-10-24' &&
+          request.resource.data.total_spots == 35
+        ) ||
+        (
+          tripId == 'rio_cristalino' &&
+          request.resource.data.name == '🌿 Rio Cristalino + Aldeia Dom Bosco' &&
+          request.resource.data.trip_date == '2026-11-08' &&
+          request.resource.data.total_spots == 35
+        ) ||
+        (
+          tripId == 'jaciara_canyon' &&
+          request.resource.data.name == '🌿 Jaciara – Cânion das Índias' &&
+          request.resource.data.trip_date == '2026-11-15' &&
+          request.resource.data.total_spots == 40
+        );
+    }
+
+    function publicPortalTripCreate(tripId) {
+      return signedIn() &&
+        request.resource.data.source == 'public_portal_v26_auto' &&
+        request.resource.data.portal_template_id == tripId &&
+        portalTemplateValid(tripId) &&
+        request.resource.data.status == 'open' &&
+        request.resource.data.used_spots is int &&
+        request.resource.data.remaining_spots is int &&
+        request.resource.data.used_spots >= 2 &&
+        request.resource.data.used_spots <= request.resource.data.total_spots &&
+        request.resource.data.remaining_spots == request.resource.data.total_spots - request.resource.data.used_spots &&
+        request.resource.data.special_seat_reserved == true &&
+        request.resource.data.special_seat_counted == true &&
+        request.resource.data.special_seat_count == 1 &&
+        request.resource.data.special_passenger_name == 'Jonatas Marques de Arruda' &&
+        request.resource.data.special_passenger_role == 'GUIA DE TURISMO' &&
+        existsAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+        getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.source == 'public_portal_v26' &&
+        getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - 1;
+    }
+
+    match /trips/{tripId} {
+      allow read: if true;
+      allow create: if canManage() || publicPortalTripCreate(tripId);
+      allow delete: if canManage();
+      allow update: if canManage() ||
+        (roleIs('support') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['checklist','updated_at'])) ||
+        (
+          signedIn() &&
+          !exists(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+          existsAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['used_spots','remaining_spots','updated_at']) &&
+          request.resource.data.used_spots > resource.data.used_spots &&
+          request.resource.data.remaining_spots >= 0 &&
+          request.resource.data.remaining_spots == resource.data.remaining_spots - (request.resource.data.used_spots - resource.data.used_spots) &&
+          (
+            !('total_spots' in resource.data) ||
+            resource.data.total_spots <= 0 ||
+            (
+              request.resource.data.used_spots <= resource.data.total_spots &&
+              request.resource.data.remaining_spots <= resource.data.total_spots &&
+              (
+                (('special_seat_reserved' in resource.data) && resource.data.special_seat_reserved == true) ||
+                request.resource.data.used_spots <= resource.data.total_spots - 1
+              )
+            )
+          ) &&
+          getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - resource.data.used_spots
+        );
+
+      match /reservations/{reservationId} {
+        allow create: if canManage() ||
+          (
+            signedIn() && reservationId == request.auth.uid &&
+            request.resource.data.seats is int &&
+            request.resource.data.seats >= 1 && request.resource.data.seats <= 10 &&
+            request.resource.data.participants is list &&
+            request.resource.data.participants.size() == request.resource.data.seats &&
+            request.resource.data.policy_accepted == true &&
+            request.resource.data.status == 'active'
+          );
+        allow read: if canViewReservations() ||
+          (signedIn() && reservationId == request.auth.uid) ||
+          (
+            signedIn() &&
+            ('sale_id' in resource.data) &&
+            resource.data.sale_id is string &&
+            saleOwned(resource.data.sale_id)
+          );
+        allow update: if canManage() ||
+          (roleIs('finance') && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'paid_amount','refunded_amount','payment_method','payment_status','admin_notes','updated_at',
+            'installment_total','installments','next_due_date'
+          ])) ||
+          (
+            signedIn() && reservationId == request.auth.uid &&
+            resource.data.status == 'active' &&
+            request.resource.data.status == 'cancel_requested' &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cancel_reason','cancel_requested_at','updated_at'])
+          ) ||
+          (
+            signedIn() &&
+            ('sale_id' in resource.data) &&
+            resource.data.sale_id is string &&
+            saleOwned(resource.data.sale_id) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'responsible_name','responsible_cpf','email','participants','registration_answers',
+              'accommodation','category','status','registration_status','policy_text','policy_version',
+              'policy_accepted','policy_accepted_at','updated_at'
+            ]) &&
+            request.resource.data.seats == resource.data.seats &&
+            request.resource.data.paid_amount == resource.data.paid_amount &&
+            request.resource.data.refunded_amount == resource.data.refunded_amount &&
+            request.resource.data.payment_method == resource.data.payment_method &&
+            request.resource.data.payment_status == resource.data.payment_status &&
+            request.resource.data.status == 'active' &&
+            request.resource.data.registration_status == 'completed' &&
+            request.resource.data.participants is list &&
+            request.resource.data.participants.size() == resource.data.seats &&
+            request.resource.data.policy_accepted == true
+          );
+        allow delete: if canManage();
+      }
+
+      match /operations/{operationId} {
+        allow read, write: if canOperate();
+      }
+
+      match /feedback/{feedbackId} {
+        allow create: if signedIn() && feedbackId == request.auth.uid &&
+          request.resource.data.rating is int &&
+          request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+        allow read: if canViewReservations() || (signedIn() && feedbackId == request.auth.uid);
+        allow update: if signedIn() && feedbackId == request.auth.uid;
+        allow delete: if canManage();
+      }
+    }
+
+    match /sales/{saleId} {
+      allow create: if canFinance() || publicPortalSaleCreate(saleId);
+      allow delete: if canFinance();
+      allow read: if canFinance() ||
+        (
+          signedIn() &&
+          (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid)
+        );
+      allow update: if canFinance() ||
+        (
+          signedIn() &&
+          (!('sale_status' in resource.data) || resource.data.sale_status != 'cancelled') &&
+          (!('claimed_uid' in resource.data) || resource.data.claimed_uid == '' || resource.data.claimed_uid == request.auth.uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'claimed_uid','customer_name','customer_cpf','customer_email','participants',
+            'accommodation','category','registration_status','registered_at','updated_at'
+          ]) &&
+          request.resource.data.claimed_uid == request.auth.uid &&
+          request.resource.data.trip_id == resource.data.trip_id &&
+          request.resource.data.seats == resource.data.seats &&
+          request.resource.data.paid_amount == resource.data.paid_amount &&
+          request.resource.data.payment_method == resource.data.payment_method &&
+          request.resource.data.payment_status == resource.data.payment_status
+        );
+    }
+
+    match /{path=**}/reservations/{reservationId} {
+      allow read: if canViewReservations();
+    }
+
+    match /expenses/{expenseId} {
+      allow read, write: if canFinance();
+    }
+
+    match /settings/public {
+      allow read: if true;
+      allow write: if canManage();
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if canManage();
+    }
+
+    match /audit_logs/{logId} {
+      allow read, create: if canManage();
+      allow update, delete: if false;
+    }
+
+    match /trash/{trashId} {
+      allow read, write: if canManage();
+    }
+
+    match /admin_users/{userId} {
+      allow read: if isOwner() || (signedIn() && request.auth.uid == userId);
+      allow create, update, delete: if isOwner();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
