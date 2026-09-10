@@ -27,7 +27,7 @@
 <link rel="stylesheet" href="/enhancements-v10.css">
 <link rel="stylesheet" href="/ui-polish-v12.css">
 <link rel="stylesheet" href="/special-passenger-v13.css">
-<link rel="stylesheet" href="/pdf-preview-v14.css">
+<link rel="stylesheet" href="/pdf-preview-v14.css?v=20260910-perf">
 <link rel="stylesheet" href="/public-premium-v15.css">
 <link rel="stylesheet" href="/public-simple-v17.css">
 <link rel="stylesheet" href="/public-hero-v18.css">
@@ -46,15 +46,15 @@
 @media(max-width:900px){.side .brand .mark{width:62px!important;height:62px!important;min-width:62px!important;flex-basis:62px!important}}
 </style>
 <script>
-/* No Admin, agrupa MutationObservers legados em um único callback por frame. */
-if(location.pathname.startsWith('/admin')&&window.MutationObserver&&window.requestAnimationFrame){
+/* No Admin, limita observadores legados a no máximo uma execução a cada 60 ms. */
+if(location.pathname.startsWith('/admin')&&window.MutationObserver){
   const NativeMutationObserver=window.MutationObserver;
   window.MutationObserver=function(callback){
-    let frame=0,lastMutations=null,lastObserver=null;
+    let timer=0,lastMutations=null,lastObserver=null;
     return new NativeMutationObserver((mutations,observer)=>{
       lastMutations=mutations;lastObserver=observer;
-      if(frame)return;
-      frame=requestAnimationFrame(()=>{frame=0;callback(lastMutations,lastObserver)});
+      if(timer)return;
+      timer=setTimeout(()=>{timer=0;callback(lastMutations,lastObserver)},60);
     });
   };
   window.MutationObserver.prototype=NativeMutationObserver.prototype;
@@ -85,7 +85,7 @@ if(location.pathname.startsWith('/admin')&&window.MutationObserver&&window.reque
 <script src="/enhancements-v10.js" defer></script>
 <script src="/enhancements-v10-syncfix.js" defer></script>
 <script src="/special-passenger-v13.js" defer></script>
-<script src="/pdf-preview-v14.js" defer></script>
+<script src="/pdf-preview-v14.js?v=20260910-perf" defer></script>
 <script src="/public-premium-v15.js" defer></script>
 <script src="/pdf-actions-v16.js" defer></script>
 <script src="/public-simple-v17.js" defer></script>
