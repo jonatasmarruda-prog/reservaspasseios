@@ -1,0 +1,31 @@
+name: Boas-vindas após pagamento
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trilheiros-paid-welcome-email
+  cancel-in-progress: false
+
+jobs:
+  send-welcome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Enviar boas-vindas para reservas quitadas
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+        run: node automation/send-paid-welcome-emails.mjs
