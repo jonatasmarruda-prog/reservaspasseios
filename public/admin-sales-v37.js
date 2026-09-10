@@ -26,14 +26,18 @@ async function copyText(text){
 }
 async function getSale(id){const s=await db.collection('sales').doc(id).get();if(!s.exists)throw Error('Venda não encontrada.');return{id:s.id,...s.data()}}
 async function reservationRefForSale(s){
-  const exact=db.collection('trips').doc(s.trip_id).collection('reservations').doc(s.id);
-  try{const snap=await exact.get();if(snap.exists)return exact}catch(_){ }
-  const local=(state.reservations||[]).find(r=>r.trip_id===s.trip_id&&(r.id===s.id||r.sale_id===s.id));
-  if(local?.id)return db.collection('trips').doc(s.trip_id).collection('reservations').doc(local.id);
-  return exact;
+  const local=(state.reservations||[]).find(r=>r.id===s.id||r.sale_id===s.id);
+  if(local?.id&&local?.trip_id)return db.collection('trips').doc(local.trip_id).collection('reservations').doc(local.id);
+  if(s.trip_id){
+    const exact=db.collection('trips').doc(s.trip_id).collection('reservations').doc(s.id);
+    try{const snap=await exact.get();if(snap.exists)return exact}catch(_){ }
+    try{const qs=await db.collection('trips').doc(s.trip_id).collection('reservations').where('sale_id','==',s.id).limit(1).get();if(!qs.empty)return qs.docs[0].ref}catch(_){ }
+  }
+  try{const qs=await db.collectionGroup('reservations').where('sale_id','==',s.id).limit(1).get();if(!qs.empty)return qs.docs[0].ref}catch(_){ }
+  return s.trip_id?db.collection('trips').doc(s.trip_id).collection('reservations').doc(s.id):null;
 }
 async function getReservation(s){
-  try{const ref=await reservationRefForSale(s),r=await ref.get();return r.exists?{id:r.id,...r.data()}:null}catch(_){return null}
+  try{const ref=await reservationRefForSale(s);if(!ref)return null;const r=await ref.get();return r.exists?{id:r.id,...r.data()}:null}catch(_){return null}
 }
 function closeDetails(){q('#v37SaleDetails')?.remove()}
 window.openSaleDetailsV37=async function(id){
@@ -48,31 +52,35 @@ window.openSaleDetailsV37=async function(id){
 window.deleteSaleV37=async function(id){
   if(!ownerOrAdmin())return notify('Somente proprietário ou administrador pode excluir vendas.','error');
   try{
-    const s=await getSale(id),netPaid=paid(s);
-    if(netPaid>0.009)return notify(`Esta venda tem ${money(netPaid)} recebido confirmado. Use “Cancelar” e registre o reembolso para preservar o histórico financeiro.`,'error');
-    const name=s.customer_name||'Cliente',trip=s.trip_name||'Passeio';
-    if(!confirm(`Excluir definitivamente a venda de ${name} — ${trip}?\n\nA venda será removida e as vagas voltarão para o passeio.`))return;
-    const saleRef=db.collection('sales').doc(id),tripRef=db.collection('trips').doc(s.trip_id),resRef=await reservationRefForSale(s);
-    let released=false,newUsed=null,newRemaining=null;
+    const s=await getSale(id),netPaid=paid(s),name=s.customer_name||'Cliente',trip=s.trip_name||'Passeio';
+    const warning=netPaid>0.009
+      ?`Excluir definitivamente a VENDA PAGA de ${name} — ${trip}?\n\nRecebido líquido: ${money(netPaid)}.\n\nA exclusão removerá esta venda do financeiro e o cadastro vinculado. Antes de apagar, o sistema guardará uma cópia na Lixeira para segurança.`
+      :`Excluir definitivamente a venda de ${name} — ${trip}?\n\nA venda será removida e, se ainda estiver ativa, as vagas voltarão para o passeio. Uma cópia será guardada na Lixeira.`;
+    if(!confirm(warning))return;
+    if(netPaid>0.009&&!confirm('Confirma novamente a exclusão desta venda paga? Esta ação altera os totais financeiros imediatamente.'))return;
+    const saleRef=db.collection('sales').doc(id),resRef=await reservationRefForSale(s),linkedTripId=resRef?.parent?.parent?.id||s.trip_id||'',tripRef=linkedTripId?db.collection('trips').doc(linkedTripId):null,trashRef=db.collection('trash').doc();
+    let released=false,newUsed=null,newRemaining=null,reservationId=resRef?.id||'';
     await db.runTransaction(async tx=>{
-      const [ss,ts,rs]=await Promise.all([tx.get(saleRef),tx.get(tripRef),tx.get(resRef)]);
-      if(!ss.exists)throw Error('Venda não encontrada.');
-      const sd=ss.data(),wasActive=sd.sale_status!=='cancelled',seats=n(sd.seats);
-      if(wasActive&&ts.exists){
+      const ss=await tx.get(saleRef);if(!ss.exists)throw Error('Venda não encontrada.');
+      const ts=tripRef?await tx.get(tripRef):null;
+      const rs=resRef?await tx.get(resRef):null;
+      const sd=ss.data(),wasActive=sd.sale_status!=='cancelled',seats=n(sd.seats),stamp=firebase.firestore.FieldValue.serverTimestamp();
+      tx.set(trashRef,{kind:'deleted_sale',entity:'sale',entity_id:id,trip_id:linkedTripId||sd.trip_id||'',customer_name:sd.customer_name||'',sale_snapshot:sd,reservation_snapshot:rs?.exists?rs.data():null,reservation_id:rs?.exists?rs.id:'',deleted_by:auth?.currentUser?.email||'',deleted_at:stamp,source:'admin_sales_v37'});
+      if(wasActive&&ts?.exists){
         const td=ts.data(),minUsed=(td.special_seat_reserved===true||td.special_seat_counted===true)?1:0,totalSpots=n(td.total_spots),used=n(td.used_spots),remaining=n(td.remaining_spots);
         newUsed=Math.max(minUsed,used-seats);
         newRemaining=totalSpots>0?Math.max(0,totalSpots-newUsed):remaining+seats;
-        const tu={used_spots:newUsed,remaining_spots:newRemaining,updated_at:firebase.firestore.FieldValue.serverTimestamp()};
+        const tu={used_spots:newUsed,remaining_spots:newRemaining,updated_at:stamp};
         const inv=td.accommodation_inventory||{},uAcc={...(td.accommodation_used||{})};
         if(sd.accommodation&&Object.prototype.hasOwnProperty.call(inv,sd.accommodation)){uAcc[sd.accommodation]=Math.max(0,n(uAcc[sd.accommodation])-seats);tu.accommodation_used=uAcc}
         tx.update(tripRef,tu);released=true;
       }
-      if(rs.exists)tx.delete(resRef);
+      if(rs?.exists)tx.delete(resRef);
       tx.delete(saleRef);
     });
-    state.reservations=(state.reservations||[]).filter(r=>!(r.trip_id===s.trip_id&&(r.id===id||r.sale_id===id)));
-    if(released){const t=(state.trips||[]).find(x=>x.id===s.trip_id);if(t){t.used_spots=newUsed;t.remaining_spots=newRemaining}}
-    notify('Venda excluída e vagas devolvidas ao passeio.','success');
+    state.reservations=(state.reservations||[]).filter(r=>!(r.id===reservationId||r.sale_id===id||r.id===id));
+    if(released){const t=(state.trips||[]).find(x=>x.id===linkedTripId);if(t){t.used_spots=newUsed;t.remaining_spots=newRemaining}}
+    notify(netPaid>0.009?'Venda paga excluída. Uma cópia foi preservada na Lixeira.':'Venda excluída e cópia preservada na Lixeira.','success');
     window.renderSalesPageV37();
   }catch(e){console.error('V37_DELETE_SALE',e);notify(e.message||'Não foi possível excluir a venda.','error')}
 };
@@ -81,8 +89,8 @@ window.renderSalesPageV37=async function(){
   if(!location.pathname.startsWith('/admin'))return;
   const content=q('#content'),title=q('#pageTitle');if(!content)return;if(title)title.textContent='Vendas e recebimentos';qa('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab==='salesV21'));content.innerHTML='<div class="saleLoadingV21">Carregando vendas...</div>';
   try{
-    const ss=await db.collection('sales').orderBy('created_at','desc').limit(500).get(),sales=ss.docs.map(d=>({id:d.id,...d.data()})),act=sales.filter(active),contracted=act.reduce((s,x)=>s+total(x),0),received=act.reduce((s,x)=>s+paid(x),0),receivable=act.reduce((s,x)=>s+balance(x),0),seats=act.reduce((s,x)=>s+n(x.seats),0),pendingReg=act.filter(x=>x.registration_status!=='completed').length;
-    content.innerHTML=`<div class="saleAdminTopV21"><div><span>CONTROLE DE VENDAS</span><h2>Vendas, recebimentos e reservas.</h2><p>Valores contratados, recebimentos confirmados, parcelas e participantes no mesmo controle.</p></div><div class="v22TopActions"><button id="accInventoryV37" class="v22Secondary">Hospedagem / limites</button><button id="salesNewV37">+ Nova venda</button></div></div><div class="saleMetricsV21 v22Metrics"><div><small>VENDIDO</small><strong>${money(contracted)}</strong></div><div><small>RECEBIDO CONFIRMADO</small><strong>${money(received)}</strong></div><div><small>A RECEBER</small><strong>${money(receivable)}</strong></div><div><small>VAGAS ATIVAS</small><strong>${seats}</strong></div><div><small>CADASTROS PENDENTES</small><strong>${pendingReg}</strong></div></div><section class="salePanelV21"><div class="salePanelHeadV21"><div><b>Vendas registradas</b><span>${sales.length} registro${sales.length===1?'':'s'}</span></div></div>${sales.length?`<div class="saleTableWrapV21"><table class="saleTableV21 v22SaleTable"><thead><tr><th>Cliente</th><th>Passeio</th><th>Vagas</th><th>Financeiro</th><th>Tipo / opção</th><th>Cadastro</th><th>Ações</th></tr></thead><tbody>${sales.map(s=>{const st=pstatus(s),bal=balance(s),cancel=s.sale_status==='cancelled',canLink=!isCanva(s)&&s.registration_status!=='completed'&&!cancel,canDelete=paid(s)<=0.009;return`<tr class="${cancel?'v22CancelledRow':''}"><td><b>${esc(s.customer_name||'—')}</b><small>${esc(payLabels[s.payment_method]||s.payment_method||'')}</small></td><td><b>${esc(s.trip_name||'—')}</b><small>${dateBR(s.trip_date)}</small></td><td>${n(s.seats)}</td><td><b>${money(total(s))}</b><small>Recebido ${money(paid(s))}${bal>0&&!cancel?` • falta ${money(bal)}`:''}</small><span class="v22PayStatus ${esc(st)}">${esc(statusLabels[st]||st)}</span></td><td><small>${esc(pkg(s))}</small></td><td><span class="saleStatusV21 ${s.registration_status==='completed'?'done':'pending'}">${s.registration_status==='completed'?'Concluído':'Pendente'}</span></td><td><div class="saleRowActionsV21 v22RowActions">${!cancel&&bal>0?`<button data-v37-pay="${esc(s.id)}">+ Pagamento</button>`:''}${!cancel?`<button data-v37-edit="${esc(s.id)}">Editar</button>`:''}${canLink?`<button data-v37-link="${esc(s.id)}">Link</button>`:''}<button data-v37-open="${esc(s.id)}">Abrir</button>${canDelete?`<button class="danger" data-v37-delete="${esc(s.id)}">Excluir</button>`:!cancel?`<button class="danger" data-v37-cancel="${esc(s.id)}">Cancelar</button>`:''}</div></td></tr>`}).join('')}</tbody></table></div>`:'<div class="saleEmptyV21">Nenhuma venda registrada.</div>'}</section>`;
+    const ss=await db.collection('sales').orderBy('created_at','desc').limit(500).get(),sales=ss.docs.map(d=>({id:d.id,...d.data()})),act=sales.filter(active),contracted=act.reduce((s,x)=>s+total(x),0),received=act.reduce((s,x)=>s+paid(x),0),receivable=act.reduce((s,x)=>s+balance(x),0),seats=act.reduce((s,x)=>s+n(x.seats),0),pendingReg=act.filter(x=>x.registration_status!=='completed').length,canAdmin=ownerOrAdmin();
+    content.innerHTML=`<div class="saleAdminTopV21"><div><span>CONTROLE DE VENDAS</span><h2>Vendas, recebimentos e reservas.</h2><p>Valores contratados, recebimentos confirmados, parcelas e participantes no mesmo controle.</p></div><div class="v22TopActions"><button id="accInventoryV37" class="v22Secondary">Hospedagem / limites</button><button id="salesNewV37">+ Nova venda</button></div></div><div class="saleMetricsV21 v22Metrics"><div><small>VENDIDO</small><strong>${money(contracted)}</strong></div><div><small>RECEBIDO CONFIRMADO</small><strong>${money(received)}</strong></div><div><small>A RECEBER</small><strong>${money(receivable)}</strong></div><div><small>VAGAS ATIVAS</small><strong>${seats}</strong></div><div><small>CADASTROS PENDENTES</small><strong>${pendingReg}</strong></div></div><section class="salePanelV21"><div class="salePanelHeadV21"><div><b>Vendas registradas</b><span>${sales.length} registro${sales.length===1?'':'s'}</span></div></div>${sales.length?`<div class="saleTableWrapV21"><table class="saleTableV21 v22SaleTable"><thead><tr><th>Cliente</th><th>Passeio</th><th>Vagas</th><th>Financeiro</th><th>Tipo / opção</th><th>Cadastro</th><th>Ações</th></tr></thead><tbody>${sales.map(s=>{const st=pstatus(s),bal=balance(s),cancel=s.sale_status==='cancelled',canLink=!isCanva(s)&&s.registration_status!=='completed'&&!cancel;return`<tr class="${cancel?'v22CancelledRow':''}"><td><b>${esc(s.customer_name||'—')}</b><small>${esc(payLabels[s.payment_method]||s.payment_method||'')}</small></td><td><b>${esc(s.trip_name||'—')}</b><small>${dateBR(s.trip_date)}</small></td><td>${n(s.seats)}</td><td><b>${money(total(s))}</b><small>Recebido ${money(paid(s))}${bal>0&&!cancel?` • falta ${money(bal)}`:''}</small><span class="v22PayStatus ${esc(st)}">${esc(statusLabels[st]||st)}</span></td><td><small>${esc(pkg(s))}</small></td><td><span class="saleStatusV21 ${s.registration_status==='completed'?'done':'pending'}">${s.registration_status==='completed'?'Concluído':'Pendente'}</span></td><td><div class="saleRowActionsV21 v22RowActions">${!cancel&&bal>0?`<button data-v37-pay="${esc(s.id)}">+ Pagamento</button>`:''}${!cancel?`<button data-v37-edit="${esc(s.id)}">Editar</button>`:''}${canLink?`<button data-v37-link="${esc(s.id)}">Link</button>`:''}<button data-v37-open="${esc(s.id)}">Abrir</button>${canAdmin&&!cancel?`<button class="danger" data-v37-cancel="${esc(s.id)}">Cancelar</button>`:''}${canAdmin?`<button class="danger" data-v37-delete="${esc(s.id)}">Excluir</button>`:''}</div></td></tr>`}).join('')}</tbody></table></div>`:'<div class="saleEmptyV21">Nenhuma venda registrada.</div>'}</section>`;
     q('#salesNewV37')?.addEventListener('click',()=>window.openSaleModalV21?.());q('#accInventoryV37')?.addEventListener('click',()=>window.openAccommodationInventoryV22?.());qa('[data-v37-pay]',content).forEach(b=>b.onclick=()=>window.openPaymentV22?.(b.dataset.v37Pay));qa('[data-v37-edit]',content).forEach(b=>b.onclick=()=>window.openEditSaleV22?.(b.dataset.v37Edit));qa('[data-v37-cancel]',content).forEach(b=>b.onclick=()=>window.cancelSaleV22?.(b.dataset.v37Cancel));qa('[data-v37-delete]',content).forEach(b=>b.onclick=()=>window.deleteSaleV37(b.dataset.v37Delete));qa('[data-v37-link]',content).forEach(b=>b.onclick=()=>copyText(saleUrl(b.dataset.v37Link)));qa('[data-v37-open]',content).forEach(b=>b.onclick=()=>window.openSaleDetailsV37(b.dataset.v37Open));
   }catch(e){content.innerHTML=`<div class="saleErrorV21">${esc(e.message||'Não foi possível carregar as vendas.')}</div>`}
 };
