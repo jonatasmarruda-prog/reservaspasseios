@@ -1,0 +1,27 @@
+name: Alertas financeiros diários
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 14 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  finance-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Enviar alertas financeiros
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          FINANCE_ALERT_TO: trilheiros.roomt@gmail.com
+        run: node automation/send-finance-alerts.mjs
