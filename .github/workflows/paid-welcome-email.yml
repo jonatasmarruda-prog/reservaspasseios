@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '*/5 * * * *'
-  push:
-    branches: [main]
-    paths:
-      - 'automation/send-paid-welcome-emails.mjs'
-      - '.github/workflows/paid-welcome-email.yml'
 
 permissions:
   contents: read
