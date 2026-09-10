@@ -41,6 +41,18 @@ service cloud.firestore {
           request.resource.data.used_spots > resource.data.used_spots &&
           request.resource.data.remaining_spots >= 0 &&
           request.resource.data.remaining_spots == resource.data.remaining_spots - (request.resource.data.used_spots - resource.data.used_spots) &&
+          (
+            !('total_spots' in resource.data) ||
+            resource.data.total_spots <= 0 ||
+            (
+              request.resource.data.used_spots <= resource.data.total_spots &&
+              request.resource.data.remaining_spots <= resource.data.total_spots &&
+              (
+                (('special_seat_reserved' in resource.data) && resource.data.special_seat_reserved == true) ||
+                request.resource.data.used_spots <= resource.data.total_spots - 1
+              )
+            )
+          ) &&
           getAfter(/databases/$(database)/documents/trips/$(tripId)/reservations/$(request.auth.uid)).data.seats == request.resource.data.used_spots - resource.data.used_spots
         );
 
