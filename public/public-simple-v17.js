@@ -72,6 +72,7 @@
         return;
       }
       qty=Math.min(qty,maxQty());syncCompanions();
+      const policyHtml=safe(policyFor(current)).replace(/\n/g,'<br>');
       mount.innerHTML=`${hero(current)}<section class="v17Card"><div class="v17CardTitle"><span>INSCRIÇÃO RÁPIDA</span><h2>Preencha e envie</h2><p>São só os dados necessários para reservar suas vagas.</p></div><form id="simpleRegV17" novalidate>
         ${!fixed?`<label class="v17Field v17Full"><span>Passeio</span><select id="v17Trip">${trips.map(t=>`<option value="${t.id}" ${t.id===current.id?'selected':''}>${safe(t.name)} — ${fmtDate(t.trip_date)}</option>`).join('')}</select></label>`:''}
         <div class="v17Grid">
@@ -81,7 +82,8 @@
         </div>
         <label class="v17Qty"><span>Quantas vagas?</span><select id="v17Qty">${Array.from({length:maxQty()},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===qty?'selected':''}>${n} vaga${n===1?'':'s'}</option>`).join('')}</select></label>
         <div id="v17Companions">${companions.map((name,i)=>`<label class="v17Field v17Companion"><span>Nome do acompanhante ${i+2}</span><input data-v17-companion="${i}" value="${safe(name)}" placeholder="Nome completo" required></label>`).join('')}</div>
-        <label class="v17Accept"><input id="v17Accept" type="checkbox"><span>Confirmo os dados e concordo com as condições do passeio.</span></label>
+        <details class="v17Policy"><summary><span>Política de cancelamento</span><b>Toque para ler</b></summary><div class="v17PolicyText">${policyHtml}</div></details>
+        <label class="v17Accept"><input id="v17Accept" type="checkbox"><span>Li e concordo com a política de cancelamento e com as condições do passeio.</span></label>
         <div id="v17Error" class="v17Error"></div>
         <button id="v17Submit" class="v17Submit" type="submit">Enviar cadastro</button>
       </form></section>`;
@@ -119,7 +121,7 @@
         if(!emailOk(email.value))return show('Informe um e-mail válido.',email);
         const companionInputs=[...document.querySelectorAll('[data-v17-companion]')];
         for(let i=0;i<companionInputs.length;i++)if(companionInputs[i].value.trim().length<3)return show(`Informe o nome do acompanhante ${i+2}.`,companionInputs[i]);
-        if(!accept.checked)return show('Marque a confirmação para enviar.',accept);
+        if(!accept.checked)return show('Leia a política de cancelamento e marque a confirmação para enviar.',accept);
 
         const people=[{full_name:name.value.trim(),cpf:digits(cpf.value)},...companionInputs.map(x=>({full_name:x.value.trim(),cpf:''}))];
         submit.disabled=true;submit.textContent='Enviando...';
@@ -151,7 +153,7 @@
               paid_amount:t.assumes_payment===false?0:Number(t.default_price||0)*seats,
               refunded_amount:0,
               policy_text:t.cancellation_policy||policyFor(t),
-              policy_version:'2026-09-v3-simple',
+              policy_version:'2026-09-v4-simple-policy-visible',
               policy_accepted:true,
               policy_accepted_at:now,
               created_at:now,
