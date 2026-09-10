@@ -1,4 +1,4 @@
-/* Inicialização antecipada do Firestore para modo offline */
+/* Inicialização antecipada do Firestore para modo offline + push */
 (function(){
   try{
     if(!window.firebase?.apps?.length) return;
@@ -16,5 +16,19 @@
       window.dispatchEvent(new CustomEvent('trilheiros:persistence',{detail:{enabled:false,code:err?.code||''}}));
       console.warn('Persistência offline não pôde ser ativada:',err?.code||err);
     });
+
+    if(location.pathname.startsWith('/admin')){
+      const messaging=document.createElement('script');
+      messaging.src='/__/firebase/10.14.1/firebase-messaging-compat.js';
+      messaging.defer=true;
+      messaging.onload=()=>{
+        const push=document.createElement('script');
+        push.src='/push-client.js?v=20260910-bgpush1';
+        push.defer=true;
+        document.head.appendChild(push);
+      };
+      messaging.onerror=()=>console.warn('Firebase Messaging não pôde ser carregado.');
+      document.head.appendChild(messaging);
+    }
   }catch(err){console.warn('Falha ao preparar modo offline:',err)}
 })();
