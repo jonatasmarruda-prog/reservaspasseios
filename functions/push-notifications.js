@@ -10,8 +10,7 @@ const db=getFirestore();
 const REGION='southamerica-east1';
 const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const APP_URL='https://trilheiros-reservas.web.app/admin?tab=pending';
-const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const BADGE='https://trilheiros-reservas.web.app/notification-badge-v2.svg?v=20260910-badge2';
+const SYMBOL='https://trilheiros-reservas.web.app/notification-symbol-v3.svg?v=20260910-symbol3';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
@@ -67,11 +66,10 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
   const body=`${trip} • ${method} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`;
   const payload={
     tokens:devices.map(x=>x.token),
-    notification:{title,body},
-    data:{url:APP_URL,sale_id:String(event.params.saleId),type:'payment'},
+    data:{url:APP_URL,sale_id:String(event.params.saleId),type:'payment',title,body},
     webpush:{
       headers:{Urgency:'high'},
-      notification:{title,body,icon:LOGO,badge:BADGE,requireInteraction:false,renotify:true,tag:`payment-${event.params.saleId}-${newPaid.toFixed(2)}`,vibrate:[180,80,180]},
+      notification:{title,body,icon:SYMBOL,badge:SYMBOL,requireInteraction:false,renotify:true,tag:`payment-${event.params.saleId}-${newPaid.toFixed(2)}`,vibrate:[180,80,180]},
       fcmOptions:{link:APP_URL}
     }
   };
