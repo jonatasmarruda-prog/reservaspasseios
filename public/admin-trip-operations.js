@@ -40,6 +40,7 @@ function injectStyle(){
   .tripOpsActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.tripOpsActions button{border:0;border-radius:10px;padding:9px 11px;font-weight:850;cursor:pointer;background:#0b5e45;color:#fff}.tripOpsActions button.secondary{background:#eef5f2;color:#184a39}.tripOpsActions button.gold{background:#d8ad42;color:#17372d}
   .tripOpsFinalGrid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}.tripOpsFinalGrid div{padding:8px 9px;border-radius:10px;background:#f5f8f6}.tripOpsFinalGrid span{display:block;font-size:9px;font-weight:800;color:#6b7c75}.tripOpsFinalGrid b{display:block;margin-top:3px;color:#073226;font-size:13px}
   .checkListV7:before{content:'⚠️ Checklist automático liberado 3 dias antes da viagem. Os itens pendentes também aparecem na Central de Pendências.';display:block;margin-bottom:10px;padding:10px 11px;border-radius:11px;background:#fff7df;color:#6d591c;font-size:11px;line-height:1.4}
+  #selectAllTripCheckin[disabled]{opacity:.65;cursor:default}
   @media(max-width:900px){.tripOpsSummary{grid-template-columns:1fr}.tripOpsFinalGrid{grid-template-columns:1fr 1fr}}
   `;document.head.appendChild(s);
 }
@@ -54,11 +55,60 @@ function focusSelector(sel){const el=q(sel);if(el){el.scrollIntoView({behavior:'
 window.focusTripCheckin=()=>focusSelector('.dayPeople');
 window.focusTripChecklist=()=>focusSelector('.checkListV7');
 
+function checkinRows(){
+  return qa('.dayPeople .presenceBtn').map(btn=>{
+    const raw=btn.getAttribute('onclick')||'',match=raw.match(/togglePresenceV7\('([^']*)','([^']*)',/);
+    if(!match)return null;
+    return{tripId:match[1],key:match[2],present:!!btn.closest('.dayPerson')?.classList.contains('present')};
+  }).filter(Boolean);
+}
+
+function mountSelectAllCheckin(panel){
+  const toolbar=q('.panelHead .toolbar',panel);if(!toolbar)return;
+  let btn=q('#selectAllTripCheckin',toolbar);
+  if(!btn){
+    btn=document.createElement('button');btn.id='selectAllTripCheckin';btn.type='button';btn.className='btn primary';
+    btn.onclick=()=>window.selectAllTripCheckin?.();toolbar.prepend(btn);
+  }
+  const rows=checkinRows(),total=rows.length,present=rows.filter(x=>x.present).length,complete=total>0&&present===total;
+  btn.disabled=!total||complete;
+  btn.textContent=complete?'✓ Todos selecionados':`✓ Selecionar todos (${total})`;
+  btn.title=complete?'Todos os participantes já estão marcados como embarcados.':'Marcar todos os participantes como embarcados de uma só vez.';
+}
+
+window.selectAllTripCheckin=async function(){
+  if(typeof state==='undefined'||state.tab!=='day'||typeof db==='undefined')return;
+  const rows=checkinRows(),pending=rows.filter(x=>!x.present),btn=q('#selectAllTripCheckin');
+  if(!rows.length){if(typeof toast==='function')toast('Nenhum participante disponível para o check-in.','error');return}
+  if(!pending.length){if(typeof toast==='function')toast('Todos os participantes já estão selecionados.','success');return}
+  if(btn){btn.disabled=true;btn.textContent='Selecionando todos...'}
+  try{
+    for(let i=0;i<pending.length;i+=400){
+      const batch=db.batch();
+      pending.slice(i,i+400).forEach(({tripId,key})=>{
+        const ref=db.collection('trips').doc(tripId).collection('operations').doc(key);
+        batch.set(ref,{present:true,updated_at:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      });
+      await batch.commit();
+    }
+    pending.forEach(({key})=>{state.dayOps[key]={...(state.dayOps[key]||{}),present:true}});
+    if(typeof toast==='function')toast(`${pending.length} participante(s) marcado(s) como embarcado(s).`,'success');
+    if(typeof window.renderAdmin==='function')window.renderAdmin();else schedule(20);
+  }catch(e){
+    console.warn('TRIP_CHECKIN_SELECT_ALL',e);
+    if(typeof toast==='function')toast('Não foi possível selecionar todos agora. Tente novamente.','error');
+    schedule(20);
+  }
+};
+
 function patchDayMode(){
   if(typeof state==='undefined'||state.tab!=='day')return;
   const content=q('#content'),t=selectedTrip();if(!content||!t)return;
   const panel=q('.dayPeople')?.closest('.panel');
-  if(panel){setText(q('.panelHead .eyebrow',panel),'EMBARQUE / CHECK-IN');setText(q('.panelHead h2',panel),'Check-in do passeio');setText(q('.panelHead p',panel),'Marque cada participante conforme embarcar. A lista permanece vinculada ao passeio e sincroniza com a nuvem.')}
+  if(panel){
+    setText(q('.panelHead .eyebrow',panel),'EMBARQUE / CHECK-IN');setText(q('.panelHead h2',panel),'Check-in do passeio');setText(q('.panelHead p',panel),'Marque cada participante conforme embarcar. A lista permanece vinculada ao passeio e sincroniza com a nuvem.');
+    mountSelectAllCheckin(panel);
+  }
   const checklist=q('.checkListV7')?.closest('.panel');if(checklist){setText(q('.panelHead .eyebrow',checklist),'⚠️ CHECKLIST AUTOMÁTICO');setText(q('.panelHead h2',checklist),'Preparação antes da viagem')}
 
   const people=qa('.dayPerson'),present=qa('.dayPerson.present').length,total=people.length,missing=missingChecklist(t),d=dayDiff(t.trip_date),closure=t.financial_closure||{};
