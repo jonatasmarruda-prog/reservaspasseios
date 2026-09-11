@@ -3,9 +3,10 @@
 'use strict';
 if(!location.pathname.startsWith('/admin'))return;
 const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>[...r.querySelectorAll(s)];
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
 const n=v=>Math.max(0,Number(v||0)||0);
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
+const IMMEDIATE_EMAIL_URL='https://trilheiros-reservas.vercel.app/api/welcome-email';
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
 function canManageEmail(){return['owner','admin','finance'].includes(String(state?.role||''))}
 function fullyPaid(s){
@@ -46,10 +47,32 @@ async function queuePaidWelcome(id,{silent=false}={}){
   }
   if(!Object.keys(patch).length)return false;
   await ref.update(patch);
-  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. O e-mail de boas-vindas foi solicitado para envio imediato.','success');
+  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. Enviando e-mail de boas-vindas agora...','success');
   return true;
 }
 window.queuePaidWelcomeEmail=queuePaidWelcome;
+
+async function sendPaidWelcomeImmediate(id,{silent=false,retries=2}={}){
+  if(!id)throw Error('Venda não informada.');
+  const user=window.firebase?.auth?.().currentUser;if(!user||user.isAnonymous)throw Error('Faça login novamente para enviar o e-mail.');
+  let lastError=null;
+  for(let attempt=0;attempt<=retries;attempt++){
+    try{
+      const token=await user.getIdToken(attempt>0);
+      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+      let response;
+      try{response=await fetch(IMMEDIATE_EMAIL_URL,{method:'POST',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({saleId:id})})}finally{clearTimeout(timer)}
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Error(data.error||`Falha no envio (${response.status}).`);
+      if(data.sent||data.alreadySent){if(!silent)notify(data.alreadySent?'E-mail de boas-vindas já estava enviado.':'✅ E-mail de boas-vindas enviado agora.','success');return data}
+      if(data.processing){await new Promise(r=>setTimeout(r,900));continue}
+      return data;
+    }catch(e){lastError=e;if(attempt<retries)await new Promise(r=>setTimeout(r,700*(attempt+1)))}
+  }
+  if(!silent)notify(`Pagamento confirmado, mas o e-mail imediato falhou: ${lastError?.message||'erro de envio'}. O backup automático continuará tentando.`,'error');
+  throw lastError||Error('Falha no envio imediato.');
+}
+window.sendPaidWelcomeImmediate=sendPaidWelcomeImmediate;
 
 window.requestWelcomeEmailV37=async function(id){
   try{
@@ -62,9 +85,9 @@ window.requestWelcomeEmailV37=async function(id){
     const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
     if(!s.payment_completed_at)patch.payment_completed_at=stamp;
     await db.collection('sales').doc(id).update(patch);
-    notify('Reenvio solicitado. O e-mail será disparado automaticamente agora.','success');
+    await sendPaidWelcomeImmediate(id);
     if(typeof window.renderSalesPageV37==='function')window.renderSalesPageV37();
-  }catch(e){notify(e.message||'Não foi possível solicitar o e-mail.','error')}
+  }catch(e){if(!String(e?.message||'').includes('Falha no envio'))notify(e.message||'Não foi possível solicitar o e-mail.','error')}
 };
 
 async function enhanceSalesEmail(){
@@ -90,18 +113,21 @@ function watchPaymentCompletion(id){
     if(stopped||!snap.exists)return;const s=snap.data()||{};
     if(!fullyPaid(s))return;
     stopped=true;unsub();
-    try{await queuePaidWelcome(id,{silent:true})}catch(e){console.warn('EMAIL_PAYMENT_MARKER',e)}
+    try{await queuePaidWelcome(id,{silent:true});await sendPaidWelcomeImmediate(id,{silent:true})}catch(e){console.warn('EMAIL_PAYMENT_IMMEDIATE',e)}
   },()=>{});
   setTimeout(()=>{if(!stopped){stopped=true;unsub()}},10*60*1000);
 }
 
-/* Pendências V35: somente depois da confirmação do operador o e-mail é liberado. */
+/* Pendências V35: confirmou e quitou, o envio ao Resend acontece na mesma ação. */
 const originalConfirm=window.confirmSyncedPaymentV35;
 if(typeof originalConfirm==='function'&&!originalConfirm.__welcomeQueue){
   const wrappedConfirm=async function(tripId,id,saleId,...args){
     const sid=saleId||id;
     const result=await originalConfirm.call(this,tripId,id,saleId,...args);
-    try{await queuePaidWelcome(sid)}catch(e){console.warn('WELCOME_AFTER_PENDING_CONFIRM',e)}
+    try{
+      const sale=await saleById(sid);
+      if(sale&&fullyPaid(sale)&&validEmail(emailOf(sale))){await queuePaidWelcome(sid,{silent:true});await sendPaidWelcomeImmediate(sid)}
+    }catch(e){console.warn('WELCOME_AFTER_PENDING_CONFIRM',e)}
     return result;
   };
   wrappedConfirm.__welcomeQueue=true;
