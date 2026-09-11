@@ -1,16 +1,21 @@
-name: Lembretes automáticos dos passeios
+name: Régua automática pré e pós-trilha
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 12 * * *'
+    - cron: '17 * * * *'
 
 permissions:
   contents: read
 
+concurrency:
+  group: trilheiros-email-lifecycle
+  cancel-in-progress: false
+
 jobs:
   reminders:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,9 +23,9 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
-      - name: Enviar lembretes
+      - name: Processar pré-trilha e pós-trilha
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_FROM: 'Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>'
         run: node automation/send-reminders.mjs
