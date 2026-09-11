@@ -2,7 +2,7 @@
 (function(){
   'use strict';
   const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
-  const NOTIFICATION_BADGE='/notification-badge.svg?v=20260910-brand7';
+  const NOTIFICATION_SYMBOL='/notification-morro-v4.svg?v=20260910-morro4';
   const NOTIF_KEY='trilheiros_admin_notifications_v6';
   let deferredPrompt=null,swRegistration=null,salesUnsub=null,salesBaseline=false,authBound=false,authBindTries=0;
   const saleState=new Map();
@@ -51,7 +51,7 @@
   async function registerServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
-      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260910-brand7',{updateViaCache:'none'});
+      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260910-morro4',{updateViaCache:'none'});
       const update=()=>swRegistration?.update?.().catch(()=>{});
       if('requestIdleCallback' in window)requestIdleCallback(update,{timeout:2500});else setTimeout(update,1200);
       return swRegistration;
@@ -76,10 +76,10 @@
     }catch(_){ }
   }
 
-  async function mobileNotify({title='🥾 Trilheiros Gestão',body='',url='/admin',tag='trilheiros-gestao',force=false}={}){
+  async function mobileNotify({title='⛰️ Trilheiros Gestão',body='',url='/admin',tag='trilheiros-gestao',force=false}={}){
     if(!('Notification' in window)||Notification.permission!=='granted')return false;
     if(!force&&document.visibilityState==='visible')return false;
-    const options={body,icon:LOGO,badge:NOTIFICATION_BADGE,tag,renotify:true,vibrate:[180,80,180],timestamp:Date.now(),data:{url},actions:[{action:'open',title:'Abrir Gestão'}]};
+    const options={body,icon:NOTIFICATION_SYMBOL,badge:NOTIFICATION_SYMBOL,tag,renotify:true,vibrate:[180,80,180],timestamp:Date.now(),data:{url},actions:[{action:'open',title:'Abrir Gestão'}]};
     try{
       const reg=swRegistration||await navigator.serviceWorker?.ready;
       if(reg?.showNotification){await reg.showNotification(title,options);return true}
@@ -113,7 +113,7 @@
       const permission=await Notification.requestPermission();
       if(permission==='granted'){
         addHistory({key:'notifications-enabled-v2',title:'🔔 Notificações ativadas',body:'O Trilheiros Gestão pode avisar novas reservas, cancelamentos e pagamentos.',type:'system',data:{url:'/admin?tab=notifications'}},false);
-        await mobileNotify({title:'🥾 Trilheiros Gestão',body:'Notificações personalizadas ativadas neste celular.',url:'/admin?tab=notifications',tag:'trilheiros-test-enabled',force:true});
+        await mobileNotify({title:'⛰️ Trilheiros Gestão',body:'Notificações personalizadas ativadas neste celular.',url:'/admin?tab=notifications',tag:'trilheiros-test-enabled',force:true});
         try{toast('Notificações ativadas neste celular.')}catch(_){ }
       }else try{toast('Permissão de notificações não concedida.','error')}catch(_){ }
       window.renderNotifications?.();
@@ -122,7 +122,7 @@
 
   async function testNotification(){
     if(!('Notification' in window)||Notification.permission!=='granted')return requestNotifications();
-    await mobileNotify({title:'🥾 Teste — Trilheiros Gestão',body:'Tudo certo. Este celular está pronto para receber os alertas do sistema.',url:'/admin?tab=notifications',tag:'trilheiros-manual-test',force:true});
+    await mobileNotify({title:'⛰️ Teste — Trilheiros Gestão',body:'Tudo certo. Este celular está pronto para receber os alertas do sistema.',url:'/admin?tab=notifications',tag:'trilheiros-manual-test',force:true});
   }
   window.testAdminNotification=testNotification;
 
@@ -157,7 +157,7 @@
           if(change.type!=='modified')return;
           const delta=Math.max(0,next.paid-prev.paid);
           if(delta>0.009){
-            const balance=Math.max(0,Number(s.balance_due||0)),title=`💰 Pagamento confirmado — ${s.customer_name||'Cliente'}`,body=`${s.trip_name||'Passeio'} • ${paymentLabel(s.payment_method)} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,key=`payment:${id}:${next.paid.toFixed(2)}`;
+            const balance=Math.max(0,Number(s.balance_due||0)),title=`⛰️ Pagamento confirmado — ${s.customer_name||'Cliente'}`,body=`${s.trip_name||'Passeio'} • ${paymentLabel(s.payment_method)} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,key=`payment:${id}:${next.paid.toFixed(2)}`;
             addHistory({key,title,body,type:'payment',data:{sale_id:id,trip_id:s.trip_id||'',url:'/admin?tab=pending'}},document.visibilityState!=='visible');
           }
         });
