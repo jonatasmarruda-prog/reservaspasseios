@@ -1,10 +1,10 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-symbol3';
-const NOTIFICATION_SYMBOL='/notification-symbol-v3.svg?v=20260910-symbol3';
+const CACHE='trilheiros-shell-20260910-morro4';
+const NOTIFICATION_SYMBOL='/notification-morro-v4.svg?v=20260910-morro4';
 const APP_SHELL=[
   '/offline.html',
   '/manifest.webmanifest?v=20260910-brand7',
-  '/notification-symbol-v3.svg?v=20260910-symbol3',
+  '/notification-morro-v4.svg?v=20260910-morro4',
   '/app.css',
   '/premium.css',
   '/admin-v7.css',
@@ -110,7 +110,7 @@ function notificationOptions(data={}){
 
 self.addEventListener('push',event=>{
   const data=normalizePushPayload(event);
-  const title=data.title||'🥾 Trilheiros Gestão';
+  const title=data.title||'⛰️ Trilheiros Gestão';
   event.waitUntil(self.registration.showNotification(title,notificationOptions(data)));
 });
 
@@ -122,7 +122,7 @@ self.addEventListener('message',event=>{
   }
   if(data.type==='SHOW_NOTIFICATION'){
     const payload=data.payload||{};
-    event.waitUntil?.(self.registration.showNotification(payload.title||'🥾 Trilheiros Gestão',notificationOptions(payload)));
+    event.waitUntil?.(self.registration.showNotification(payload.title||'⛰️ Trilheiros Gestão',notificationOptions(payload)));
   }
 });
 
