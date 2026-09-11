@@ -1,5 +1,6 @@
 name: Boas-vindas após pagamento
 
+# Alteração intencional para disparar imediatamente o processamento pendente.
 on:
   workflow_dispatch:
   schedule:
