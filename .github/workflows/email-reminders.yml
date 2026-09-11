@@ -4,6 +4,12 @@ on:
   workflow_dispatch:
   schedule:
     - cron: '17 * * * *'
+    - cron: '47 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'automation/send-reminders.mjs'
+      - '.github/workflows/email-reminders.yml'
 
 permissions:
   contents: read
@@ -23,7 +29,7 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
-      - name: Processar pré-trilha e pós-trilha
+      - name: Processar e-mails de 3 dias, 1 dia e pós-passeio
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
