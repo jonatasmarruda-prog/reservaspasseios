@@ -10,7 +10,7 @@ const db=getFirestore();
 const REGION='southamerica-east1';
 const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const APP_URL='https://trilheiros-reservas.web.app/admin?tab=pending';
-const SYMBOL='https://trilheiros-reservas.web.app/notification-symbol-v3.svg?v=20260910-symbol3';
+const SYMBOL='https://trilheiros-reservas.web.app/notification-morro-v4.svg?v=20260910-morro4';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
@@ -62,7 +62,7 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
   const customer=String(after.customer_name||'Cliente');
   const trip=String(after.trip_name||'Passeio');
   const method=String(after.payment_method||'Pagamento');
-  const title=`💰 Pagamento confirmado — ${customer}`;
+  const title=`⛰️ Pagamento confirmado — ${customer}`;
   const body=`${trip} • ${method} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`;
   const payload={
     tokens:devices.map(x=>x.token),
