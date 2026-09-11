@@ -97,13 +97,33 @@ function wrapFinancialClose(){
   wrapped.__tripOpsEmail=true;window.toggleCloseTrip=wrapped;try{globalThis.toggleCloseTrip=wrapped}catch(_){ }return true;
 }
 
+async function openFinanceClosure(tripId){
+  if(typeof state==='undefined'||typeof window.renderAdmin!=='function')return false;
+  state.tab='finance';window.renderAdmin();
+  for(let i=0;i<30;i++){
+    await new Promise(r=>setTimeout(r,120));
+    const btn=[...document.querySelectorAll('[data-v40-close]')].find(x=>x.dataset.v40Close===tripId);
+    if(btn){btn.click();return true}
+  }
+  return false;
+}
+async function watchClosureAndQueueEmail(tripId){
+  for(let i=0;i<100;i++){
+    await new Promise(r=>setTimeout(r,300));
+    if(tripById(tripId)?.financial_locked){await requestClosureEmail(tripId);return true}
+  }
+  return false;
+}
+
 window.finalizeTripOperations=async function(tripId){
   const t=tripById(tripId);if(!t)return;
   if(!canManage()){if(typeof toast==='function')toast('Somente proprietário ou administrador pode finalizar o passeio.','error');return}
   const d=dayDiff(t.trip_date);if(d>0){if(typeof toast==='function')toast('O resultado final só pode ser fechado no dia do passeio ou depois.','error');return}
   const missing=missingChecklist(t);if(missing.length&&!confirm(`Ainda existem ${missing.length} item(ns) do checklist pendente(s). Deseja continuar para o fechamento financeiro?`))return;
-  if(typeof window.toggleCloseTrip!=='function'){if(typeof toast==='function')toast('Fechamento financeiro indisponível. Abra a aba Financeiro e tente novamente.','error');return}
-  await window.toggleCloseTrip(tripId);
+  if(typeof window.toggleCloseTrip==='function'){await window.toggleCloseTrip(tripId);return}
+  const opened=await openFinanceClosure(tripId);
+  if(!opened){if(typeof toast==='function')toast('Não foi possível abrir o fechamento financeiro deste passeio.','error');return}
+  watchClosureAndQueueEmail(tripId).catch(()=>{});
 };
 
 function wrapRender(){
