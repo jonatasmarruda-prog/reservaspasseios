@@ -18,8 +18,17 @@ const recent=v=>{const ms=stampMs(v);return ms>0&&now-ms<=LOOKBACK_MS};
 const payLabel=v=>{const s=String(v||'').toLowerCase();if(s.includes('parcel'))return'PIX parcelado';if(s.includes('card')||s.includes('cart'))return'Cartão';if(s.includes('pix'))return'PIX';return String(v||'Pagamento')};
 
 async function activeDevices(){
-  const snap=await db.collection('push_devices').where('active','==',true).limit(100).get();
-  return snap.docs.map(d=>({id:d.id,token:String(d.data()?.token||'')})).filter(x=>x.token);
+  const map=new Map();
+  try{
+    const snap=await db.collection('push_devices').where('active','==',true).limit(100).get();
+    snap.docs.forEach(d=>{const token=String(d.data()?.token||'');if(token)map.set(token,{id:d.id,token,source:'push_devices'})});
+  }catch(err){console.warn('push_devices:',err.message)}
+  try{
+    const owner=await db.collection('settings').doc('push_device_owner').get();
+    const tokens=owner.exists&&Array.isArray(owner.data()?.tokens)?owner.data().tokens:[];
+    tokens.map(String).filter(t=>t.length>50).forEach(token=>{if(!map.has(token))map.set(token,{id:hash(token),token,source:'settings'})});
+  }catch(err){console.warn('settings push:',err.message)}
+  return[...map.values()];
 }
 
 const deviceCache=await activeDevices();
@@ -45,16 +54,15 @@ async function sendPush({key,title,body,url,type='system'}){
   const message={
     tokens:devices.map(x=>x.token),
     data:{title,body,url,tag:key,type,timestamp:String(Date.now())},
-    webpush:{
-      headers:{Urgency:'high'},
-      notification:{title,body,icon:'https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png',tag:key,renotify:true,requireInteraction:false},
-      fcmOptions:{link:url}
-    }
+    webpush:{headers:{Urgency:'high'},notification:{title,body,icon:'https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png',tag:key,renotify:true,requireInteraction:false},fcmOptions:{link:url}}
   };
   const result=await messaging.sendEachForMulticast(message);
   const invalid=[];
-  result.responses.forEach((r,i)=>{const code=String(r.error?.code||'');if(!r.success&&(code.includes('registration-token-not-registered')||code.includes('invalid-registration-token')))invalid.push(devices[i]?.id)});
-  if(invalid.length)await Promise.all(invalid.filter(Boolean).map(id=>db.collection('push_devices').doc(id).set({active:false,updated_at:FV.serverTimestamp()},{merge:true})));
+  result.responses.forEach((r,i)=>{const code=String(r.error?.code||'');if(!r.success&&(code.includes('registration-token-not-registered')||code.includes('invalid-registration-token')))invalid.push(devices[i])});
+  for(const item of invalid){
+    if(item.source==='push_devices')await db.collection('push_devices').doc(item.id).set({active:false,updated_at:FV.serverTimestamp()},{merge:true}).catch(()=>{});
+    else await db.collection('settings').doc('push_device_owner').set({tokens:FV.arrayRemove(item.token),updated_at:FV.serverTimestamp()},{merge:true}).catch(()=>{});
+  }
   await ref.set({status:result.successCount>0?'sent':'error',success_count:result.successCount,failure_count:result.failureCount,sent_at:FV.serverTimestamp(),updated_at:FV.serverTimestamp()},{merge:true});
   console.log(`${type}: ${title} | sucesso ${result.successCount} | falha ${result.failureCount}`);
   return result;
@@ -81,12 +89,10 @@ for(const doc of salesSnap.docs){
     const r=await sendPush({key:`pending:${s.id}`,title:`💰 Novo pagamento — ${name}`,body:`${trip} • ${payLabel(s.payment_method)} • ${money(total||balance)} • aguardando conferência`,url:`${BASE_URL}/admin?tab=pending`,type:'pending_payment'});
     if(!r?.skipped)sent++;
   }
-
   if(!cancelled&&['paid','confirmed','approved','completed','pago','quitado'].includes(status)&&paid>0){
     const anchor=stampMs(s.payment_completed_at)||Math.round(paid*100);
     const r=await sendPush({key:`paid:${s.id}:${anchor}`,title:`✅ Pagamento confirmado — ${name}`,body:`${trip} • ${payLabel(s.payment_method)} • ${money(paid)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,url:`${BASE_URL}/admin?tab=pending`,type:'payment_confirmed'});
     if(!r?.skipped)sent++;
   }
 }
-
 console.log(`Push background concluído: ${checked} venda(s) recente(s), ${sent} envio(s) novo(s).`);
