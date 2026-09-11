@@ -1,10 +1,11 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-morro4';
-const NOTIFICATION_SYMBOL='/notification-morro-v4.svg?v=20260910-morro4';
+const CACHE='trilheiros-shell-20260910-push5';
+const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const NOTIFICATION_BADGE='/notification-badge.png?v=20260910-push5';
 const APP_SHELL=[
   '/offline.html',
   '/manifest.webmanifest?v=20260910-brand7',
-  '/notification-morro-v4.svg?v=20260910-morro4',
+  '/notification-badge.png?v=20260910-push5',
   '/app.css',
   '/premium.css',
   '/admin-v7.css',
@@ -58,17 +59,14 @@ self.addEventListener('fetch',event=>{
   if(request.method!=='GET')return;
   const url=new URL(request.url);
   if(url.origin!==self.location.origin)return;
-
   if(request.mode==='navigate'){
     event.respondWith(networkFirst(request,true));
     return;
   }
-
   if(/\.(?:js|css|html|webmanifest)$/i.test(url.pathname)||url.pathname.startsWith('/__/firebase/')){
     event.respondWith(networkFirst(request,false));
     return;
   }
-
   event.respondWith(staleWhileRevalidate(request));
 });
 
@@ -96,8 +94,8 @@ function normalizePushPayload(event){
 function notificationOptions(data={}){
   return{
     body:data.body||'Há uma nova atualização no Trilheiros Gestão.',
-    icon:data.icon||NOTIFICATION_SYMBOL,
-    badge:data.badge||NOTIFICATION_SYMBOL,
+    icon:data.icon||NOTIFICATION_ICON,
+    badge:data.badge||NOTIFICATION_BADGE,
     tag:data.tag||'trilheiros-gestao',
     renotify:data.renotify===true||data.renotify==='true',
     requireInteraction:data.requireInteraction===true||data.requireInteraction==='true',
@@ -110,7 +108,7 @@ function notificationOptions(data={}){
 
 self.addEventListener('push',event=>{
   const data=normalizePushPayload(event);
-  const title=data.title||'⛰️ Trilheiros Gestão';
+  const title=data.title||'🥾 Trilheiros Gestão';
   event.waitUntil(self.registration.showNotification(title,notificationOptions(data)));
 });
 
@@ -122,7 +120,7 @@ self.addEventListener('message',event=>{
   }
   if(data.type==='SHOW_NOTIFICATION'){
     const payload=data.payload||{};
-    event.waitUntil?.(self.registration.showNotification(payload.title||'⛰️ Trilheiros Gestão',notificationOptions(payload)));
+    event.waitUntil?.(self.registration.showNotification(payload.title||'🥾 Trilheiros Gestão',notificationOptions(payload)));
   }
 });
 
