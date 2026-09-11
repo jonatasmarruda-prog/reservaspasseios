@@ -14,7 +14,7 @@
   function loadTripWeather(){
     if(!location.pathname.startsWith('/admin')||document.querySelector('script[data-admin-weather]'))return;
     const s=document.createElement('script');
-    s.src='/admin-weather.js?v=20260911-weather2';
+    s.src='/admin-weather.js?v=20260911-weather3';
     s.defer=true;
     s.dataset.adminWeather='1';
     document.head.appendChild(s);
