@@ -5,6 +5,14 @@
   --premium-green-3:#17644b;
   --premium-gold:#d7a934;
   --premium-soft:#f6faf8;
+  --premium-shadow-sm:0 8px 22px rgba(8,47,36,.055);
+  --premium-shadow-md:0 16px 38px rgba(8,47,36,.075),0 2px 8px rgba(8,47,36,.035);
+  --premium-shadow-lg:0 24px 58px rgba(8,47,36,.11),0 5px 16px rgba(8,47,36,.045);
+  --premium-radius:20px;
+}
+
+html,body,button,input,select,textarea{
+  font-family:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
 }
 
 body{
@@ -12,6 +20,17 @@ body{
     radial-gradient(circle at 12% 0%,rgba(15,74,56,.08),transparent 28%),
     radial-gradient(circle at 90% 8%,rgba(215,169,52,.07),transparent 24%),
     linear-gradient(180deg,#f8fbf9 0%,#f2f6f4 100%);
+  font-feature-settings:"cv02","cv03","cv04","cv11";
+  -webkit-font-smoothing:antialiased;
+  text-rendering:optimizeLegibility;
+}
+
+h1,h2,h3,h4,strong,b{
+  letter-spacing:-.018em;
+}
+
+small,.eyebrow,.table th,label>span{
+  letter-spacing:.025em;
 }
 
 /* LOGO OFICIAL */
@@ -56,13 +75,14 @@ body{
   border-radius:14px;
   border:1px solid rgba(8,47,36,.10);
   background:rgba(255,255,255,.88);
-  box-shadow:0 10px 30px rgba(8,47,36,.07);
-  transition:.2s ease;
+  box-shadow:var(--premium-shadow-sm);
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
 }
 
 .adminlink:hover{
   transform:translateY(-1px);
-  box-shadow:0 14px 34px rgba(8,47,36,.11);
+  box-shadow:var(--premium-shadow-md);
+  border-color:rgba(8,47,36,.16);
 }
 
 .hero{
@@ -154,8 +174,8 @@ body{
   padding:34px;
   border-radius:30px;
   border:1px solid rgba(8,47,36,.08);
-  background:rgba(255,255,255,.95);
-  box-shadow:0 22px 58px rgba(8,47,36,.09);
+  background:rgba(255,255,255,.96);
+  box-shadow:var(--premium-shadow-lg);
 }
 
 .sectionTitle{
@@ -175,7 +195,7 @@ input,select,textarea{
   border-radius:14px;
   border-color:#d4e1db;
   background:#fcfefd;
-  transition:.18s ease;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
 }
 
 input:hover,select:hover,textarea:hover{
@@ -184,36 +204,42 @@ input:hover,select:hover,textarea:hover{
 
 input:focus,select:focus,textarea:focus{
   border-color:#438b6f;
-  box-shadow:0 0 0 4px rgba(67,139,111,.10);
+  background:#fff;
+  box-shadow:0 0 0 4px rgba(67,139,111,.10),0 8px 20px rgba(8,47,36,.04);
 }
 
 .btn{
   min-height:46px;
   border-radius:14px;
-  transition:transform .18s ease,box-shadow .18s ease,background .18s ease;
+  transition:transform .16s ease,box-shadow .16s ease,background .16s ease,border-color .16s ease;
 }
 
 .btn.primary,
 .primary{
   background:linear-gradient(135deg,#082f24 0%,#0f4a38 100%);
-  box-shadow:0 12px 26px rgba(8,47,36,.17);
+  box-shadow:0 10px 24px rgba(8,47,36,.17);
 }
 
 .btn.primary:hover{
   transform:translateY(-1px);
-  box-shadow:0 16px 32px rgba(8,47,36,.22);
+  box-shadow:0 15px 30px rgba(8,47,36,.22);
+}
+
+.btn:active{
+  transform:translateY(0) scale(.985);
 }
 
 .tripSummary{
   border-radius:20px;
   background:linear-gradient(135deg,#f1f8f4,#e9f4ef);
   border-color:#d7e8df;
+  box-shadow:var(--premium-shadow-sm);
 }
 
 .participant{
   border-radius:20px;
   background:#fff;
-  box-shadow:0 8px 22px rgba(8,47,36,.035);
+  box-shadow:var(--premium-shadow-sm);
 }
 
 .policy{
@@ -266,7 +292,12 @@ input:focus,select:focus,textarea:focus{
 .nav button{
   min-height:44px;
   border-radius:12px;
-  transition:.18s ease;
+  position:relative;
+  transition:background .18s ease,color .18s ease,transform .18s ease,box-shadow .18s ease;
+}
+
+.nav button:hover{
+  transform:translateX(2px);
 }
 
 .nav button.active,.nav button:hover{
@@ -274,36 +305,152 @@ input:focus,select:focus,textarea:focus{
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.05);
 }
 
-.adminHead{
-  background:rgba(255,255,255,.92);
-  backdrop-filter:blur(14px);
-  -webkit-backdrop-filter:blur(14px);
+.nav button.active::before{
+  content:"";
+  position:absolute;
+  left:4px;
+  top:11px;
+  bottom:11px;
+  width:3px;
+  border-radius:99px;
+  background:var(--premium-gold);
 }
 
-.metric,.panel{
-  border-color:rgba(8,47,36,.08);
-  box-shadow:0 14px 34px rgba(8,47,36,.055);
+.adminHead{
+  background:rgba(255,255,255,.93);
+  backdrop-filter:blur(16px);
+  -webkit-backdrop-filter:blur(16px);
+  box-shadow:0 4px 18px rgba(8,47,36,.035);
+}
+
+.adminContent{
+  animation:premiumContentIn .28s ease both;
+}
+
+.metric,.panel,.commCard,.notificationItem,.attentionItem,.financeCategory,.pendingItem,.dayStats>div,.feedbackList article,.reportCards button{
+  border-color:rgba(8,47,36,.075) !important;
+  box-shadow:var(--premium-shadow-md);
 }
 
 .metric{
   border-radius:20px;
+  position:relative;
+  overflow:hidden;
+  background:linear-gradient(180deg,#fff 0%,#fbfdfc 100%);
+  transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease;
+}
+
+.metric::after{
+  content:"";
+  position:absolute;
+  inset:auto 0 0 0;
+  height:3px;
+  background:linear-gradient(90deg,transparent,rgba(23,100,75,.18),transparent);
+  opacity:.7;
+}
+
+.metric:hover{
+  transform:translateY(-2px);
+  box-shadow:var(--premium-shadow-lg);
+  border-color:rgba(8,47,36,.13) !important;
 }
 
 .metric strong{
-  letter-spacing:-.025em;
+  font-size:clamp(23px,2vw,29px);
+  font-weight:750;
+  letter-spacing:-.035em;
+  font-variant-numeric:tabular-nums;
+}
+
+.metric span,.metric small{
+  line-height:1.4;
 }
 
 .panel{
   border-radius:22px;
+  background:rgba(255,255,255,.97);
+  transition:box-shadow .18s ease,border-color .18s ease;
+}
+
+.panel:hover{
+  box-shadow:var(--premium-shadow-lg);
+  border-color:rgba(8,47,36,.11) !important;
+}
+
+.panelHead{
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(249,252,250,.98));
+}
+
+.panelHead h2,.adminHead h1{
+  font-weight:750;
+  letter-spacing:-.028em;
 }
 
 .table th{
   background:#f5f9f7;
+  font-weight:800;
+  letter-spacing:.065em;
+}
+
+.table tbody tr{
+  transition:background .14s ease;
+}
+
+.table tbody tr:hover{
+  background:#f8fbf9;
+}
+
+.table td strong{
+  font-weight:650;
+}
+
+.pill{
+  box-shadow:inset 0 0 0 1px rgba(8,47,36,.035);
+}
+
+.commCard,.notificationItem,.attentionItem,.financeCategory,.pendingItem,.dayStats>div,.feedbackList article,.reportCards button{
+  transition:transform .17s ease,box-shadow .17s ease,border-color .17s ease;
+}
+
+.commCard:hover,.notificationItem:hover,.attentionItem:hover,.financeCategory:hover,.pendingItem:hover,.dayStats>div:hover,.feedbackList article:hover,.reportCards button:hover{
+  transform:translateY(-1px);
+  box-shadow:var(--premium-shadow-lg);
+  border-color:rgba(8,47,36,.12) !important;
+}
+
+.modalBack{
+  background:rgba(4,22,17,.56);
+  backdrop-filter:blur(7px);
+  -webkit-backdrop-filter:blur(7px);
 }
 
 .modal{
   border:1px solid rgba(8,47,36,.08);
-  box-shadow:0 36px 100px rgba(0,0,0,.28);
+  box-shadow:0 36px 100px rgba(0,0,0,.28),0 10px 26px rgba(8,47,36,.11);
+  animation:premiumModalIn .2s ease both;
+}
+
+.iconClose{
+  transition:transform .16s ease,background .16s ease;
+}
+
+.iconClose:hover{
+  transform:rotate(4deg) scale(1.04);
+  background:#e9f1ed;
+}
+
+@keyframes premiumContentIn{
+  from{opacity:.55;transform:translateY(4px)}
+  to{opacity:1;transform:none}
+}
+
+@keyframes premiumModalIn{
+  from{opacity:0;transform:translateY(8px) scale(.985)}
+  to{opacity:1;transform:none}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
 
 @media(max-width:900px){
@@ -327,6 +474,9 @@ input:focus,select:focus,textarea:focus{
     padding:24px;
     border-radius:24px;
   }
+  .metric:hover,.panel:hover,.commCard:hover,.notificationItem:hover,.attentionItem:hover,.financeCategory:hover,.pendingItem:hover,.dayStats>div:hover,.feedbackList article:hover,.reportCards button:hover{
+    transform:none;
+  }
 }
 
 @media(max-width:560px){
@@ -348,5 +498,8 @@ input:focus,select:focus,textarea:focus{
   }
   .heroStat{
     padding:18px;
+  }
+  .metric,.panel,.commCard,.notificationItem,.attentionItem,.financeCategory,.pendingItem,.dayStats>div,.feedbackList article,.reportCards button{
+    box-shadow:0 8px 20px rgba(8,47,36,.055);
   }
 }
