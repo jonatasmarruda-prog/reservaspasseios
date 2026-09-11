@@ -4,7 +4,7 @@
   const VAPID_KEY='BHkqY6PmyREIcUGPdsfmdDDCf5Zsjb7qjrjRU3HwOz0M5RPFxqIW4Onyr0bC49PpQW2iPeoFz-vge1v5voVHiGE';
   const REGISTER_URL='https://southamerica-east1-trilheiros-reservas.cloudfunctions.net/registerPushDevice';
   const TOKEN_KEY='trilheiros_fcm_token_v1';
-  const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push8';
+  const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push9';
   let running=false,lastAttempt=0;
 
   function patchNotificationIcon(){
@@ -23,6 +23,26 @@
   }
   patchNotificationIcon();
 
+  async function saveTokenFree(token,user){
+    try{
+      const database=typeof db!=='undefined'?db:(window.firebase?.firestore?.());
+      if(!database)return false;
+      const FV=firebase.firestore.FieldValue;
+      await database.collection('settings').doc('push_device_owner').set({
+        tokens:FV.arrayUnion(token),
+        owner_uid:user.uid,
+        owner_email:user.email||'',
+        active:true,
+        platform:'web-pwa-android',
+        updated_at:FV.serverTimestamp()
+      },{merge:true});
+      return true;
+    }catch(err){
+      console.warn('Registro push gratuito:',err?.message||err);
+      return false;
+    }
+  }
+
   async function registerPush(force=false){
     if(running)return false;
     if(!location.pathname.startsWith('/admin'))return false;
@@ -38,19 +58,27 @@
       const messaging=firebase.messaging();
       const token=await messaging.getToken({vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
       if(!token)throw new Error('FCM_TOKEN_EMPTY');
-      const idToken=await user.getIdToken(true);
-      const response=await fetch(REGISTER_URL,{
-        method:'POST',
-        cache:'no-store',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${idToken}`},
-        body:JSON.stringify({token,platform:'web-pwa-android'})
-      });
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||!data.ok)throw new Error(data.error||`HTTP_${response.status}`);
+
+      const directSaved=await saveTokenFree(token,user);
+      let functionSaved=false;
+      try{
+        const idToken=await user.getIdToken(true);
+        const response=await fetch(REGISTER_URL,{
+          method:'POST',cache:'no-store',
+          headers:{'Content-Type':'application/json','Authorization':`Bearer ${idToken}`},
+          body:JSON.stringify({token,platform:'web-pwa-android'})
+        });
+        const data=await response.json().catch(()=>({}));
+        functionSaved=!!(response.ok&&data.ok);
+      }catch(_){functionSaved=false}
+
+      if(!directSaved&&!functionSaved)throw new Error('PUSH_REGISTER_FAILED');
       localStorage.setItem(TOKEN_KEY,token);
       localStorage.setItem('trilheiros_fcm_registered_at',new Date().toISOString());
+      localStorage.setItem('trilheiros_fcm_registration_mode',directSaved?'free-firestore':'cloud-function');
       window.__trilheirosPushReady=true;
       window.dispatchEvent(new CustomEvent('trilheiros:push-ready'));
+      console.info('Push em segundo plano registrado.',directSaved?'free-firestore':'cloud-function');
       return true;
     }catch(err){
       window.__trilheirosPushReady=false;
@@ -76,7 +104,5 @@
     if(button)setTimeout(()=>registerPush(true),700);
   },true);
 
-  try{
-    firebase.auth().onAuthStateChanged(user=>{if(user&&!user.isAnonymous)setTimeout(()=>registerPush(true),500)});
-  }catch(_){ }
+  try{firebase.auth().onAuthStateChanged(user=>{if(user&&!user.isAnonymous)setTimeout(()=>registerPush(true),500)});}catch(_){ }
 })();
