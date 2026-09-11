@@ -37,17 +37,6 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Garantir permissão de leitura dos serviços Google Cloud
-        shell: bash
-        run: |
-          set -euo pipefail
-          DEPLOY_SA="$(node -e "const fs=require('fs');const p=process.env.GOOGLE_APPLICATION_CREDENTIALS;process.stdout.write(JSON.parse(fs.readFileSync(p,'utf8')).client_email)")"
-          echo "Conta de deploy: ${DEPLOY_SA}"
-          gcloud projects add-iam-policy-binding trilheiros-reservas \
-            --member="serviceAccount:${DEPLOY_SA}" \
-            --role="roles/serviceusage.serviceUsageViewer" \
-            --quiet
-
       - name: Publicar Hosting
         run: firebase deploy --project trilheiros-reservas --only hosting --non-interactive
 
