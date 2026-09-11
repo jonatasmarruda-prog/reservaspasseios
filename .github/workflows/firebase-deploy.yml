@@ -37,5 +37,9 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
-      - name: Publicar Hosting e notificações em segundo plano
-        run: firebase deploy --project trilheiros-reservas --only hosting,functions --non-interactive
+      - name: Publicar Hosting
+        run: firebase deploy --project trilheiros-reservas --only hosting --non-interactive
+
+      - name: Publicar Functions
+        continue-on-error: true
+        run: firebase deploy --project trilheiros-reservas --only functions --non-interactive
