@@ -8,7 +8,7 @@ const CHECKLIST=[
   ['participant_list','Lista de participantes revisada'],['whatsapp','Grupo/avisos enviados'],['payments','Pagamentos conferidos']
 ];
 const TZ='America/Cuiaba';
-let renderTimer=0;
+let renderTimer=0,booted=false;
 
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>[...r.querySelectorAll(s)];
@@ -27,7 +27,8 @@ function selectedTrip(){
   return tripById(id)||null;
 }
 function missingChecklist(t){const c=t?.checklist||{};return CHECKLIST.filter(([k])=>!c[k])}
-function schedule(){clearTimeout(renderTimer);renderTimer=setTimeout(()=>{injectStyle();patchNavigation();patchDayMode()},60)}
+function schedule(delay=70){clearTimeout(renderTimer);renderTimer=setTimeout(()=>{injectStyle();patchNavigation();patchDayMode()},delay)}
+function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
 
 function injectStyle(){
   if(q('#tripOperationsStyle'))return;
@@ -45,8 +46,8 @@ function injectStyle(){
 
 function patchNavigation(){
   if(typeof state==='undefined')return;
-  const day=q('[data-tab="day"]');if(day)day.innerHTML='✅ Embarque / Check-in';
-  if(state.tab==='day'&&q('#pageTitle'))q('#pageTitle').textContent='Embarque / Check-in';
+  const day=q('[data-tab="day"]');setText(day,'✅ Embarque / Check-in');
+  if(state.tab==='day')setText(q('#pageTitle'),'Embarque / Check-in');
 }
 
 function focusSelector(sel){const el=q(sel);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.animate?.([{boxShadow:'0 0 0 0 rgba(216,173,66,.7)'},{boxShadow:'0 0 0 8px rgba(216,173,66,0)'}],{duration:900})}}
@@ -57,8 +58,8 @@ function patchDayMode(){
   if(typeof state==='undefined'||state.tab!=='day')return;
   const content=q('#content'),t=selectedTrip();if(!content||!t)return;
   const panel=q('.dayPeople')?.closest('.panel');
-  if(panel){const eyebrow=q('.panelHead .eyebrow',panel),h=q('.panelHead h2',panel),p=q('.panelHead p',panel);if(eyebrow)eyebrow.textContent='EMBARQUE / CHECK-IN';if(h)h.textContent='Check-in do passeio';if(p)p.textContent='Marque cada participante conforme embarcar. A lista permanece vinculada ao passeio e sincroniza com a nuvem.'}
-  const checklist=q('.checkListV7')?.closest('.panel');if(checklist){const eyebrow=q('.panelHead .eyebrow',checklist),h=q('.panelHead h2',checklist);if(eyebrow)eyebrow.textContent='⚠️ CHECKLIST AUTOMÁTICO';if(h)h.textContent='Preparação antes da viagem'}
+  if(panel){setText(q('.panelHead .eyebrow',panel),'EMBARQUE / CHECK-IN');setText(q('.panelHead h2',panel),'Check-in do passeio');setText(q('.panelHead p',panel),'Marque cada participante conforme embarcar. A lista permanece vinculada ao passeio e sincroniza com a nuvem.')}
+  const checklist=q('.checkListV7')?.closest('.panel');if(checklist){setText(q('.panelHead .eyebrow',checklist),'⚠️ CHECKLIST AUTOMÁTICO');setText(q('.panelHead h2',checklist),'Preparação antes da viagem')}
 
   const people=qa('.dayPerson'),present=qa('.dayPerson.present').length,total=people.length,missing=missingChecklist(t),d=dayDiff(t.trip_date),closure=t.financial_closure||{};
   let readiness='EM PREPARAÇÃO',readinessClass='';
@@ -67,11 +68,15 @@ function patchDayMode(){
   else if(d<=3&&missing.length){readiness=`${missing.length} PENDÊNCIA(S)`;readinessClass='warn'}
   else if(d<=3){readiness='PRONTO PARA VIAJAR';readinessClass='ok'}
   const when=d===0?'HOJE':d===1?'AMANHÃ':d>1&&d<999?`FALTAM ${d} DIAS`:d<0?`PASSOU HÁ ${Math.abs(d)} DIA(S)`:'DATA A CONFIRMAR';
+  const signature=[t.id,present,total,missing.map(x=>x[0]).join(','),d,t.financial_locked?'1':'0',closure.received||0,closure.cost_actual||0,closure.profit_actual||0,closure.margin_percent||0].join('|');
 
-  let summary=q('#tripOpsSummary',content);if(!summary){summary=document.createElement('section');summary.id='tripOpsSummary';summary.className='tripOpsSummary';const grid=q('.dayGrid',content);grid?content.insertBefore(summary,grid):content.prepend(summary)}
+  let summary=q('#tripOpsSummary',content);
+  if(!summary){summary=document.createElement('section');summary.id='tripOpsSummary';summary.className='tripOpsSummary';const grid=q('.dayGrid',content);grid?content.insertBefore(summary,grid):content.prepend(summary)}
+  if(summary.dataset.signature===signature)return;
+  summary.dataset.signature=signature;
   summary.innerHTML=`
     <article class="tripOpsCard"><span class="opsEyebrow">✅ EMBARQUE / CHECK-IN</span><h3>${present}/${total} embarcados</h3><p>Controle presencial do grupo no momento da saída.</p><strong class="opsValue">${total?Math.round(present/total*100):0}%</strong><span class="tripOpsStatus ${present===total&&total?'ok':''}">${present===total&&total?'CHECK-IN COMPLETO':'CHECK-IN EM ANDAMENTO'}</span><div class="tripOpsActions"><button type="button" onclick="focusTripCheckin()">Abrir lista de embarque</button></div></article>
-    <article class="tripOpsCard"><span class="opsEyebrow">⚠️ CHECKLIST PRÉ-VIAGEM</span><h3>${when}</h3><p>${d>=0&&d<=3?'Checklist automático ativo. Confira os itens antes da saída.':'O sistema acompanha a data do passeio e destaca pendências automaticamente.'}</p><strong class="opsValue">${CHECKLIST.length-missing.length}/${CHECKLIST.length}</strong><span class="tripOpsStatus ${missing.length&&d<=3?'warn':!missing.length?'ok':''}">${readiness}</span><div class="tripOpsActions"><button type="button" class="secondary" onclick="focusTripChecklist()">Ver checklist</button></div></article>
+    <article class="tripOpsCard"><span class="opsEyebrow">⚠️ CHECKLIST PRÉ-VIAGEM</span><h3>${when}</h3><p>${d>=0&&d<=3?'Checklist automático ativo. Confira os itens antes da saída.':'O sistema acompanha a data do passeio e destaca pendências automaticamente.'}</p><strong class="opsValue">${CHECKLIST.length-missing.length}/${CHECKLIST.length}</strong><span class="tripOpsStatus ${readinessClass}">${readiness}</span><div class="tripOpsActions"><button type="button" class="secondary" onclick="focusTripChecklist()">Ver checklist</button></div></article>
     <article class="tripOpsCard"><span class="opsEyebrow">💰 RESULTADO FINAL</span><h3>${t.financial_locked?'Passeio fechado':'Fechamento automático'}</h3><p>${t.financial_locked?'Resultado financeiro preservado e relatório enviado/colocado na fila de e-mail.':'Ao finalizar, o sistema calcula receitas, despesas, lucro e margem usando os dados já lançados.'}</p>${t.financial_locked?`<div class="tripOpsFinalGrid"><div><span>RECEBIDO</span><b>${money(closure.received)}</b></div><div><span>DESPESAS</span><b>${money(closure.cost_actual)}</b></div><div><span>LUCRO</span><b>${money(closure.profit_actual)}</b></div><div><span>MARGEM</span><b>${Number(closure.margin_percent||0).toFixed(1)}%</b></div></div><span class="tripOpsStatus closed">RESULTADO FINAL SALVO</span>`:`<strong class="opsValue">${d<=0?'Pronto':'Após a viagem'}</strong><span class="tripOpsStatus ${d<0?'warn':''}">${d<=0?'PODE FINALIZAR':'AGUARDANDO A DATA'}</span>${canManage()?`<div class="tripOpsActions"><button type="button" class="gold" ${d>0?'disabled style="opacity:.55;cursor:not-allowed"':''} onclick="finalizeTripOperations('${String(t.id).replace(/'/g,'')}')">Finalizar passeio e calcular</button></div>`:''}`}</article>`;
 }
 
@@ -106,10 +111,23 @@ function wrapRender(){
   const wrapped=function(...args){const out=old.apply(this,args);schedule();return out};wrapped.__tripOps=true;window.renderAdmin=wrapped;try{globalThis.renderAdmin=wrapped}catch(_){ }return true;
 }
 
+function bindDayEvents(){
+  if(document.documentElement.dataset.tripOpsEvents==='1')return;
+  document.documentElement.dataset.tripOpsEvents='1';
+  document.addEventListener('change',e=>{
+    if(typeof state==='undefined'||state.tab!=='day')return;
+    if(e.target?.matches?.('#dayTripSelect,.checkListV7 input,.checkListV7 select'))schedule(100);
+  },true);
+  document.addEventListener('click',e=>{
+    if(typeof state==='undefined'||state.tab!=='day')return;
+    if(e.target?.closest?.('.dayPeople,.checkListV7'))schedule(120);
+  },true);
+}
+
 function boot(){
-  injectStyle();wrapRender();wrapFinancialClose();schedule();
-  const timer=setInterval(()=>{wrapRender();wrapFinancialClose();schedule();if(typeof state!=='undefined'&&typeof window.renderAdmin==='function'&&typeof window.toggleCloseTrip==='function')clearInterval(timer)},350);
-  const mo=new MutationObserver(()=>schedule());mo.observe(document.documentElement,{subtree:true,childList:true});
+  if(booted)return;booted=true;
+  injectStyle();wrapRender();wrapFinancialClose();bindDayEvents();schedule(20);
+  window.addEventListener('load',()=>schedule(80),{once:true});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();
 })();
