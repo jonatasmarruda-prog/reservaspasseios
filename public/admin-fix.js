@@ -19,6 +19,10 @@
   }
 
   function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+  function digits(v){return String(v||'').replace(/\D/g,'')}
+  function slug(v){return String(v||'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+  function brDate(v){const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return s||'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
+  function appState(){try{return window.state||globalThis.state}catch(_){return null}}
 
   function installRoomEditor(){
     if(typeof window.structureModalV7!=='function'||window.structureModalV7.__roomEditorV2)return false;
@@ -58,7 +62,7 @@
     };
 
     const enhanced=function(tripId){
-      const t=(window.state?.trips||globalThis.state?.trips||[]).find(x=>x.id===tripId);
+      const t=(appState()?.trips||[]).find(x=>x.id===tripId);
       if(!t||typeof window.modal!=='function')return;
       const rooms=Array.isArray(t.rooms)?t.rooms:[];
       const vehicles=Array.isArray(t.vehicles)?t.vehicles:[];
@@ -78,7 +82,6 @@
         <div class="modalFoot"><button type="button" class="btn ghost" onclick="document.getElementById('modal')?.remove()">Cancelar</button><button class="btn primary">Salvar estrutura</button></div>
       </form>`);
 
-      const host=document.getElementById('accommodationRows');
       if(rooms.length)rooms.forEach(r=>window.addAccommodationRow(r));
       else window.addAccommodationRow({name:'Quarto 01',type:'Compartilhado',capacity:2});
 
@@ -111,15 +114,112 @@
     return true;
   }
 
-  function scheduleRoomEditor(){
+  function optionLabel(v){
+    const raw=String(v||'').trim(),n=raw.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_');
+    if(!raw)return'';
+    if(n.includes('camp'))return'Camping';
+    if(n.includes('compart'))return'Quarto compartilhado';
+    if(n.includes('casal'))return'Quarto casal';
+    return raw.replaceAll('_',' ');
+  }
+
+  async function getTripOps(tripId){
+    const out={};
+    try{const snap=await db.collection('trips').doc(tripId).collection('operations').get();snap.docs.forEach(d=>out[d.id]={id:d.id,...d.data()})}catch(err){console.warn('REPORT_OPS',err)}
+    return out;
+  }
+
+  function peopleForReport(tripId){
+    const s=appState(),out=[];
+    (s?.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>(r.participants||[]).forEach((p,i)=>out.push({
+      key:digits(p.cpf)||`${r.id}-${i}`,
+      name:p.full_name||r.responsible_name||'Participante',
+      email:r.email||'',
+      reservation:r,
+      responsible:r.responsible_name||'',
+      index:i
+    })));
+    return out;
+  }
+
+  function reportHeader(doc,title,t,subtitle=''){
+    doc.setFillColor(7,50,38);doc.rect(0,0,210,38,'F');
+    doc.setFillColor(216,173,66);doc.rect(0,38,210,2,'F');
+    doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(10);doc.text('TRILHEIROS DE RONDONÓPOLIS',14,13);
+    doc.setFontSize(18);doc.text(title,14,23);
+    doc.setFont('helvetica','normal');doc.setFontSize(9);doc.text(`${t.name||'Passeio'} • ${brDate(t.trip_date)}${t.destination?` • ${t.destination}`:''}`,14,31);
+    if(subtitle){doc.setTextColor(70,88,81);doc.setFontSize(8.5);doc.text(subtitle,14,47)}
+  }
+
+  function reportFooter(doc,t,total){
+    const pages=doc.internal.getNumberOfPages();
+    for(let i=1;i<=pages;i++){
+      doc.setPage(i);doc.setFontSize(7);doc.setTextColor(110);doc.text(`Trilheiros de Rondonópolis • ${t.name||'Passeio'} • ${total} registro(s)`,14,289);doc.text(`Página ${i}/${pages}`,196,289,{align:'right'});
+    }
+  }
+
+  window.attractionLodgingPdf=async function(id){
+    if(!id){try{return toast('Selecione um passeio.','error')}catch(_){return}}
+    const s=appState(),t=(s?.trips||[]).find(x=>x.id===id);if(!t)return;
+    if(!window.jspdf?.jsPDF){try{return toast('Gerador de PDF ainda está carregando. Tente novamente.','error')}catch(_){return}}
+    const ops=await getTripOps(id),rooms=Array.isArray(t.rooms)?t.rooms:[],roomMap=new Map(rooms.map(r=>[String(r.name||''),r]));
+    const rows=peopleForReport(id).map(p=>{
+      const op=ops[p.key]||{},room=String(op.room||'').trim(),def=roomMap.get(room),r=p.reservation||{};
+      const answer=r.registration_answers||{};
+      const fallback=r.accommodation||r.category||r.participant_type||answer?.opcao?.value||answer?.tipo?.value||answer?.categoria?.value||'';
+      const type=def?.type?optionLabel(def.type):optionLabel(fallback)||(/camp/i.test(room)?'Camping':room?'Hospedagem':'Não definido');
+      return{...p,room:room||'Não definido',type};
+    }).sort((a,b)=>`${a.room} ${a.name}`.localeCompare(`${b.room} ${b.name}`,'pt-BR',{numeric:true,sensitivity:'base'}));
+    const {jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});
+    reportHeader(doc,'LISTA PARA ATRATIVOS E HOSPEDAGEM',t,'Organização por hóspede, tipo de hospedagem e número do quarto/camping.');
+    doc.autoTable({startY:53,head:[['Nº','NOME DO TURISTA','TIPO DE HOSPEDAGEM','QUARTO / CAMPING']],body:rows.map((p,i)=>[String(i+1).padStart(2,'0'),p.name,p.type,p.room]),theme:'grid',styles:{font:'helvetica',fontSize:8.5,cellPadding:2.8,textColor:[25,48,40],lineColor:[220,231,226],lineWidth:.15},headStyles:{fillColor:[7,50,38],textColor:[255,255,255],fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[247,250,248]},columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:72},2:{cellWidth:53},3:{cellWidth:43}},margin:{left:14,right:14,bottom:16}});
+    reportFooter(doc,t,rows.length);doc.save(`atrativos-hospedagem-${slug(t.name)}.pdf`);
+    try{await window.auditV7?.('pdf','trip',id,`Lista de atrativos e hospedagem gerada (${rows.length} pessoas)`)}catch(_){ }
+  };
+
+  window.transportProfessionalPdf=async function(id){
+    if(!id){try{return toast('Selecione um passeio.','error')}catch(_){return}}
+    const s=appState(),t=(s?.trips||[]).find(x=>x.id===id);if(!t)return;
+    if(!window.jspdf?.jsPDF){try{return toast('Gerador de PDF ainda está carregando. Tente novamente.','error')}catch(_){return}}
+    const reservations=(s?.reservations||[]).filter(r=>r.trip_id===id&&r.status!=='cancelled').map(r=>({name:r.responsible_name||r.participants?.[0]?.full_name||'Responsável',email:r.email||'—',qty:Math.max(1,Number(r.seats||r.participants?.length||1))})).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR',{sensitivity:'base'}));
+    const total=reservations.reduce((sum,r)=>sum+r.qty,0),{jsPDF}=window.jspdf,doc=new jsPDF({unit:'mm',format:'a4'});
+    reportHeader(doc,'LISTA DE TRANSPORTE',t,`Relação de responsáveis para transporte • Total de passageiros: ${total}`);
+    doc.autoTable({startY:53,head:[['Nº','NOME / RESPONSÁVEL','E-MAIL','QTD. PESSOAS']],body:reservations.map((r,i)=>[String(i+1).padStart(2,'0'),r.name,r.email,String(r.qty)]),theme:'grid',styles:{font:'helvetica',fontSize:8.6,cellPadding:2.8,textColor:[25,48,40],lineColor:[220,231,226],lineWidth:.15},headStyles:{fillColor:[7,50,38],textColor:[255,255,255],fontStyle:'bold',fontSize:8},alternateRowStyles:{fillColor:[247,250,248]},columnStyles:{0:{cellWidth:12,halign:'center'},1:{cellWidth:68},2:{cellWidth:76},3:{cellWidth:28,halign:'center'}},margin:{left:14,right:14,bottom:16}});
+    reportFooter(doc,t,total);doc.save(`transporte-${slug(t.name)}.pdf`);
+    try{await window.auditV7?.('pdf','trip',id,`Lista profissional de transporte gerada (${total} pessoas)`)}catch(_){ }
+  };
+
+  function renderProfessionalReports(){
+    const s=appState(),content=document.getElementById('content');if(!s||!content||s.tab!=='reports')return;
+    content.innerHTML=`<section class="panel"><div class="panelHead"><div><span class="eyebrow">CENTRAL DE RELATÓRIOS</span><h2>Documentos profissionais</h2><p>Selecione o passeio e gere documentos prontos para enviar a pousadas, atrativos, transporte e seguro.</p></div></div><div class="reportTripSelect"><select id="reportTrip"><option value="">Selecione um passeio</option>${(s.trips||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('')}</select></div><div class="reportCards">
+      <button onclick="attractionLodgingPdf(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista atrativos e hospedagem</strong><small>Nome do turista, tipo de hospedagem e número do quarto ou camping. Organizado para enviar à pousada e aos atrativos.</small></button>
+      <button onclick="transportProfessionalPdf(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista de transporte</strong><small>Nome do responsável, e-mail e quantidade de pessoas. Documento limpo para empresa de transporte.</small></button>
+      <button onclick="typeof pdfTrip==='function'&&pdfTrip(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista oficial de participantes</strong><small>Relação completa do passeio para uso interno.</small></button>
+      <button onclick="typeof insuranceCsvV7==='function'&&insuranceCsvV7(document.getElementById('reportTrip').value)"><span>CSV</span><strong>Lista para seguro</strong><small>Nome completo e CPF no formato solicitado para seguro.</small></button>
+      <button onclick="typeof copySurveyV7==='function'&&copySurveyV7(document.getElementById('reportTrip').value)"><span>LINK</span><strong>Avaliação pós-passeio</strong><small>Copie o link para os participantes avaliarem a experiência.</small></button>
+      <button onclick="typeof backupV7==='function'&&backupV7()"><span>JSON</span><strong>Backup completo</strong><small>Passeios, reservas, despesas e configurações.</small></button>
+    </div></section>`;
+  }
+
+  function installReportsCenter(){
+    const current=window.renderAdmin;
+    if(typeof current!=='function'||current.__professionalReportsV3)return false;
+    const wrapped=function(...args){const out=current.apply(this,args);setTimeout(renderProfessionalReports,0);return out};
+    wrapped.__professionalReportsV3=true;
+    window.renderAdmin=wrapped;try{globalThis.renderAdmin=wrapped}catch(_){ }
+    if(appState()?.tab==='reports')setTimeout(renderProfessionalReports,0);
+    return true;
+  }
+
+  function scheduleEnhancements(){
     let tries=0;
-    const timer=setInterval(()=>{tries++;if(installRoomEditor()||tries>60)clearInterval(timer)},200);
+    const timer=setInterval(()=>{tries++;const a=installRoomEditor(),b=installReportsCenter();if((a||window.structureModalV7?.__roomEditorV2)&&(b||window.renderAdmin?.__professionalReportsV3)||tries>80)clearInterval(timer)},200);
   }
 
   attachModalRemove();
   loadTripWeather();
-  scheduleRoomEditor();
-  window.addEventListener('load',()=>{attachModalRemove();loadTripWeather();installRoomEditor()});
+  scheduleEnhancements();
+  window.addEventListener('load',()=>{attachModalRemove();loadTripWeather();installRoomEditor();installReportsCenter();setTimeout(renderProfessionalReports,100)});
 
-  document.addEventListener('click',function(){setTimeout(()=>{attachModalRemove();installRoomEditor()},0)},true);
+  document.addEventListener('click',function(){setTimeout(()=>{attachModalRemove();installRoomEditor();installReportsCenter();if(appState()?.tab==='reports')renderProfessionalReports()},0)},true);
 })();
