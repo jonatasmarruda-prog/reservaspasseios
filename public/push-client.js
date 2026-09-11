@@ -4,7 +4,24 @@
   const VAPID_KEY='BHkqY6PmyREIcUGPdsfmdDDCf5Zsjb7qjrjRU3HwOz0M5RPFxqIW4Onyr0bC49PpQW2iPeoFz-vge1v5voVHiGE';
   const REGISTER_URL='https://southamerica-east1-trilheiros-reservas.cloudfunctions.net/registerPushDevice';
   const TOKEN_KEY='trilheiros_fcm_token_v1';
+  const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+  const BADGE='/notification-badge.png?v=20260910-push5';
   let running=false,lastAttempt=0;
+
+  function patchNotificationIcon(){
+    try{
+      const proto=globalThis.ServiceWorkerRegistration?.prototype;
+      if(!proto?.showNotification||proto.showNotification.__trilheirosIconPatched)return;
+      const native=proto.showNotification;
+      const wrapped=function(title,options={}){
+        const next={...options,icon:ICON,badge:BADGE};
+        return native.call(this,title,next);
+      };
+      wrapped.__trilheirosIconPatched=true;
+      proto.showNotification=wrapped;
+    }catch(_){ }
+  }
+  patchNotificationIcon();
 
   async function registerPush(force=false){
     if(running)return false;
@@ -16,6 +33,7 @@
     running=true;lastAttempt=Date.now();
     try{
       const reg=await navigator.serviceWorker.ready;
+      await reg.update().catch(()=>{});
       const messaging=firebase.messaging();
       const token=await messaging.getToken({vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
       if(!token)throw new Error('FCM_TOKEN_EMPTY');
@@ -50,7 +68,7 @@
   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')registerPush(false)});
   document.addEventListener('click',event=>{
     const button=event.target?.closest?.('#mobileNotifyEnable,#mobileNotifyTest');
-    if(button)setTimeout(()=>registerPush(true),1800);
+    if(button)setTimeout(()=>registerPush(true),1200);
   },true);
 
   try{
