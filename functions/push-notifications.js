@@ -12,7 +12,7 @@ const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const BASE_URL='https://trilheiros-reservas.web.app';
 const PENDING_URL=`${BASE_URL}/admin?tab=pending`;
 const PEOPLE_URL=`${BASE_URL}/admin?tab=people`;
-const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push7';
+const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push8';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
@@ -33,11 +33,15 @@ function paymentLabel(v){
 }
 
 function isPendingPayment(s){
-  const status=String(s?.payment_status||'pending').toLowerCase();
-  const paid=Math.max(0,Number(s?.paid_amount||0));
-  const total=Math.max(0,Number(s?.sale_total||0));
-  const balance=Math.max(0,Number(s?.balance_due ?? (total-paid)));
-  return ['pending','partial','awaiting','aguardando'].includes(status)&&balance>0.009;
+  if(!s)return false;
+  const status=String(s.payment_status||'pending').toLowerCase();
+  const saleStatus=String(s.sale_status||'').toLowerCase();
+  const paid=Math.max(0,Number(s.paid_amount||0));
+  const total=Math.max(0,Number(s.sale_total||0));
+  const balance=Math.max(0,Number(s.balance_due ?? Math.max(0,total-paid)));
+  if(saleStatus==='cancelled'||saleStatus==='canceled')return false;
+  if(['paid','confirmed','confirmado','quitado','completed'].includes(status))return false;
+  return balance>0.009;
 }
 
 export const registerPushDevice=onRequest({region:REGION},async(req,res)=>{
@@ -81,7 +85,7 @@ async function sendAdminPush({title,body,url,type,tag,data={}}){
   if(!devices.length){logger.info('Nenhum dispositivo push ativo.',{type});return{successCount:0,failureCount:0};}
   const payload={
     tokens:devices.map(x=>x.token),
-    data:{url,type,title,body,...Object.fromEntries(Object.entries(data).map(([k,v])=>[k,String(v??'')]))},
+    data:{url,type,title,body,tag,...Object.fromEntries(Object.entries(data).map(([k,v])=>[k,String(v??'')]))},
     webpush:{
       headers:{Urgency:'high',TTL:'86400'},
       notification:{
@@ -147,12 +151,12 @@ export const notifyReservationUpdate=onDocumentWritten({document:'trips/{tripId}
 export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',region:REGION},async event=>{
   const before=event.data?.before?.exists?event.data.before.data():null;
   const after=event.data?.after?.exists?event.data.after.data():null;
-  if(!after||after.sale_status==='cancelled')return;
+  if(!after||String(after.sale_status||'').toLowerCase()==='cancelled')return;
 
   const oldPaid=Math.max(0,Number(before?.paid_amount||0));
   const newPaid=Math.max(0,Number(after.paid_amount||0));
   const delta=newPaid-oldPaid;
-  const customer=String(after.customer_name||after.responsible_name||'Cliente');
+  const customer=String(after.customer_name||after.responsible_name||after.name||'Cliente');
   const trip=String(after.trip_name||'Passeio');
   const method=paymentLabel(after.payment_method);
   const total=Math.max(0,Number(after.sale_total||0));
@@ -173,7 +177,10 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
   const newlyCreated=!before;
   const becamePending=Boolean(before)&&!isPendingPayment(before)&&isPendingPayment(after);
   const methodChanged=Boolean(before)&&isPendingPayment(after)&&String(before.payment_method||'')!==String(after.payment_method||'')&&Boolean(after.payment_method);
-  if(!(isPendingPayment(after)&&(newlyCreated||becamePending||methodChanged)))return;
+  const pendingSignalChanged=Boolean(before)&&isPendingPayment(after)&&[
+    'requested_amount','amount_to_confirm','installment_amount','payment_reference','payment_intent','payment_origin'
+  ].some(key=>String(before?.[key]??'')!==String(after?.[key]??''));
+  if(!(isPendingPayment(after)&&(newlyCreated||becamePending||methodChanged||pendingSignalChanged)))return;
 
   const requested=Math.max(0,Number(after.requested_amount||after.amount_to_confirm||after.installment_amount||0));
   const value=requested>0?requested:(balance>0?balance:total);
@@ -182,7 +189,7 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
     body:`${trip} • ${method}${value>0?` • ${money(value)}`:''} • conferir e confirmar no Gestão`,
     url:PENDING_URL,
     type:'payment_pending',
-    tag:`payment-pending-${event.params.saleId}`,
+    tag:`payment-pending-${event.params.saleId}-${String(after.updated_at?.seconds||after.updated_at||Date.now())}`,
     data:{sale_id:event.params.saleId}
   });
 });
