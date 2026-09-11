@@ -45,6 +45,43 @@
 .loginBrand .brand .mark{width:82px!important;height:82px!important;min-width:82px!important;flex-basis:82px!important}
 @media(max-width:900px){.side .brand .mark{width:62px!important;height:62px!important;min-width:62px!important;flex-basis:62px!important}}
 </style>
+<script>
+/* Proteção global contra ciclos de MutationObserver no painel.
+   A Central de Relatórios possuía um loop: V42 alterava textos dos cards,
+   o observer detectava a própria alteração e executava o patch novamente.
+   No modo Embarque, o resumo operacional também pode atualizar o próprio DOM.
+   Ignoramos apenas essas mutações auto-geradas e agrupamos as demais. */
+if(location.pathname.startsWith('/admin')&&window.MutationObserver){
+  const NativeMutationObserver=window.MutationObserver;
+  const ignoredMutation=mutation=>{
+    try{
+      const target=mutation?.target?.nodeType===1?mutation.target:mutation?.target?.parentElement;
+      if(!target?.closest)return false;
+      if(target.closest('.reportCards'))return true;
+      if(target.closest('#tripOpsSummary'))return true;
+      return false;
+    }catch(_){return false}
+  };
+  window.MutationObserver=function(callback){
+    let timer=0,lastMutations=[],lastObserver=null;
+    return new NativeMutationObserver((mutations,observer)=>{
+      const useful=(mutations||[]).filter(m=>!ignoredMutation(m));
+      if(!useful.length)return;
+      lastMutations=useful;
+      lastObserver=observer;
+      if(timer)return;
+      timer=setTimeout(()=>{
+        timer=0;
+        const batch=lastMutations,obs=lastObserver;
+        lastMutations=[];lastObserver=null;
+        try{callback(batch,obs)}catch(err){console.warn('ADMIN_MUTATION_OBSERVER',err)}
+      },100);
+    });
+  };
+  window.MutationObserver.prototype=NativeMutationObserver.prototype;
+  window.__TRILHEIROS_PERF_MODE=true;
+}
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js" defer></script>
 <script src="/__/firebase/10.14.1/firebase-app-compat.js" defer></script>
@@ -52,7 +89,7 @@
 <script src="/__/firebase/10.14.1/firebase-firestore-compat.js" defer></script>
 <script src="/__/firebase/10.14.1/firebase-messaging-compat.js" defer></script>
 <script src="/__/firebase/init.js" defer></script>
-<script src="/preboot.js?v=20260911-stability3" defer></script>
+<script src="/preboot.js?v=20260911-reportsfix4" defer></script>
 <script src="/spark.js?v=20260911-stability3" defer></script>
 <script src="/admin-fix.js?v=20260911-stability3" defer></script>
 <script src="/features-v2.js?v=20260911-stability3" defer></script>
@@ -87,10 +124,10 @@
 <script src="/admin-sales-v37.js?v=20260911-stability3" defer></script>
 <script src="/admin-email-controls.js?v=20260911-stability3" defer></script>
 <script src="/admin-master-v40.js?v=20260911-stability3" defer></script>
-<script src="/admin-stable-v42.js?v=20260911-stability3" defer></script>
+<script src="/admin-stable-v42.js?v=20260911-reportsfix4" defer></script>
 <script src="/trip-dedupe-v43.js?v=20260911-stability3" defer></script>
-<script src="/admin-weather-reports-fix.js?v=20260911-stability3" defer></script>
-<script src="/admin-trip-operations.js?v=20260911-stability3" defer></script>
+<script src="/admin-weather-reports-fix.js?v=20260911-reportsfix4" defer></script>
+<script src="/admin-trip-operations.js?v=20260911-reportsfix4" defer></script>
 <script src="/admin-instagram.js?v=20260911-instagram1" defer></script>
 <script>
 window.addEventListener('DOMContentLoaded',()=>{
