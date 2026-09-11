@@ -20,7 +20,7 @@ function emailState(s){
   if(s?.welcome_email_sent_at||s?.welcome_email_status==='sent')return{key:'sent',label:'Enviado',action:'Reenviar'};
   if(s?.welcome_email_status==='error')return{key:'error',label:'Erro no envio',action:'Tentar novamente'};
   if(!fullyPaid(s))return{key:'waiting',label:'Após quitação',action:''};
-  if(s?.welcome_email_status==='sending'||s?.welcome_email_status==='pending')return{key:'pending',label:'Envio automático em até 5 min',action:''};
+  if(s?.welcome_email_status==='sending'||s?.welcome_email_status==='pending')return{key:'pending',label:'Envio automático imediato',action:''};
   return{key:'ready',label:'Pronto para envio automático',action:'Enviar agora'};
 }
 function injectStyle(){
@@ -46,7 +46,7 @@ async function queuePaidWelcome(id,{silent=false}={}){
   }
   if(!Object.keys(patch).length)return false;
   await ref.update(patch);
-  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. O e-mail será enviado automaticamente em até 5 minutos.','success');
+  if(!silent&&validEmail(emailOf(s)))notify('Pagamento confirmado. O e-mail de boas-vindas foi solicitado para envio imediato.','success');
   return true;
 }
 window.queuePaidWelcomeEmail=queuePaidWelcome;
@@ -62,7 +62,7 @@ window.requestWelcomeEmailV37=async function(id){
     const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
     if(!s.payment_completed_at)patch.payment_completed_at=stamp;
     await db.collection('sales').doc(id).update(patch);
-    notify('E-mail colocado na fila. O envio ocorre automaticamente em até 5 minutos.','success');
+    notify('Reenvio solicitado. O e-mail será disparado automaticamente agora.','success');
     if(typeof window.renderSalesPageV37==='function')window.renderSalesPageV37();
   }catch(e){notify(e.message||'Não foi possível solicitar o e-mail.','error')}
 };
