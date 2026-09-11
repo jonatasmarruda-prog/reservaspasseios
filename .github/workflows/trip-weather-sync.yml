@@ -2,6 +2,11 @@ name: Clima diário dos passeios
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/sync-trip-weather.mjs'
+      - '.github/workflows/trip-weather-sync.yml'
   schedule:
     # 07:05 em Mato Grosso (UTC-4)
     - cron: '5 11 * * *'
