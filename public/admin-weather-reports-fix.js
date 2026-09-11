@@ -22,7 +22,7 @@ function dailyAt(data,date){const i=data?.daily?.time?.indexOf(String(date||'').
 function injectStyle(){
   if(q('#weatherReportsFixStyle'))return;
   const s=document.createElement('style');s.id='weatherReportsFixStyle';s.textContent=`
-  #v40ReportTrip{position:relative!important;z-index:5!important;pointer-events:auto!important;touch-action:auto!important;opacity:1!important;visibility:visible!important;cursor:pointer!important;-webkit-user-select:auto!important;user-select:auto!important}
+  #v40ReportTrip{position:relative!important;z-index:5!important;pointer-events:auto!important;touch-action:manipulation!important;opacity:1!important;visibility:visible!important;cursor:pointer!important;-webkit-user-select:auto!important;user-select:auto!important;-webkit-appearance:menulist!important;appearance:auto!important}
   .v40ReportBar{position:relative!important;z-index:4!important;pointer-events:auto!important;overflow:visible!important}.v40ReportBar select,.v40ReportBar button{pointer-events:auto!important}
   .twWeather{margin:0 0 18px;padding:18px;border:1px solid #dce8e3;border-radius:20px;background:linear-gradient(135deg,#f8fbf9,#eef7f3);box-shadow:0 10px 28px rgba(7,50,38,.06)}
   .twWeatherHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.twWeatherHead h2,.twWeatherHead h3{margin:3px 0 4px;color:#073226}.twWeatherHead p{margin:0;color:#63786e;font-size:12px}.twLive{font-size:10px;font-weight:900;padding:6px 9px;border-radius:999px;background:#e6f6ed;color:#136746;white-space:nowrap}
@@ -34,17 +34,33 @@ function injectStyle(){
 
 function repairReports(){
   if(state.tab!=='reports')return;
-  const sel=q('#v40ReportTrip');if(!sel)return;
-  sel.disabled=false;sel.removeAttribute('disabled');sel.style.pointerEvents='auto';sel.style.touchAction='auto';
-  if(sel.dataset.reportFixed==='1')return;
-  sel.dataset.reportFixed='1';
+  const original=q('#v40ReportTrip');if(!original)return;
   const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));
-  const current=state.reportTripFix||sel.value;
+  const current=state.reportTripFix||original.value;
+
+  // Substitui o select por um clone limpo para remover listeners antigos que
+  // podiam interceptar pointer/touch e impedir a abertura nativa da lista.
+  const sel=original.dataset.reportFixed==='2'?original:original.cloneNode(false);
+  if(sel!==original)original.replaceWith(sel);
+
+  sel.disabled=false;
+  sel.removeAttribute('disabled');
+  sel.dataset.reportFixed='2';
+  sel.style.pointerEvents='auto';
+  sel.style.touchAction='manipulation';
+  sel.style.cursor='pointer';
   sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');
+
   if(current&&trips.some(t=>t.id===current))sel.value=current;
+  else if(trips.length)sel.value=trips[0].id;
   state.reportTripFix=sel.value;
-  ['pointerdown','mousedown','touchstart','click'].forEach(evt=>sel.addEventListener(evt,e=>e.stopPropagation(),{passive:true}));
-  sel.addEventListener('change',e=>{state.reportTripFix=e.target.value;e.stopPropagation()});
+
+  if(sel.dataset.reportEvents!=='1'){
+    sel.dataset.reportEvents='1';
+    const save=()=>{state.reportTripFix=sel.value};
+    sel.addEventListener('change',save);
+    sel.addEventListener('input',save);
+  }
 }
 
 async function mountHomeWeather(){
