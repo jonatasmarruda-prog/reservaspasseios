@@ -79,11 +79,13 @@
     actions.append(a);
   }
 
-  const publicObserver=new MutationObserver(()=>{
-    attachSimpleSummary();
-    enhanceSuccess();
-  });
-  publicObserver.observe(document.documentElement,{subtree:true,childList:true});
+  if(!location.pathname.startsWith('/admin')){
+    const publicObserver=new MutationObserver(()=>{
+      attachSimpleSummary();
+      enhanceSuccess();
+    });
+    publicObserver.observe(document.documentElement,{subtree:true,childList:true});
+  }
   window.addEventListener('load',()=>{attachSimpleSummary();enhanceSuccess()});
 
   /* ---------- Minha Viagem Premium ---------- */

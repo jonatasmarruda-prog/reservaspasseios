@@ -52,12 +52,21 @@ A V43 consolida duplicados existentes: migra reservas, vendas e despesas para o 
 Regra obrigatória: mesma viagem + mesma data = um único passeio.
 
 ## Deploy Firebase
-`.github/workflows/firebase-deploy.yml` publica `hosting,functions` no projeto `trilheiros-reservas` quando há mudanças em `public/**`, `functions/**`, `firebase.json` ou no próprio workflow.
+`.github/workflows/firebase-deploy.yml` publica somente `hosting` no projeto `trilheiros-reservas` quando há mudanças em `public/**`, `firebase.json` ou no próprio workflow.
 
-O workflow instala dependências das Functions, autentica com `FIREBASE_SERVICE_ACCOUNT` e executa:
-`firebase deploy --project trilheiros-reservas --only hosting,functions --non-interactive`.
+O workflow autentica com `FIREBASE_SERVICE_ACCOUNT` e executa:
+`firebase deploy --project trilheiros-reservas --only hosting --non-interactive`.
 
-Não incluir Firestore Rules nesse deploy sem validar previamente as permissões da conta de serviço.
+Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem validar previamente as permissões da conta de serviço.
+
+## Estabilidade do painel e Relatórios — 11/09/2026
+- A causa do travamento do seletor `#reportTrip` era `public/admin-fix.js`: um listener global de clique reconstruía a Central de Relatórios com `innerHTML` depois de qualquer toque e podia envolver `window.renderAdmin` novamente a cada clique.
+- A Central V7 agora é renderizada diretamente pelo fluxo oficial de `renderReportsV7()`. A escolha de `#reportTrip` fica em `state.reportTripCentral` e não dispara nova renderização.
+- O seletor operacional V40 permanece separado em `#v40ReportTrip`, com estado próprio em `state.reportTripV40`.
+- Foram removidos observers globais redundantes das camadas V40, V42, vendas, custos e Instagram. Os observers exclusivos do cadastro público não são mais iniciados na rota `/admin`; `admin-trip-operations.js` atual já não usa `MutationObserver`.
+- O workaround que substituía globalmente `MutationObserver` e o seletor alternativo touch-safe foram removidos; a estabilidade vem da eliminação da origem da renderização repetida.
+- `sales-management-v22.js` tinha erro de sintaxe e voltou a carregar normalmente.
+- Build do shell: `20260911-stable-admin1`. HTML não é armazenado e JS/CSS sempre revalidam; o Service Worker usa network-first para arquivos de aplicação.
 
 ## Cadastro direto por link do passeio
 Links no formato `https://trilheiros-reservas.web.app/cadastro/<tripId>` usam `public/cadastro.html`.
@@ -178,7 +187,7 @@ Arquivos:
 - `public/pwa.js` — controles, teste e integração visual;
 - `functions/push-notifications.js` — envia push pelo Firebase Admin Messaging;
 - `functions/entry.js` — exporta as Functions de push;
-- `.github/workflows/firebase-deploy.yml` — publica Hosting + Functions.
+- `.github/workflows/firebase-deploy.yml` — publica somente o Firebase Hosting; as Functions têm fluxos separados e não devem ser reativadas sem autorização.
 
 O administrador precisa abrir o sistema ao menos uma vez, estar autenticado e conceder permissão de notificações para registrar o token do celular em `push_devices`.
 

@@ -166,8 +166,10 @@
     }
   });
 
-  const observer=new MutationObserver(()=>requestAnimationFrame(polish));
-  observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+  if(!location.pathname.startsWith('/admin')){
+    const observer=new MutationObserver(()=>requestAnimationFrame(polish));
+    observer.observe(document.documentElement,{childList:true,subtree:true,characterData:true});
+  }
   document.addEventListener('DOMContentLoaded',polish);
   setTimeout(polish,350);
 })();

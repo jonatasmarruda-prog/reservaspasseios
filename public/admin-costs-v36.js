@@ -105,5 +105,5 @@ function ensureFinance(){if(state.tab!=='finance')return;const content=q('#conte
 
 const oldPayable=window.payableModalV30;window.payableModalV30=function(prefillTrip=''){if(prefillTrip)return window.expenseModalV36(prefillTrip);notify('Abra primeiro o passeio desejado em “Despesas por passeio”. Assim nenhuma despesa será misturada.');};
 const oldRender=window.renderAdmin;if(typeof oldRender==='function'){window.renderAdmin=function(...args){const out=oldRender.apply(this,args);setTimeout(ensureFinance,80);return out};try{renderAdmin=window.renderAdmin}catch(_){ }}
-const mo=new MutationObserver(()=>{if(state.tab==='finance'&&!q('#v36ExpenseHub'))setTimeout(ensureFinance,30)});mo.observe(document.body,{childList:true,subtree:true});setTimeout(ensureFinance,250);
+setTimeout(ensureFinance,250);
 })();

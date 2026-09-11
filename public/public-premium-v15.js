@@ -164,16 +164,18 @@
     const h1=q('h1',success);if(h1)h1.textContent='Cadastro confirmado!';
   }
 
-  let queued=false;
-  const observer=new MutationObserver(()=>{
-    if(queued)return;queued=true;
-    requestAnimationFrame(()=>{
-      queued=false;
-      enhanceForm();enhanceSuccess();
-      const form=q('#simpleReg');if(form){enhanceSummary(form);updateProgress(form);updateSubmit(form)}
+  if(!location.pathname.startsWith('/admin')){
+    let queued=false;
+    const observer=new MutationObserver(()=>{
+      if(queued)return;queued=true;
+      requestAnimationFrame(()=>{
+        queued=false;
+        enhanceForm();enhanceSuccess();
+        const form=q('#simpleReg');if(form){enhanceSummary(form);updateProgress(form);updateSubmit(form)}
+      });
     });
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','disabled']});
+    observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','disabled']});
+  }
   window.addEventListener('load',()=>{enhanceForm();enhanceSuccess()});
   setTimeout(()=>{enhanceForm();enhanceSuccess()},350);
 })();

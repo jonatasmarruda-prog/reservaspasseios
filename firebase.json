@@ -14,19 +14,15 @@
       {"source": "**", "destination": "/index.html"}
     ],
     "headers": [
+      {"source": "/", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
+      {"source": "/admin", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
+      {"source": "/admin/**", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/cadastro.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/reservation-portal-v27.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/reservation-portal-v27.css", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/reservation-portal-logo-clean-v27.css", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/admin-*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/admin-*.css", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/admin-instagram.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/pdf-*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/trip-dedupe-v43.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/push-client.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/pwa.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
+      {"source": "/*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
+      {"source": "/*.css", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
+      {"source": "/*.webmanifest", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
       {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]}
     ]
   },

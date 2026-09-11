@@ -180,7 +180,15 @@ async function promoteWait(id){
 }
 
 async function mountReports(){
-  if(state.tab!=='reports')return;const content=q('#content');if(!content||q('#v40OpsReports'))return;const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));const box=document.createElement('section');box.id='v40OpsReports';box.className='v40Block';box.innerHTML=`<div class="v40Head"><div><span class="eyebrow">RELATÓRIOS OPERACIONAIS</span><h2>PDFs específicos para fornecedores</h2><p>Sem CPF, sem e-mail e sem dados de segurança.</p></div></div><div class="v40ReportBar"><select id="v40ReportTrip">${trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('')}</select><button data-v40-report="bus">Ônibus</button><button data-v40-report="attraction">Atrativo</button><button data-v40-report="hotel">Hospedagem</button><button data-v40-report="internal">Interno</button></div>`;content.appendChild(box);qa('[data-v40-report]',box).forEach(b=>b.onclick=()=>generateOperationalPdf(b.dataset.v40Report,q('#v40ReportTrip',box).value));
+  if(state.tab!=='reports')return;
+  const content=q('#content');if(!content||q('#v40OpsReports'))return;
+  const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));
+  const selected=trips.some(t=>t.id===state.reportTripV40)?state.reportTripV40:(trips[0]?.id||'');
+  const box=document.createElement('section');box.id='v40OpsReports';box.className='v40Block';
+  box.innerHTML=`<div class="v40Head"><div><span class="eyebrow">RELATÓRIOS OPERACIONAIS</span><h2>PDFs específicos para fornecedores</h2><p>Sem CPF, sem e-mail e sem dados de segurança.</p></div></div><div class="v40ReportBar"><select id="v40ReportTrip">${trips.map(t=>`<option value="${esc(t.id)}" ${t.id===selected?'selected':''}>${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('')}</select><button data-v40-report="bus">Ônibus</button><button data-v40-report="attraction">Atrativo</button><button data-v40-report="hotel">Hospedagem</button><button data-v40-report="internal">Interno</button></div>`;
+  content.appendChild(box);
+  const select=q('#v40ReportTrip',box);if(select)select.onchange=()=>{state.reportTripV40=select.value};
+  qa('[data-v40-report]',box).forEach(b=>b.onclick=()=>generateOperationalPdf(b.dataset.v40Report,select?.value||''));
 }
 async function reportRows(tripId,type){
   const t=(state.trips||[]).find(x=>x.id===tripId);if(!t)return{t:null,rows:[]};const ss=await db.collection('sales').where('trip_id','==',tripId).get(),sales=new Map(ss.docs.map(d=>[d.id,{id:d.id,...d.data()}])),rows=[{name:GUIDE,type:'GUIA DE TURISMO',method:'',status:''}];
@@ -206,5 +214,5 @@ function renderCustomTab(){if(state.tab==='safetyV40')renderSafety();else if(sta
 function mount(){injectNav();guardLockedFinance();renderCustomTab();mountExecutive();mountFinanceControl();mountReports();mountBackup()}
 const oldRender=window.renderAdmin;
 if(typeof oldRender==='function'&&!oldRender.__v40){const wrapped=function(...args){const out=oldRender.apply(this,args);setTimeout(mount,40);return out};wrapped.__v40=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){}}
-const mo=new MutationObserver(()=>{injectNav();if(['safetyV40','waitlistV40'].includes(state.tab)){if(!q('#content .v40Block'))setTimeout(renderCustomTab,25)}else{setTimeout(()=>{mountExecutive();mountFinanceControl();mountReports();mountBackup()},25)}});mo.observe(document.body,{subtree:true,childList:true});window.addEventListener('load',()=>setTimeout(mount,120));setTimeout(mount,500);
+window.addEventListener('load',()=>setTimeout(mount,120));setTimeout(mount,500);
 })();

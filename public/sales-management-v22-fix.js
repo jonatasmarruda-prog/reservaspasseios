@@ -132,8 +132,6 @@
     },80);
   }
 
-  const obs=new MutationObserver(()=>{patchAdminButtons();if(cancelledSale)renderCancelled()});
-  obs.observe(document.documentElement,{subtree:true,childList:true});
   window.addEventListener('load',()=>{patchAdminButtons();guardCancelledSale()});
   setTimeout(()=>{patchAdminButtons();guardCancelledSale()},300);
 })();

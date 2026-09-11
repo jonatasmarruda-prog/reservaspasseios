@@ -98,5 +98,5 @@ window.renderSalesPageV37=async function(){
 window.renderSalesPageV21=window.renderSalesPageV37;try{renderSalesPageV21=window.renderSalesPageV37}catch(_){ }
 function patch(){if(!location.pathname.startsWith('/admin'))return;const nav=q('[data-tab="salesV21"]');if(nav)nav.onclick=()=>{state.tab='salesV21';window.renderSalesPageV37()};if(state.tab==='salesV21'&&!q('.v22SaleTable')&&!q('.saleLoadingV21'))window.renderSalesPageV37()}
 const oldRender=window.renderAdmin;if(typeof oldRender==='function'){window.renderAdmin=function(...args){const out=oldRender.apply(this,args);setTimeout(()=>{patch();if(state.tab==='salesV21')window.renderSalesPageV37()},0);return out};try{renderAdmin=window.renderAdmin}catch(_){ }}
-const mo=new MutationObserver(()=>patch());mo.observe(document.body,{subtree:true,childList:true});window.addEventListener('load',patch);setTimeout(patch,300);
+window.addEventListener('load',patch);setTimeout(patch,300);
 })();

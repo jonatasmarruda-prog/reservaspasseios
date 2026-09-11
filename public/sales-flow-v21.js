@@ -207,8 +207,6 @@
     let tries=0;const timer=setInterval(()=>{tries++;try{if(typeof db!=='undefined'&&db&&typeof auth!=='undefined'&&auth){clearInterval(timer);saleRegistrationV21(m[1])}}catch(_){ }if(tries>100){clearInterval(timer);publicFail('Cadastro indisponível','Recarregue a página e tente novamente.')}},80);
   }
 
-  const observer=new MutationObserver(()=>injectAdmin());
-  observer.observe(document.documentElement,{subtree:true,childList:true});
   window.addEventListener('load',()=>{injectAdmin();routeSaleWhenReady()});
   window.addEventListener('popstate',routeSaleWhenReady);
   injectAdmin();routeSaleWhenReady();

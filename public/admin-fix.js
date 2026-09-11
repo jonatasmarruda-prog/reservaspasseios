@@ -12,7 +12,7 @@
   function loadTripWeather(){
     if(!location.pathname.startsWith('/admin')||document.querySelector('script[data-admin-weather]'))return;
     const s=document.createElement('script');
-    s.src='/admin-weather.js?v=20260911-weather3';
+    s.src='/admin-weather.js?v=20260911-stable-admin1';
     s.defer=true;
     s.dataset.adminWeather='1';
     document.head.appendChild(s);
@@ -194,7 +194,8 @@
 
   function renderProfessionalReports(){
     const s=appState(),content=document.getElementById('content');if(!s||!content||s.tab!=='reports')return;
-    content.innerHTML=`<section class="panel"><div class="panelHead"><div><span class="eyebrow">CENTRAL DE RELATÓRIOS</span><h2>Documentos profissionais</h2><p>Selecione o passeio e gere documentos prontos para enviar a pousadas, atrativos, transporte e seguro.</p></div></div><div class="reportTripSelect"><select id="reportTrip"><option value="">Selecione um passeio</option>${(s.trips||[]).map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('')}</select></div><div class="reportCards">
+    const trips=s.trips||[],selected=trips.some(t=>t.id===s.reportTripCentral)?s.reportTripCentral:'';
+    content.innerHTML=`<section class="panel"><div class="panelHead"><div><span class="eyebrow">CENTRAL DE RELATÓRIOS</span><h2>Documentos profissionais</h2><p>Selecione o passeio e gere documentos prontos para enviar a pousadas, atrativos, transporte e seguro.</p></div></div><div class="reportTripSelect"><select id="reportTrip"><option value="">Selecione um passeio</option>${trips.map(t=>`<option value="${esc(t.id)}" ${t.id===selected?'selected':''}>${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('')}</select></div><div class="reportCards">
       <button onclick="attractionLodgingPdf(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista atrativos e hospedagem</strong><small>Nome do turista, tipo de hospedagem e número do quarto ou camping. Organizado para enviar à pousada e aos atrativos.</small></button>
       <button onclick="transportProfessionalPdf(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista de transporte</strong><small>Nome do responsável, e-mail e quantidade de pessoas. Documento limpo para empresa de transporte.</small></button>
       <button onclick="typeof pdfTrip==='function'&&pdfTrip(document.getElementById('reportTrip').value)"><span>PDF</span><strong>Lista oficial de participantes</strong><small>Relação completa do passeio para uso interno.</small></button>
@@ -202,27 +203,18 @@
       <button onclick="typeof copySurveyV7==='function'&&copySurveyV7(document.getElementById('reportTrip').value)"><span>LINK</span><strong>Avaliação pós-passeio</strong><small>Copie o link para os participantes avaliarem a experiência.</small></button>
       <button onclick="typeof backupV7==='function'&&backupV7()"><span>JSON</span><strong>Backup completo</strong><small>Passeios, reservas, despesas e configurações.</small></button>
     </div></section>`;
+    const select=document.getElementById('reportTrip');
+    if(select)select.onchange=()=>{s.reportTripCentral=select.value};
   }
 
   function installReportsCenter(){
-    const current=window.renderAdmin;
-    if(typeof current!=='function'||current.__professionalReportsV3)return false;
-    const wrapped=function(...args){const out=current.apply(this,args);setTimeout(renderProfessionalReports,0);return out};
-    wrapped.__professionalReportsV3=true;
-    window.renderAdmin=wrapped;try{globalThis.renderAdmin=wrapped}catch(_){ }
-    if(appState()?.tab==='reports')setTimeout(renderProfessionalReports,0);
+    window.renderProfessionalReports=renderProfessionalReports;
     return true;
-  }
-
-  function scheduleEnhancements(){
-    let tries=0;
-    const timer=setInterval(()=>{tries++;const a=installRoomEditor(),b=installReportsCenter();if((a||window.structureModalV7?.__roomEditorV2)&&(b||window.renderAdmin?.__professionalReportsV3)||tries>80)clearInterval(timer)},200);
   }
 
   attachModalRemove();
   loadTripWeather();
-  scheduleEnhancements();
-  window.addEventListener('load',()=>{attachModalRemove();loadTripWeather();installRoomEditor();installReportsCenter();setTimeout(renderProfessionalReports,100)});
-
-  document.addEventListener('click',function(){setTimeout(()=>{attachModalRemove();installRoomEditor();installReportsCenter();if(appState()?.tab==='reports')renderProfessionalReports()},0)},true);
+  installReportsCenter();
+  document.addEventListener('DOMContentLoaded',()=>{attachModalRemove();installRoomEditor();installReportsCenter()});
+  window.addEventListener('load',()=>{attachModalRemove();loadTripWeather();installRoomEditor();installReportsCenter()});
 })();

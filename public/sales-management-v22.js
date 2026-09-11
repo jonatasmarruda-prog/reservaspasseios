@@ -94,7 +94,6 @@
         back.querySelector('.saleModalV22').innerHTML=`<section class="saleDoneV21"><div class="saleDoneIconV21">✓</div><span>VENDA REGISTRADA</span><h2>${esc(t.name)}</h2><p><b>${n} vaga${n===1?'':'s'}</b> • Total ${money(total)} • Recebido ${money(received)}</p><div class="saleLinkBoxV21"><small>LINK EXCLUSIVO DO CLIENTE</small><input id="v22Link" readonly value="${esc(link)}"></div><div class="saleDoneActionsV21"><button id="v22Copy">Copiar link</button><a target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(text)}">Enviar no WhatsApp</a><button id="v22Share">Compartilhar</button></div><button class="saleCloseDoneV21" id="v22Done">Fechar</button></section>`;
         q('#v22Copy',back).onclick=()=>navigator.clipboard?.writeText(link).then(()=>notify('Link copiado.'));q('#v22Share',back).onclick=async()=>{try{if(navigator.share)await navigator.share({title:`Cadastro — ${t.name}`,text,url:link});else throw Error()}catch(e){if(e?.name!=='AbortError')navigator.clipboard?.writeText(link).then(()=>notify('Link copiado.'))}};q('#v22Done',back).onclick=()=>{closeModal();if(state?.tab==='salesV21')renderSalesPageV21()};
       }catch(err){msg.innerHTML=`<div class="saleErrorV21">${esc(err.message||'Não foi possível registrar a venda.')}</div>`;btn.disabled=false;btn.textContent='Registrar venda e gerar link'}
-    };
   };
 
   async function getSale(id){const s=await db.collection('sales').doc(id).get();if(!s.exists)throw Error('Venda não encontrada.');return{id:s.id,...s.data()}}
@@ -137,6 +136,6 @@
   function patchAdmin(){
     if(!location.pathname.startsWith('/admin'))return;const b=q('#newSaleV21');if(b){b.disabled=!roleCanSales();b.onclick=openSaleModalV21}const nav=q('[data-tab="salesV21"]');if(nav)nav.onclick=()=>{state.tab='salesV21';renderSalesPageV21()};if(state?.tab==='salesV21'&&q('#content')&&!q('.v22SaleTable')&&!q('.saleLoadingV21'))renderSalesPageV21();
   }
-  const obs=new MutationObserver(()=>patchAdmin());obs.observe(document.documentElement,{subtree:true,childList:true});window.addEventListener('load',patchAdmin);setTimeout(patchAdmin,400);
+  window.addEventListener('load',patchAdmin);setTimeout(patchAdmin,400);
   try{renderSalesPageV21=window.renderSalesPageV21;openSaleModalV21=window.openSaleModalV21}catch(_){ }
 })();

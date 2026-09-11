@@ -30,8 +30,13 @@
       if(text.includes('embarque'))label.style.display='none';
     });
   }
-  const boardingObserver=new MutationObserver(()=>hideBoardingFields());
-  boardingObserver.observe(document.documentElement,{subtree:true,childList:true});
+  function installBoardingGuard(){
+    const current=window.tripModal;
+    if(typeof current!=='function'||current.__hideBoardingV7)return;
+    const wrapped=function(...args){const out=current.apply(this,args);hideBoardingFields();return out};
+    wrapped.__hideBoardingV7=true;window.tripModal=wrapped;try{tripModal=wrapped}catch(_){ }
+  }
+  window.addEventListener('load',installBoardingGuard);
 
   async function surveyPage(tripId){
     app.innerHTML=`<main class="surveyPage"><section class="surveyCard"><img src="https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis"><span class="eyebrow">SUA EXPERIÊNCIA IMPORTA</span><h1>Como foi seu passeio?</h1><p class="surveyLead">Carregando informações...</p></section></main>`;

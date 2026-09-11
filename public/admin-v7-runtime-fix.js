@@ -263,7 +263,7 @@
   document.addEventListener('click',e=>{
     const report=e.target?.closest?.('#v42MonthlyReport,#v36Monthly');
     if(report){e.preventDefault();e.stopImmediatePropagation();(async()=>{const month=currentFinanceMonth();await ensureRecurringBusinessExpenses(month);await reloadExpenses();if(typeof window.openMonthlyReportV34==='function')window.openMonthlyReportV34(month);scheduleMonthlyClosure()})()}
-    else scheduleApply();
+    else if(['dashboard','finance'].includes(state?.tab))scheduleApply();
   },true);
   window.addEventListener('online',()=>{setNetworkUI();scheduleApply()});
   window.addEventListener('offline',()=>{setNetworkUI();scheduleApply()});

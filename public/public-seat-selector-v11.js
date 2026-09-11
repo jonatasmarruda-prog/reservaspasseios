@@ -62,12 +62,14 @@
     updateCopy();
   }
 
-  const observer=new MutationObserver(()=>{
-    installSelector();
-    const add=document.querySelector('#simpleAddParticipant');
-    if(add&&!add.classList.contains('v11HiddenAdd')){add.classList.add('v11HiddenAdd');add.setAttribute('aria-hidden','true');add.tabIndex=-1}
-    document.querySelectorAll('[data-remove-companion]').forEach(x=>{x.classList.add('v11HiddenRemove');x.setAttribute('aria-hidden','true');x.tabIndex=-1});
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true});
+  if(!location.pathname.startsWith('/admin')){
+    const observer=new MutationObserver(()=>{
+      installSelector();
+      const add=document.querySelector('#simpleAddParticipant');
+      if(add&&!add.classList.contains('v11HiddenAdd')){add.classList.add('v11HiddenAdd');add.setAttribute('aria-hidden','true');add.tabIndex=-1}
+      document.querySelectorAll('[data-remove-companion]').forEach(x=>{x.classList.add('v11HiddenRemove');x.setAttribute('aria-hidden','true');x.tabIndex=-1});
+    });
+    observer.observe(document.documentElement,{subtree:true,childList:true});
+  }
   window.addEventListener('load',installSelector);
 })();

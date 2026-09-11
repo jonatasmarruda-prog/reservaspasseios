@@ -96,13 +96,6 @@
     const head=document.querySelector('.dayHeader p');if(head){const txt=`${dateLabel(t.trip_date)} • ${total} participante(s)`;setText(head,txt)}
   }
 
-  let patchQueued=false;
-  const observer=new MutationObserver(()=>{
-    if(patchQueued)return;patchQueued=true;
-    requestAnimationFrame(()=>{patchQueued=false;patchDayMode()});
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true});
-
   async function logoData(){
     try{const r=await fetch(LOGO);const b=await r.blob();return await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=rej;fr.readAsDataURL(b)})}catch{return null}
   }
@@ -147,7 +140,13 @@
     doc.autoTable({startY:43,head:[['Nº','Participante','CPF','Quarto']],body:people.map((p,i)=>[i+1,p.name,p.special?'—':cpfLabel(p.cpf),p.room||'—']),headStyles:{fillColor:[7,50,38]},styles:{fontSize:8.7,cellPadding:2.4},margin:{left:14,right:14}});doc.save(`quartos-${slug(t.name)}.pdf`)
   };
 
-  /* Garante a reserva ao entrar no painel e também após cadastrar/duplicar passeios. */
-  setInterval(()=>{ensureGuideSeats();patchDayMode()},2500);
+  /* Garante a reserva após cada renderização real, sem observar o documento inteiro. */
+  const previousRender=window.renderAdmin;
+  if(typeof previousRender==='function'&&!previousRender.__specialPassengerV13){
+    const wrapped=function(...args){const out=previousRender.apply(this,args);setTimeout(()=>{ensureGuideSeats();patchDayMode()},0);return out};
+    wrapped.__specialPassengerV13=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
+  }
+  document.addEventListener('change',e=>{if(e.target?.matches?.('#dayTripSelect,.dayAlloc select'))requestAnimationFrame(patchDayMode)},true);
+  document.addEventListener('click',e=>{if(e.target?.closest?.('.dayPeople'))requestAnimationFrame(patchDayMode)},true);
   window.addEventListener('load',()=>setTimeout(ensureGuideSeats,1200));
 })();

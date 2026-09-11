@@ -280,12 +280,20 @@
     });
   }
 
-  let scheduled=false;
-  const observer=new MutationObserver(()=>{
-    if(scheduled)return;scheduled=true;
-    requestAnimationFrame(()=>{scheduled=false;patchRegistrationForm();patchAdminCapacityBadges()});
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true});
+  if(!location.pathname.startsWith('/admin')){
+    let scheduled=false;
+    const observer=new MutationObserver(()=>{
+      if(scheduled)return;scheduled=true;
+      requestAnimationFrame(()=>{scheduled=false;patchRegistrationForm()});
+    });
+    observer.observe(document.documentElement,{subtree:true,childList:true});
+  }else{
+    const previousRender=window.renderAdmin;
+    if(typeof previousRender==='function'&&!previousRender.__capacityBadgesV24){
+      const wrapped=function(...args){const out=previousRender.apply(this,args);requestAnimationFrame(patchAdminCapacityBadges);return out};
+      wrapped.__capacityBadgesV24=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
+    }
+  }
 
   window.addEventListener('load',()=>{
     patchRegistrationForm();patchAdminCapacityBadges();watchDirectRegistration();

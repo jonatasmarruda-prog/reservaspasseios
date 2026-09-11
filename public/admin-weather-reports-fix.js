@@ -18,7 +18,7 @@ function slug(v){return String(v||'passeio').normalize('NFD').replace(/[\u0300-\
 function toastError(e,msg){console.error(msg,e);if(typeof toast==='function')toast(e?.message||msg,'error');else alert(e?.message||msg)}
 function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
 function activeTrips(){return(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')))}
-function selectedOperationalTripId(){const trips=activeTrips(),native=q('#v40ReportTrip'),id=state.reportTripFix||native?.value||'';return trips.some(t=>t.id===id)?id:(trips[0]?.id||'')}
+function selectedOperationalTripId(){const trips=activeTrips(),native=q('#v40ReportTrip'),id=state.reportTripV40||native?.value||'';return trips.some(t=>t.id===id)?id:(trips[0]?.id||'')}
 
 function weatherLabel(code){const c=Number(code);if(c===0)return'☀️ Céu limpo';if([1,2].includes(c))return'🌤️ Parcialmente nublado';if(c===3)return'☁️ Nublado';if([45,48].includes(c))return'🌫️ Neblina';if([51,53,55,56,57].includes(c))return'🌦️ Garoa';if([61,63,65,66,67].includes(c))return'🌧️ Chuva';if([80,81,82].includes(c))return'🌦️ Pancadas de chuva';if([95,96,99].includes(c))return'⛈️ Trovoadas';return'🌡️ Condições do tempo'}
 function knownDestination(t){const x=`${t?.name||''} ${t?.destination||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();if(x.includes('chapada'))return'Chapada dos Guimarães, Mato Grosso, Brasil';if(x.includes('salto das nuvens')||x.includes('tangara'))return'Tangará da Serra, Mato Grosso, Brasil';if(x.includes('nobres')||x.includes('bom jardim'))return'Nobres, Mato Grosso, Brasil';if(x.includes('rio cristalino')||x.includes('poxoreu')||x.includes('morro da mesa'))return'Poxoréu, Mato Grosso, Brasil';if(x.includes('jaciara')||x.includes('canion das indias'))return'Jaciara, Mato Grosso, Brasil';if(x.includes('barra do garcas'))return'Barra do Garças, Mato Grosso, Brasil';if(x.includes('primavera'))return'Primavera do Leste, Mato Grosso, Brasil';if(x.includes('campo verde'))return'Campo Verde, Mato Grosso, Brasil';if(x.includes('alto garcas'))return'Alto Garças, Mato Grosso, Brasil';return String(t?.destination||t?.name||'').trim()}
@@ -65,13 +65,6 @@ async function generateHotelReport(tripId){
 
 function stabilizeCentralReports(){
   if(state.tab!=='reports')return;
-  const select=q('#reportTrip');
-  if(select){
-    const options=[...select.options].filter(o=>o.value),wanted=state.reportTripStable||select.value;
-    if(wanted&&options.some(o=>o.value===wanted))select.value=wanted;
-    select.hidden=false;
-    select.onchange=()=>{state.reportTripStable=select.value};
-  }
   const rules=[
     {needle:'pdfTrip(',title:'Lista para ônibus / atrativos',desc:'Somente Nº, nome do participante e tipo/opção escolhida. Sem CPF e sem “responsável”.'},
     {needle:'insuranceCsvV7(',title:'Seguro',desc:'Lista separada com CPF somente quando a seguradora exigir.'},
@@ -89,7 +82,7 @@ function repairOperationalReports(){
   const sel=q('#v40ReportTrip'),bar=q('.v40ReportBar');if(!sel||!bar)return;
   const trips=activeTrips(),current=selectedOperationalTripId(),signature=trips.map(t=>`${t.id}:${t.name}:${String(t.trip_date||'').slice(0,10)}`).join('|');
   if(sel.dataset.tripSignature!==signature){sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');sel.dataset.tripSignature=signature}
-  if(current)sel.value=current;state.reportTripFix=sel.value||current;sel.hidden=false;sel.onchange=()=>{state.reportTripFix=sel.value};
+  if(current)sel.value=current;state.reportTripV40=sel.value||current;sel.hidden=false;sel.onchange=()=>{state.reportTripV40=sel.value};
   const bus=q('[data-v40-report="bus"]',bar);if(bus){setText(bus,'Ônibus');bus.onclick=()=>generateBusReport(sel.value||selectedOperationalTripId())}
   const hotel=q('[data-v40-report="hotel"]',bar);if(hotel){setText(hotel,'Hospedagem');hotel.onclick=()=>generateHotelReport(sel.value||selectedOperationalTripId())}
 }

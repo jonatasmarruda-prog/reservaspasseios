@@ -48,13 +48,15 @@
     hero.dataset.v18='1';
   }
 
-  let queued=false;
-  const observer=new MutationObserver(()=>{
-    if(queued)return;
-    queued=true;
-    requestAnimationFrame(()=>{queued=false;patchHero()});
-  });
-  observer.observe(document.documentElement,{subtree:true,childList:true});
+  if(!location.pathname.startsWith('/admin')){
+    let queued=false;
+    const observer=new MutationObserver(()=>{
+      if(queued)return;
+      queued=true;
+      requestAnimationFrame(()=>{queued=false;patchHero()});
+    });
+    observer.observe(document.documentElement,{subtree:true,childList:true});
+  }
   window.addEventListener('load',patchHero);
   setTimeout(patchHero,250);
 })();

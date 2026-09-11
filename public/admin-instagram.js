@@ -80,8 +80,6 @@ function patch(){
   const previous=window.renderAdmin;window.renderAdmin=function(...args){const result=previous.apply(this,args);injectNav();if(state.tab==='instagram')setTimeout(renderInstagram,0);return result};window.renderAdmin.__instagramAssistant=true;try{renderAdmin=window.renderAdmin}catch(_){}injectNav();return true;
 }
 
-const observer=new MutationObserver(()=>{injectNav();if(typeof state!=='undefined'&&state.tab==='instagram'&&!q('.igStatus')&&!rendering)setTimeout(renderInstagram,30)});observer.observe(document.documentElement,{childList:true,subtree:true});
+patch();
 window.addEventListener('load',()=>{patch();injectNav();if(new URLSearchParams(location.search).get('tab')==='instagram'&&typeof state!=='undefined'){state.tab='instagram';window.renderAdmin()}});
-let attempts=0;const timer=setInterval(()=>{attempts++;if(patch()||attempts>40)clearInterval(timer)},100);
 })();
-

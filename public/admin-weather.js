@@ -47,6 +47,10 @@ async function mount(force=false){
   let host=q('#tripWeatherPanel');if(host&&!force&&signature===lastSignature)return;if(host)host.remove();lastSignature=signature;injectStyle();host=document.createElement('section');host.id='tripWeatherPanel';host.innerHTML=`<div class="twHead"><div><span class="twEyebrow">CLIMA DOS PASSEIOS</span><h2>${s.tab==='day'?'Previsão do passeio selecionado':'Previsão dos próximos passeios'}</h2><p>Previsão automática gratuita para os próximos 16 dias.</p></div><button class="twRefresh" type="button">↻ Atualizar</button></div><div class="twGrid"></div><p class="twFoot">Fonte: Open-Meteo. Temperatura, chuva, acumulado e vento são consultados diretamente no navegador.</p>`;const grid=q('.twGrid',host);if(!trips.length)grid.innerHTML='<div class="twCard"><div class="twWait">Nenhum passeio futuro cadastrado.</div></div>';trips.forEach(t=>{const el=document.createElement('article');el.className='twCard';grid.appendChild(el);renderCard(t,el)});q('.twRefresh',host).onclick=()=>{cache.clear();lastSignature='';mount(true)};if(s.tab==='dashboard'){const exec=q('#v40Executive',content);exec?exec.after(host):content.prepend(host)}else content.prepend(host)
 }
 let timer=0;function schedule(){clearTimeout(timer);timer=setTimeout(()=>mount(false),180)}
-const mo=new MutationObserver(schedule);mo.observe(document.body,{subtree:true,childList:true});
+const mo=new MutationObserver(mutations=>{
+  const s=appState();if(!s||!['dashboard','day'].includes(s.tab))return;
+  const meaningful=mutations.some(m=>!m.target?.parentElement?.closest?.('#tripWeatherPanel')&&!m.target?.closest?.('#tripWeatherPanel'));
+  if(meaningful)schedule();
+});mo.observe(document.body,{subtree:true,childList:true});
 window.addEventListener('load',()=>setTimeout(()=>mount(true),600));setTimeout(()=>mount(true),1400);setTimeout(()=>mount(false),3500);
 })();

@@ -61,6 +61,7 @@ function nextAmount(s,r,t){
   return bal;
 }
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
+function setText(el,value){if(el&&el.textContent!==value)el.textContent=value}
 function activeSale(s){return s?.sale_status!=='cancelled'}
 function saleTotal(s){return n(s?.sale_total)>0?n(s.sale_total):n(s?.paid_amount)}
 function saleBalance(s){if(!activeSale(s))return 0;const b=Number(s?.balance_due);return Number.isFinite(b)?Math.max(0,b):Math.max(0,saleTotal(s)-n(s?.paid_amount))}
@@ -353,14 +354,14 @@ function patchReports(){
     const title=norm(q('strong',b)?.textContent||'');
     const small=q('small',b);
     if(title.includes('lista oficial de participantes')){
-      q('strong',b).textContent='Lista para ônibus / atrativos';
-      if(small)small.textContent='Somente Nº, nome do participante e tipo/opção escolhida. Sem CPF e sem “responsável”.';
+      setText(q('strong',b),'Lista para ônibus / atrativos');
+      setText(small,'Somente Nº, nome do participante e tipo/opção escolhida. Sem CPF e sem “responsável”.');
     }else if(title.includes('mapa de hospedagem')){
-      if(small)small.textContent='Nome, tipo/opção e quarto. Sem CPF.';
+      setText(small,'Nome, tipo/opção e quarto. Sem CPF.');
     }else if(title.includes('lista de transporte')){
-      if(small)small.textContent='Nome, tipo/opção, veículo e assento. Sem CPF.';
+      setText(small,'Nome, tipo/opção, veículo e assento. Sem CPF.');
     }else if(title.includes('lista para seguro')){
-      if(small)small.textContent='Lista separada com CPF somente quando a seguradora exigir.';
+      setText(small,'Lista separada com CPF somente quando a seguradora exigir.');
     }
   });
 }
@@ -374,12 +375,9 @@ function patch(){
 
 const oldRender=window.renderAdmin;
 if(typeof oldRender==='function'){
-  window.renderAdmin=function(...args){const out=oldRender.apply(this,args);setTimeout(patch,20);setTimeout(patch,180);return out};
+  window.renderAdmin=function(...args){const out=oldRender.apply(this,args);queueMicrotask(patch);return out};
   try{renderAdmin=window.renderAdmin}catch(_){}
 }
-const obs=new MutationObserver(()=>{if(location.pathname.startsWith('/admin'))patch()});
-obs.observe(document.body,{childList:true,subtree:true});
 window.addEventListener('load',patch);
-setInterval(()=>{if(state.tab==='pending'&&!q('#v42Pending'))patch();if(state.tab==='finance'&&!q('#v42FinanceDash'))patch()},900);
 setTimeout(patch,300);
 })();

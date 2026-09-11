@@ -199,12 +199,17 @@
 
   function keepOperationalUi(){ensureDayNav();installPdfFixes();enhanceDayLabels();ensureBulkSelectors();enhanceDayPdfActions()}
 
+  const previousRender=window.renderAdmin;
+  if(typeof previousRender==='function'&&!previousRender.__operationalUiSync){
+    const wrapped=function(...args){const out=previousRender.apply(this,args);setTimeout(keepOperationalUi,0);return out};
+    wrapped.__operationalUiSync=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
+  }
+
   window.addEventListener('load',()=>{
     setTimeout(mirror,1800);
     setTimeout(keepOperationalUi,500);
-    setTimeout(keepOperationalUi,1500);
   });
   document.addEventListener('submit',e=>{if(e.target?.id==='generalSettings')setTimeout(mirror,1200)},true);
-  document.addEventListener('click',()=>setTimeout(keepOperationalUi,80),true);
-  setInterval(keepOperationalUi,1600);
+  document.addEventListener('change',e=>{if(e.target?.matches?.('#dayTripSelect,.dayAlloc select,.checkListV7 input'))setTimeout(keepOperationalUi,80)},true);
+  document.addEventListener('click',e=>{if(e.target?.closest?.('.dayPeople,.checkListV7,#dayBulkAssign'))setTimeout(keepOperationalUi,80)},true);
 })();
