@@ -11,7 +11,7 @@ const REGION='southamerica-east1';
 const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const APP_URL='https://trilheiros-reservas.web.app/admin?tab=pending';
 const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const BADGE='https://trilheiros-reservas.web.app/notification-badge.svg';
+const BADGE='https://trilheiros-reservas.web.app/notification-badge-v2.svg?v=20260910-badge2';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
