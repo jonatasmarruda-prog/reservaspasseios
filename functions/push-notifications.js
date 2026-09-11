@@ -12,8 +12,7 @@ const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const BASE_URL='https://trilheiros-reservas.web.app';
 const PENDING_URL=`${BASE_URL}/admin?tab=pending`;
 const PEOPLE_URL=`${BASE_URL}/admin?tab=people`;
-const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const BADGE=`${BASE_URL}/notification-badge.png?v=20260910-push5`;
+const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push6';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
@@ -71,7 +70,6 @@ async function sendAdminPush({title,body,url,type,tag,data={}}){
         title,
         body,
         icon:ICON,
-        badge:BADGE,
         requireInteraction:false,
         renotify:true,
         tag,
