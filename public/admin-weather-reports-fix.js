@@ -32,32 +32,45 @@ function injectStyle(){
   `;document.head.appendChild(s);
 }
 
+async function generateBusReport(tripId){
+  try{
+    const t=(state.trips||[]).find(x=>x.id===tripId);if(!t)throw Error('Passeio não encontrado.');
+    if(!window.jspdf?.jsPDF)throw Error('Gerador de PDF ainda carregando. Tente novamente.');
+    const ss=await db.collection('sales').where('trip_id','==',tripId).get();
+    const sales=new Map(ss.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+    const rows=[{name:'Jonatas Marques de Arruda',email:'',type:'GUIA DE TURISMO'}];
+    (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
+      const s=sales.get(r.sale_id||r.id)||{};
+      const email=String(r.email||r.customer_email||s.customer_email||s.email||'').trim();
+      const people=(r.participants||s.participants||[]).filter(p=>p?.full_name);
+      if(people.length){people.forEach(p=>rows.push({name:p.full_name,email:String(p.email||email).trim(),type:'PARTICIPANTE'}));}
+      else rows.push({name:r.responsible_name||s.customer_name||'Participante',email,type:'PARTICIPANTE'});
+    });
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('TRILHEIROS DE RONDONÓPOLIS',14,16);
+    doc.setFontSize(13);doc.text('LISTA PARA ÔNIBUS',14,24);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(`${t.name} • ${brDate(t.trip_date)} • ${t.destination||''}`,14,31);
+    doc.setFont('helvetica','bold');doc.text(`TOTAL DE PESSOAS: ${rows.length}`,14,38);doc.setFont('helvetica','normal');
+    const body=rows.map((r,i)=>[String(i+1).padStart(2,'0'),r.name,r.email||'—']);
+    doc.autoTable({startY:44,head:[['Nº','NOME','E-MAIL']],body,styles:{fontSize:8.7,cellPadding:2.5},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},columnStyles:{0:{cellWidth:12},1:{cellWidth:82},2:{cellWidth:88}}});
+    const filename=`trilheiros-onibus-${String(t.name||'passeio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.pdf`;
+    if(typeof window.openPdfPreviewV14==='function')window.openPdfPreviewV14(doc,{filename,title:'Lista para ônibus',subtitle:`${t.name} • ${rows.length} pessoa(s)`,shareText:`Lista para ônibus — ${t.name}`});else doc.save(filename);
+  }catch(e){console.error('BUS_REPORT',e);if(typeof toast==='function')toast(e.message||'Erro ao gerar relatório de ônibus.','error');else alert(e.message||'Erro ao gerar relatório de ônibus.')}
+}
+
 function repairReports(){
   if(state.tab!=='reports')return;
   const sel=q('#v40ReportTrip');if(!sel)return;
-  sel.disabled=false;
-  sel.removeAttribute('disabled');
-  sel.style.pointerEvents='auto';
-  sel.style.touchAction='manipulation';
-  sel.style.cursor='pointer';
-  if(sel.dataset.reportFixed==='3')return;
-  sel.dataset.reportFixed='3';
-
   const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));
   const current=state.reportTripFix||sel.value;
-
-  // Não substitui nem recria o SELECT depois que a tela é renderizada.
-  // Isso evita fechar a lista nativa exatamente no momento do clique/toque.
-  if(!sel.options.length&&trips.length){
-    sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');
-  }
-  if(current&&[...sel.options].some(o=>o.value===current))sel.value=current;
-  else if(sel.options.length)sel.selectedIndex=0;
+  sel.disabled=false;sel.removeAttribute('disabled');sel.style.pointerEvents='auto';sel.style.touchAction='manipulation';sel.style.cursor='pointer';
+  const signature=trips.map(t=>`${t.id}:${t.name}:${String(t.trip_date||'').slice(0,10)}`).join('|');
+  if(sel.dataset.tripSignature!==signature){sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');sel.dataset.tripSignature=signature;}
+  if(current&&trips.some(t=>t.id===current))sel.value=current;else if(trips.length&&!sel.value)sel.value=trips[0].id;
   state.reportTripFix=sel.value;
-
-  const save=()=>{state.reportTripFix=sel.value};
-  sel.addEventListener('change',save,{passive:true});
-  sel.addEventListener('input',save,{passive:true});
+  if(sel.dataset.reportEvents!=='1'){sel.dataset.reportEvents='1';const save=()=>{state.reportTripFix=sel.value};sel.addEventListener('change',save);sel.addEventListener('input',save);}
+  const bus=q('[data-v40-report="bus"]');
+  if(bus&&!bus.dataset.busEmailReport){bus.dataset.busEmailReport='1';bus.onclick=()=>generateBusReport(sel.value);}
 }
 
 async function mountHomeWeather(){
