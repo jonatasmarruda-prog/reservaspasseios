@@ -5,7 +5,7 @@
   const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
   const TZ='America/Cuiaba';
-  const BUILD='20260911-financecore3';
+  const BUILD='20260911-financecore4';
   const ADMIN_SCOPE='business';
   const RECURRING_SETTINGS='finance_recurring_expenses';
   let recurringItems=[];
@@ -18,6 +18,7 @@
   function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
   function canFinance(){return ['owner','admin','finance'].includes(state?.role||'')}
   function canManageRecurring(){return ['owner','admin'].includes(state?.role||'')}
+  function brDate(v){const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
 
   function reservationsForTrip(tripId){return (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled')}
   function activeSeats(tripId){return reservationsForTrip(tripId).reduce((sum,r)=>sum+num(r.seats),0)}
@@ -213,6 +214,23 @@
     box.innerHTML=`<div class="panelHead"><div><span class="eyebrow">DESPESAS FIXAS</span><h2>Administrativo • ${escapeHtml(month)}</h2><p>Contadora, empréstimos, seguros, impostos e outros custos mensais da empresa.</p></div><button class="btn primary" onclick="openBusinessExpenseModal()">+ Nova despesa fixa</button></div><div class="dayStats"><div><span>Total do mês</span><strong>${money(total)}</strong></div><div><span>Pago</span><strong>${money(paid)}</strong></div><div><span>A pagar</span><strong>${money(open)}</strong></div></div><div class="tableWrap" style="margin-top:14px"><table class="table"><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Repetição</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${rows.length?rows.map(e=>`<tr><td><strong>${escapeHtml(e.description||'Despesa')}</strong></td><td>${escapeHtml(e.category||'Outros')}</td><td>${String(e.due_date||'').split('-').reverse().join('/')||'—'}</td><td>${e.recurring_parent_id?'<span class="pill active">TODO MÊS</span>':'ÚNICA'}</td><td><button class="pill ${expensePaid(e)?'active':'pending'}" style="border:0;cursor:pointer" onclick="toggleBusinessExpensePaid('${e.id}')">${expensePaid(e)?'PAGA':'A PAGAR'}</button></td><td><strong>${money(expenseAmount(e,0))}</strong></td><td><div class="actions"><button onclick="openBusinessExpenseModal('${e.id}','${e.recurring_parent_id||''}')" title="Editar">✎</button><button class="dangerMini" onclick="deleteBusinessExpense('${e.id}')" title="${e.recurring_parent_id?'Encerrar recorrência':'Excluir'}">⌫</button></div></td></tr>`).join(''):'<tr><td colspan="7">Nenhuma despesa fixa administrativa nesta competência.</td></tr>'}</tbody></table></div>`;
   }
 
+  function paidExpenseMonth(e){return String(e?.paid_date||e?.expense_date||e?.updated_at||e?.created_at||'').slice(0,7)}
+  function monthlyPaidClosure(month=currentFinanceMonth()){
+    const rows=(state.expenses||[]).filter(e=>expensePaid(e)&&paidExpenseMonth(e)===month).map(e=>{
+      const admin=isBusinessExpense(e),trip=(state.trips||[]).find(t=>t.id===e.trip_id),seats=trip?activeSeats(trip.id):0;
+      return{...e,total:expenseAmount(e,seats),admin,origin:admin?'ADMINISTRATIVO':(trip?.name||e.trip_name||'Passeio'),paidDate:String(e.paid_date||e.expense_date||'').slice(0,10)};
+    }).sort((a,b)=>String(a.paidDate).localeCompare(String(b.paidDate)));
+    const tripPaid=rows.filter(x=>!x.admin).reduce((s,x)=>s+x.total,0),adminPaid=rows.filter(x=>x.admin).reduce((s,x)=>s+x.total,0),totalPaid=tripPaid+adminPaid;
+    return{month,rows,tripPaid,adminPaid,totalPaid};
+  }
+  function patchMonthlyExpenseClosure(){
+    const modal=document.querySelector('#v42MonthlyModal');if(!modal)return;
+    const section=[...modal.querySelectorAll('section')].find(s=>norm(s.querySelector('h3')?.textContent||'')==='despesas pagas no mes');if(!section)return;
+    const c=monthlyPaidClosure(currentFinanceMonth());
+    section.innerHTML=`<h3>Fechamento das despesas pagas no mês</h3><p style="margin:4px 0 12px;color:#667a72;font-size:12px">Somente valores realmente marcados como <b>PAGA</b>. Soma despesas dos passeios + despesas fixas/administrativas pagas dentro deste mês.</p><div class="dayStats" style="margin-bottom:14px"><div><span>Passeios pagos</span><strong>${money(c.tripPaid)}</strong></div><div><span>Fixas / administrativo</span><strong>${money(c.adminPaid)}</strong></div><div><span>TOTAL PAGO NO MÊS</span><strong>${money(c.totalPaid)}</strong></div></div><div class="tableWrap"><table class="table"><thead><tr><th>Data do pagamento</th><th>Origem</th><th>Despesa</th><th>Categoria</th><th>Valor pago</th></tr></thead><tbody>${c.rows.length?c.rows.map(e=>`<tr><td>${brDate(e.paidDate)}</td><td><strong>${escapeHtml(e.origin)}</strong></td><td>${escapeHtml(e.description||e.category||'Despesa')}</td><td>${escapeHtml(e.category||'Outros')}</td><td><strong>${money(e.total)}</strong></td></tr>`).join(''):`<tr><td colspan="5">Nenhuma despesa foi marcada como paga nesta competência. Custos apenas previstos não entram como pagamento.</td></tr>`}</tbody><tfoot><tr><td colspan="4"><strong>TOTAL PAGO NO MÊS</strong></td><td><strong>${money(c.totalPaid)}</strong></td></tr></tfoot></table></div>`;
+  }
+  function scheduleMonthlyClosure(){[180,500,1000].forEach(ms=>setTimeout(patchMonthlyExpenseClosure,ms))}
+
   function financeSelfTest(){
     const planned=(items,seats)=>items.filter(x=>x.mode!=='per_person').reduce((s,x)=>s+num(x.amount),0)+items.filter(x=>x.mode==='per_person').reduce((s,x)=>s+num(x.amount),0)*seats;
     const cases=[planned([{mode:'per_person',amount:50}],13)===650,planned([{mode:'fixed',amount:1000},{mode:'per_person',amount:50}],10)===1500,planned([{mode:'fixed',amount:300}],0)===300,expenseAmount({cost_mode:'per_person',amount:40,status:'pending'},5)===200,expenseAmount({cost_mode:'fixed',amount:400,status:'paid'},5)===400,reservationReceivable({sale_total:500,paid_amount:200,status:'active'},{default_price:0})===300,recurringApplies({active:true,start_month:'2026-01',end_month:''},'2026-09')===true,recurringApplies({active:true,start_month:'2026-01',end_month:'2026-08'},'2026-09')===false];
@@ -230,21 +248,21 @@
     const h=systemHealth(),sync=state.sync instanceof Date?state.sync.toLocaleTimeString('pt-BR'):'aguardando';
     box.innerHTML=`<div class="panelHead"><div><span class="eyebrow">SAÚDE DO SISTEMA</span><h2>Verificação automática</h2><p>Checagens locais do financeiro, Firebase, sincronização e integridade dos passeios.</p></div><small>Build ${BUILD}</small></div><div class="dayStats"><div><span>${healthDot(h.finance)}Financeiro</span><strong>${h.finance?'OK':'ATENÇÃO'}</strong></div><div><span>${healthDot(h.firestore&&h.auth)}Firebase</span><strong>${h.firestore&&h.auth?'OK':'VERIFICAR'}</strong></div><div><span>${healthDot(h.online)}Conexão</span><strong>${h.online?'Online':'Offline'}</strong></div><div><span>${healthDot(h.orphanExpenses===0&&h.duplicateTrips===0)}Integridade</span><strong>${h.orphanExpenses===0&&h.duplicateTrips===0?'OK':'REVISAR'}</strong></div></div><p style="margin:12px 0 0;color:#667a72;font-size:12px">Sincronização: ${sync} • Push: ${h.push==='granted'?'permitido':h.push==='denied'?'bloqueado':h.push==='default'?'aguardando permissão':h.push} • Despesas sem passeio: ${h.orphanExpenses} • Possíveis duplicidades: ${h.duplicateTrips}</p>`;
   }
-  function applyFinancialPreview(){refreshTripFinancialPreview();requestAnimationFrame(()=>{patchDashboardMetrics();patchV42TripResults();injectHealthPanel();injectBusinessExpensePanel()})}
+  function applyFinancialPreview(){refreshTripFinancialPreview();requestAnimationFrame(()=>{patchDashboardMetrics();patchV42TripResults();injectHealthPanel();injectBusinessExpensePanel();patchMonthlyExpenseClosure()})}
   function scheduleApply(){[80,350,900].forEach(ms=>setTimeout(applyFinancialPreview,ms))}
   function installFinalRenderWrapper(){
     const current=window.renderAdmin;if(typeof current!=='function'||current.__tripCostPreviewFixed)return;
     const wrapped=function(...args){refreshTripFinancialPreview();const out=current.apply(this,args);scheduleApply();return out};wrapped.__tripCostPreviewFixed=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
   }
-  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,tripFinance,totals:financeTotals,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview,ensureRecurringBusinessExpenses};
+  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,tripFinance,totals:financeTotals,monthlyPaidClosure,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview,ensureRecurringBusinessExpenses};
   window.setNetworkUI=function(){const online=navigator.onLine,b=document.querySelector('#networkBadge');if(b){b.textContent=online?'● Online':'● Offline';b.className='networkBadge '+(online?'online':'offline')}const s=document.querySelector('#sync');if(s&&!online){s.textContent='☁ Offline • dados locais';s.classList.add('offline')}};
   window.updateNotificationBadge=function(){const count=(state.notifications||[]).filter(n=>!n.read).length,b=document.querySelector('#notifyCount');if(b)b.textContent=count?String(count):'';const s=document.querySelector('#sideNotifyCount');if(s)s.textContent=count?`(${count})`:''};
 
   installFinalRenderWrapper();
   window.addEventListener('DOMContentLoaded',()=>{installFinalRenderWrapper();scheduleApply();setTimeout(()=>installFinalRenderWrapper(),1200)});
   document.addEventListener('click',e=>{
-    const report=e.target?.closest?.('#v42MonthlyReport');
-    if(report){e.preventDefault();e.stopImmediatePropagation();(async()=>{await ensureRecurringBusinessExpenses(currentFinanceMonth());if(typeof window.openMonthlyReportV34==='function')window.openMonthlyReportV34(currentFinanceMonth())})()}
+    const report=e.target?.closest?.('#v42MonthlyReport,#v36Monthly');
+    if(report){e.preventDefault();e.stopImmediatePropagation();(async()=>{const month=currentFinanceMonth();await ensureRecurringBusinessExpenses(month);await reloadExpenses();if(typeof window.openMonthlyReportV34==='function')window.openMonthlyReportV34(month);scheduleMonthlyClosure()})()}
     else scheduleApply();
   },true);
   window.addEventListener('online',()=>{setNetworkUI();scheduleApply()});
