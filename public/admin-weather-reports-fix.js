@@ -18,6 +18,8 @@ function knownDestination(t){const x=`${t?.name||''} ${t?.destination||''}`.norm
 async function geocodeTrip(t){const query=knownDestination(t);if(!query)return null;if(geoCache.has(query))return geoCache.get(query);try{const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=pt&format=json`,{cache:'no-store'});if(!r.ok)throw Error('geocoding');const j=await r.json(),x=j?.results?.[0],out=x?{name:[x.name,x.admin1].filter(Boolean).join(' • '),lat:x.latitude,lon:x.longitude}:null;geoCache.set(query,out);return out}catch(_){return null}}
 async function forecast(lat,lon,days=16){const key=`${Number(lat).toFixed(3)},${Number(lon).toFixed(3)},${days}`,hit=forecastCache.get(key);if(hit&&Date.now()-hit.at<WEATHER_TTL)return hit.data;const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${encodeURIComponent(TZ)}&forecast_days=${days}`,{cache:'no-store'});if(!r.ok)throw Error('weather');const data=await r.json();forecastCache.set(key,{at:Date.now(),data});return data}
 function dailyAt(data,date){const i=data?.daily?.time?.indexOf(String(date||'').slice(0,10))??-1;if(i<0)return null;return{code:data.daily.weather_code?.[i],max:data.daily.temperature_2m_max?.[i],min:data.daily.temperature_2m_min?.[i],rain:data.daily.precipitation_probability_max?.[i]}}
+function slug(v){return String(v||'passeio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()}
+function toastError(e,msg){console.error(msg,e);if(typeof toast==='function')toast(e?.message||msg,'error');else alert(e?.message||msg)}
 
 function injectStyle(){
   if(q('#weatherReportsFixStyle'))return;
@@ -32,30 +34,78 @@ function injectStyle(){
   `;document.head.appendChild(s);
 }
 
+async function tripSalesMap(tripId){
+  const ss=await db.collection('sales').where('trip_id','==',tripId).get();
+  return new Map(ss.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+}
+
+async function tripOperationsMap(tripId){
+  const out=new Map();
+  try{
+    const snap=await db.collection('trips').doc(tripId).collection('operations').get();
+    snap.docs.forEach(d=>out.set(d.id,d.data()||{}));
+  }catch(_){ }
+  return out;
+}
+
+function participantKey(p,r,i){
+  const cpf=String(p?.cpf||'').replace(/\D/g,'');
+  return cpf||`${r.id}-${i}`;
+}
+
 async function generateBusReport(tripId){
   try{
     const t=(state.trips||[]).find(x=>x.id===tripId);if(!t)throw Error('Passeio não encontrado.');
     if(!window.jspdf?.jsPDF)throw Error('Gerador de PDF ainda carregando. Tente novamente.');
-    const ss=await db.collection('sales').where('trip_id','==',tripId).get();
-    const sales=new Map(ss.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
-    const rows=[{name:'Jonatas Marques de Arruda',email:'',type:'GUIA DE TURISMO'}];
+    const sales=await tripSalesMap(tripId);
+    const rows=[{name:'Jonatas Marques de Arruda',email:'—'}];
     (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
       const s=sales.get(r.sale_id||r.id)||{};
       const email=String(r.email||r.customer_email||s.customer_email||s.email||'').trim();
       const people=(r.participants||s.participants||[]).filter(p=>p?.full_name);
-      if(people.length){people.forEach(p=>rows.push({name:p.full_name,email:String(p.email||email).trim(),type:'PARTICIPANTE'}));}
-      else rows.push({name:r.responsible_name||s.customer_name||'Participante',email,type:'PARTICIPANTE'});
+      if(people.length)people.forEach(p=>rows.push({name:p.full_name,email:String(p.email||email||'—').trim()}));
+      else rows.push({name:r.responsible_name||s.customer_name||'Participante',email:email||'—'});
     });
     const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
     doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('TRILHEIROS DE RONDONÓPOLIS',14,16);
-    doc.setFontSize(13);doc.text('LISTA PARA ÔNIBUS',14,24);
+    doc.setFontSize(13);doc.text('RELATÓRIO DO ÔNIBUS',14,24);
     doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(`${t.name} • ${brDate(t.trip_date)} • ${t.destination||''}`,14,31);
     doc.setFont('helvetica','bold');doc.text(`TOTAL DE PESSOAS: ${rows.length}`,14,38);doc.setFont('helvetica','normal');
-    const body=rows.map((r,i)=>[String(i+1).padStart(2,'0'),r.name,r.email||'—']);
-    doc.autoTable({startY:44,head:[['Nº','NOME','E-MAIL']],body,styles:{fontSize:8.7,cellPadding:2.5},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},columnStyles:{0:{cellWidth:12},1:{cellWidth:82},2:{cellWidth:88}}});
-    const filename=`trilheiros-onibus-${String(t.name||'passeio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').toLowerCase()}.pdf`;
-    if(typeof window.openPdfPreviewV14==='function')window.openPdfPreviewV14(doc,{filename,title:'Lista para ônibus',subtitle:`${t.name} • ${rows.length} pessoa(s)`,shareText:`Lista para ônibus — ${t.name}`});else doc.save(filename);
-  }catch(e){console.error('BUS_REPORT',e);if(typeof toast==='function')toast(e.message||'Erro ao gerar relatório de ônibus.','error');else alert(e.message||'Erro ao gerar relatório de ônibus.')}
+    doc.autoTable({startY:44,head:[['Nº','NOME','E-MAIL']],body:rows.map((r,i)=>[String(i+1).padStart(2,'0'),r.name,r.email]),styles:{fontSize:8.7,cellPadding:2.5},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},columnStyles:{0:{cellWidth:12},1:{cellWidth:82},2:{cellWidth:88}}});
+    const filename=`trilheiros-onibus-${slug(t.name)}.pdf`;
+    if(typeof window.openPdfPreviewV14==='function')window.openPdfPreviewV14(doc,{filename,title:'Relatório do ônibus',subtitle:`${t.name} • ${rows.length} pessoa(s)`,shareText:`Relatório do ônibus — ${t.name}`});else doc.save(filename);
+  }catch(e){toastError(e,'Erro ao gerar relatório do ônibus.')}
+}
+
+async function generateHotelReport(tripId){
+  try{
+    const t=(state.trips||[]).find(x=>x.id===tripId);if(!t)throw Error('Passeio não encontrado.');
+    if(!window.jspdf?.jsPDF)throw Error('Gerador de PDF ainda carregando. Tente novamente.');
+    const [sales,ops]=await Promise.all([tripSalesMap(tripId),tripOperationsMap(tripId)]);
+    const rows=[];
+    (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
+      const s=sales.get(r.sale_id||r.id)||{};
+      const fallbackType=String(s.accommodation||r.accommodation||s.category||r.category||'Não informado').replaceAll('_',' ');
+      const people=(r.participants||s.participants||[]).filter(p=>p?.full_name);
+      if(people.length){
+        people.forEach((p,i)=>{
+          const op=ops.get(participantKey(p,r,i))||ops.get(r.id)||{};
+          rows.push({name:p.full_name,type:String(p.accommodation||p.lodging_type||fallbackType||'Não informado').replaceAll('_',' '),room:p.room||p.room_number||op.room||op.room_number||r.room||r.room_number||s.room||s.room_number||'—'});
+        });
+      }else{
+        const op=ops.get(r.id)||{};
+        rows.push({name:r.responsible_name||s.customer_name||'Participante',type:fallbackType,room:r.room||r.room_number||s.room||s.room_number||op.room||op.room_number||'—'});
+      }
+    });
+    const {jsPDF}=window.jspdf,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    doc.setFont('helvetica','bold');doc.setFontSize(16);doc.text('TRILHEIROS DE RONDONÓPOLIS',14,16);
+    doc.setFontSize(13);doc.text('RELATÓRIO DE HOSPEDAGEM',14,24);
+    doc.setFont('helvetica','normal');doc.setFontSize(10);doc.text(`${t.name} • ${brDate(t.trip_date)} • ${t.destination||''}`,14,31);
+    doc.setFont('helvetica','bold');doc.text(`TOTAL DE HÓSPEDES: ${rows.length}`,14,38);doc.setFont('helvetica','normal');
+    doc.autoTable({startY:44,head:[['Nº','NOME','TIPO DE HOSPEDAGEM','QUARTO']],body:rows.map((r,i)=>[String(i+1).padStart(2,'0'),r.name,r.type,r.room]),styles:{fontSize:8.6,cellPadding:2.5},headStyles:{fillColor:[7,50,38],textColor:[255,255,255]},columnStyles:{0:{cellWidth:12},1:{cellWidth:78},2:{cellWidth:65},3:{cellWidth:27}}});
+    const filename=`trilheiros-hospedagem-${slug(t.name)}.pdf`;
+    if(typeof window.openPdfPreviewV14==='function')window.openPdfPreviewV14(doc,{filename,title:'Relatório de hospedagem',subtitle:`${t.name} • ${rows.length} hóspede(s)`,shareText:`Relatório de hospedagem — ${t.name}`});else doc.save(filename);
+  }catch(e){toastError(e,'Erro ao gerar relatório de hospedagem.')}
 }
 
 function repairReports(){
@@ -69,8 +119,8 @@ function repairReports(){
   if(current&&trips.some(t=>t.id===current))sel.value=current;else if(trips.length&&!sel.value)sel.value=trips[0].id;
   state.reportTripFix=sel.value;
   if(sel.dataset.reportEvents!=='1'){sel.dataset.reportEvents='1';const save=()=>{state.reportTripFix=sel.value};sel.addEventListener('change',save);sel.addEventListener('input',save);}
-  const bus=q('[data-v40-report="bus"]');
-  if(bus&&!bus.dataset.busEmailReport){bus.dataset.busEmailReport='1';bus.onclick=()=>generateBusReport(sel.value);}
+  const bus=q('[data-v40-report="bus"]');if(bus){bus.textContent='Ônibus';bus.onclick=()=>generateBusReport(sel.value);}
+  const hotel=q('[data-v40-report="hotel"]');if(hotel){hotel.textContent='Hospedagem';hotel.onclick=()=>generateHotelReport(sel.value);}
 }
 
 async function mountHomeWeather(){
