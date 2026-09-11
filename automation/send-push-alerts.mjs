@@ -22,6 +22,9 @@ async function activeDevices(){
   return snap.docs.map(d=>({id:d.id,token:String(d.data()?.token||'')})).filter(x=>x.token);
 }
 
+const deviceCache=await activeDevices();
+console.log(`Dispositivos push ativos: ${deviceCache.length}`);
+
 async function claim(key,payload){
   const ref=db.collection('push_dispatches').doc(hash(key));
   let claimed=false;
@@ -37,7 +40,7 @@ async function claim(key,payload){
 async function sendPush({key,title,body,url,type='system'}){
   const {claimed,ref}=await claim(key,{title,body,url,type});
   if(!claimed)return{skipped:true};
-  const devices=await activeDevices();
+  const devices=deviceCache;
   if(!devices.length){await ref.set({status:'no_devices',updated_at:FV.serverTimestamp()},{merge:true});return{skipped:true,noDevices:true}}
   const message={
     tokens:devices.map(x=>x.token),
