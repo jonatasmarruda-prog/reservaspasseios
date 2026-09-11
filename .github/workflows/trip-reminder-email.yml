@@ -1,21 +1,19 @@
-name: Lembrete um dia antes do passeio
+name: Régua de e-mails — execução manual
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 12 * * *'
 
 permissions:
   contents: read
 
 concurrency:
-  group: trilheiros-trip-reminder-email
+  group: trilheiros-email-lifecycle
   cancel-in-progress: false
 
 jobs:
   send-reminders:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,9 +21,9 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
-      - name: Enviar lembretes de passeio
+      - name: Processar pré-trilha e pós-trilha
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-        run: node automation/send-trip-reminders.mjs
+          EMAIL_FROM: 'Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>'
+        run: node automation/send-reminders.mjs
