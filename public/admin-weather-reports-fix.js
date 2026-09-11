@@ -1,4 +1,4 @@
-/* Trilheiros Gestão — Relatórios estáveis + previsão do tempo */
+/* Trilheiros Gestão — relatórios estáveis + previsão do tempo */
 (function(){
 'use strict';
 if(typeof state==='undefined')return;
@@ -13,54 +13,52 @@ let renderTimer=0;
 
 function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
 function brDate(v){const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
+function slug(v){return String(v||'passeio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()}
+function toastError(e,msg){console.error(msg,e);if(typeof toast==='function')toast(e?.message||msg,'error');else alert(e?.message||msg)}
+function activeTrips(){return(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')))}
+function selectedTripId(){const trips=activeTrips(),native=q('#v40ReportTrip'),id=state.reportTripFix||native?.value||'';return trips.some(t=>t.id===id)?id:(trips[0]?.id||'')}
+
 function weatherLabel(code){const c=Number(code);if(c===0)return'☀️ Céu limpo';if([1,2].includes(c))return'🌤️ Parcialmente nublado';if(c===3)return'☁️ Nublado';if([45,48].includes(c))return'🌫️ Neblina';if([51,53,55,56,57].includes(c))return'🌦️ Garoa';if([61,63,65,66,67].includes(c))return'🌧️ Chuva';if([80,81,82].includes(c))return'🌦️ Pancadas de chuva';if([95,96,99].includes(c))return'⛈️ Trovoadas';return'🌡️ Condições do tempo'}
 function knownDestination(t){const x=`${t?.name||''} ${t?.destination||''}`.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();if(x.includes('chapada'))return'Chapada dos Guimarães, Mato Grosso, Brasil';if(x.includes('salto das nuvens')||x.includes('tangara'))return'Tangará da Serra, Mato Grosso, Brasil';if(x.includes('nobres')||x.includes('bom jardim'))return'Nobres, Mato Grosso, Brasil';if(x.includes('rio cristalino')||x.includes('poxoreu')||x.includes('morro da mesa'))return'Poxoréu, Mato Grosso, Brasil';if(x.includes('jaciara')||x.includes('canion das indias'))return'Jaciara, Mato Grosso, Brasil';if(x.includes('barra do garcas'))return'Barra do Garças, Mato Grosso, Brasil';if(x.includes('primavera'))return'Primavera do Leste, Mato Grosso, Brasil';if(x.includes('campo verde'))return'Campo Verde, Mato Grosso, Brasil';if(x.includes('alto garcas'))return'Alto Garças, Mato Grosso, Brasil';return String(t?.destination||t?.name||'').trim()}
 async function geocodeTrip(t){const query=knownDestination(t);if(!query)return null;if(geoCache.has(query))return geoCache.get(query);try{const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=1&language=pt&format=json`,{cache:'no-store'});if(!r.ok)throw Error('geocoding');const j=await r.json(),x=j?.results?.[0],out=x?{name:[x.name,x.admin1].filter(Boolean).join(' • '),lat:x.latitude,lon:x.longitude}:null;geoCache.set(query,out);return out}catch(_){return null}}
 async function forecast(lat,lon,days=16){const key=`${Number(lat).toFixed(3)},${Number(lon).toFixed(3)},${days}`,hit=forecastCache.get(key);if(hit&&Date.now()-hit.at<WEATHER_TTL)return hit.data;const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=${encodeURIComponent(TZ)}&forecast_days=${days}`,{cache:'no-store'});if(!r.ok)throw Error('weather');const data=await r.json();forecastCache.set(key,{at:Date.now(),data});return data}
 function dailyAt(data,date){const i=data?.daily?.time?.indexOf(String(date||'').slice(0,10))??-1;if(i<0)return null;return{code:data.daily.weather_code?.[i],max:data.daily.temperature_2m_max?.[i],min:data.daily.temperature_2m_min?.[i],rain:data.daily.precipitation_probability_max?.[i]}}
-function slug(v){return String(v||'passeio').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()}
-function toastError(e,msg){console.error(msg,e);if(typeof toast==='function')toast(e?.message||msg,'error');else alert(e?.message||msg)}
-function activeTrips(){return(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')))}
-function selectedTripId(){const trips=activeTrips(),id=state.reportTripFix||q('#v40ReportTrip')?.value||'';return trips.some(t=>t.id===id)?id:(trips[0]?.id||'')}
 
 function injectStyle(){
   if(q('#weatherReportsFixStyle'))return;
   const s=document.createElement('style');s.id='weatherReportsFixStyle';s.textContent=`
   #v40ReportTrip{display:none!important}
-  .v40ReportBar{position:relative!important;z-index:4!important;overflow:visible!important}
-  .twTripPicker{min-height:42px;border:1px solid #cad8d1!important;border-radius:11px!important;padding:0 13px!important;background:#fff!important;color:#073226!important;font-weight:800!important;text-align:left!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;cursor:pointer!important}
-  .twTripPicker:after{content:'▾';font-size:14px;color:#567267}.twTripPicker:hover{background:#f6faf8!important}
-  .twTripOverlay{position:fixed;inset:0;z-index:999999;background:rgba(4,25,19,.58);display:flex;align-items:center;justify-content:center;padding:18px}
-  .twTripModal{width:min(620px,100%);max-height:min(76vh,680px);background:#fff;border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.28);overflow:hidden;display:flex;flex-direction:column}
-  .twTripModalHead{padding:18px 20px;border-bottom:1px solid #e1eae6;display:flex;align-items:center;justify-content:space-between;gap:12px}.twTripModalHead h3{margin:0;color:#073226}.twTripModalHead button{border:0;background:#eef4f1;border-radius:10px;width:36px;height:36px;cursor:pointer;font-size:18px}
-  .twTripOptions{padding:10px;overflow:auto;display:grid;gap:7px}.twTripOption{width:100%;border:1px solid #dce7e2;background:#fff;border-radius:13px;padding:13px 14px;text-align:left;cursor:pointer}.twTripOption:hover,.twTripOption.active{background:#eef7f3;border-color:#91b8a8}.twTripOption strong{display:block;color:#073226}.twTripOption small{display:block;margin-top:4px;color:#6a7c74}
+  .v40ReportBar{position:relative!important;z-index:4!important;overflow:visible!important;align-items:start!important}
+  .twChooserWrap{grid-column:1/2;position:relative;min-width:240px}
+  .twTripPicker{width:100%;min-height:42px;border:1px solid #cad8d1!important;border-radius:11px!important;padding:0 13px!important;background:#fff!important;color:#073226!important;font-weight:800!important;text-align:left!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;cursor:pointer!important}
+  .twTripPicker:after{content:'▾';font-size:14px;color:#567267}.twTripPicker.open:after{content:'▴'}
+  .twTripMenu{display:none;margin-top:7px;border:1px solid #d9e5df;border-radius:14px;background:#fff;box-shadow:0 14px 34px rgba(7,50,38,.14);padding:7px;max-height:360px;overflow:auto;position:absolute;left:0;right:0;z-index:99999}
+  .twTripMenu.open{display:grid;gap:6px}
+  .twTripOption{width:100%;border:1px solid #e0e9e5!important;background:#fff!important;color:#173b30!important;border-radius:11px!important;padding:11px 12px!important;text-align:left!important;cursor:pointer!important;display:block!important}
+  .twTripOption:hover,.twTripOption.active{background:#eef7f3!important;border-color:#8bb6a5!important}.twTripOption strong{display:block}.twTripOption small{display:block;margin-top:3px;color:#6a7c74;font-weight:500}
   .twWeather{margin:0 0 18px;padding:18px;border:1px solid #dce8e3;border-radius:20px;background:linear-gradient(135deg,#f8fbf9,#eef7f3);box-shadow:0 10px 28px rgba(7,50,38,.06)}
   .twWeatherHead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.twWeatherHead h2,.twWeatherHead h3{margin:3px 0 4px;color:#073226}.twWeatherHead p{margin:0;color:#63786e;font-size:12px}.twLive{font-size:10px;font-weight:900;padding:6px 9px;border-radius:999px;background:#e6f6ed;color:#136746;white-space:nowrap}
   .twCurrent{display:grid;grid-template-columns:auto 1fr repeat(3,minmax(90px,auto));gap:12px;align-items:center;margin-top:15px;padding-top:14px;border-top:1px solid #dce8e3}.twTemp{font-size:34px;font-weight:950;color:#073226}.twCurrent strong{color:#173b30}.twCurrent small{display:block;color:#6a7f75;margin-top:3px}.twMetric{padding:9px 11px;border-radius:12px;background:#fff;border:1px solid #e0e9e5}
   .twTrips{display:grid;gap:10px;margin-top:14px}.twTrip{display:grid;grid-template-columns:1.5fr .85fr .8fr .8fr;gap:10px;align-items:center;padding:12px 13px;border-radius:14px;background:#fff;border:1px solid #dfe9e4}.twTrip strong{color:#073226}.twTrip small{display:block;color:#708078;margin-top:3px}.twTrip .twRain{font-weight:900;color:#176b9a}.twTrip .twSoon{grid-column:2/-1;color:#6e7d77;font-size:12px}
-  @media(max-width:780px){.twCurrent{grid-template-columns:1fr 1fr}.twTemp{grid-column:1/-1}.twTrip{grid-template-columns:1fr 1fr}.twTrip>div:first-child{grid-column:1/-1}.twTrip .twSoon{grid-column:1/-1}.v40ReportBar{grid-template-columns:1fr!important}.twTripPicker{grid-column:1/-1}}
+  @media(max-width:780px){.twCurrent{grid-template-columns:1fr 1fr}.twTemp{grid-column:1/-1}.twTrip{grid-template-columns:1fr 1fr}.twTrip>div:first-child{grid-column:1/-1}.twTrip .twSoon{grid-column:1/-1}.v40ReportBar{grid-template-columns:1fr!important}.twChooserWrap{grid-column:1/-1;width:100%}.twTripMenu{position:static;max-height:300px}}
   `;document.head.appendChild(s);
 }
 
-function closeTripPicker(){q('#twTripOverlay')?.remove()}
-function openTripPicker(){
-  closeTripPicker();
-  const trips=activeTrips();if(!trips.length){if(typeof toast==='function')toast('Nenhum passeio disponível.','error');return}
-  const current=selectedTripId();
-  const overlay=document.createElement('div');overlay.id='twTripOverlay';overlay.className='twTripOverlay';
-  overlay.innerHTML=`<div class="twTripModal"><div class="twTripModalHead"><h3>Escolher passeio</h3><button type="button" id="twTripClose">✕</button></div><div class="twTripOptions">${trips.map(t=>`<button type="button" class="twTripOption ${t.id===current?'active':''}" data-trip-id="${esc(t.id)}"><strong>${esc(t.name||'Passeio')}</strong><small>${brDate(t.trip_date)}${t.destination?` • ${esc(t.destination)}`:''}</small></button>`).join('')}</div></div>`;
-  document.body.appendChild(overlay);
-  q('#twTripClose',overlay).onclick=closeTripPicker;
-  overlay.onclick=e=>{if(e.target===overlay)closeTripPicker()};
-  overlay.querySelectorAll('[data-trip-id]').forEach(btn=>btn.onclick=()=>{
-    const id=btn.dataset.tripId||'';state.reportTripFix=id;
-    const sel=q('#v40ReportTrip');if(sel)sel.value=id;
-    updateTripPickerLabel();closeTripPicker();
-  });
+function setReportTrip(id){
+  const trips=activeTrips();if(!trips.some(t=>t.id===id))return;
+  state.reportTripFix=id;
+  const native=q('#v40ReportTrip');if(native)native.value=id;
+  updateTripChooser();
 }
-function updateTripPickerLabel(){
-  const id=selectedTripId(),t=activeTrips().find(x=>x.id===id),btn=q('#twTripPicker');
-  if(btn)btn.innerHTML=t?`<span>${esc(t.name)} — ${brDate(t.trip_date)}</span>`:'<span>Escolher passeio</span>';
+function updateTripChooser(){
+  const trips=activeTrips(),id=selectedTripId(),t=trips.find(x=>x.id===id),picker=q('#twTripPicker'),menu=q('#twTripMenu');
+  if(picker)picker.querySelector('span').textContent=t?`${t.name} — ${brDate(t.trip_date)}`:'Escolher passeio';
+  if(menu){menu.innerHTML=trips.map(x=>`<button type="button" class="twTripOption ${x.id===id?'active':''}" data-report-trip="${esc(x.id)}"><strong>${esc(x.name||'Passeio')}</strong><small>${brDate(x.trip_date)}${x.destination?` • ${esc(x.destination)}`:''}</small></button>`).join('');menu.querySelectorAll('[data-report-trip]').forEach(btn=>btn.onclick=e=>{e.preventDefault();e.stopPropagation();setReportTrip(btn.dataset.reportTrip);menu.classList.remove('open');picker?.classList.remove('open')})}
+}
+function ensureTripChooser(bar,sel){
+  let wrap=q('#twChooserWrap',bar);
+  if(!wrap){wrap=document.createElement('div');wrap.id='twChooserWrap';wrap.className='twChooserWrap';wrap.innerHTML='<button type="button" id="twTripPicker" class="twTripPicker"><span>Escolher passeio</span></button><div id="twTripMenu" class="twTripMenu"></div>';bar.insertBefore(wrap,sel);const picker=q('#twTripPicker',wrap),menu=q('#twTripMenu',wrap);picker.onclick=e=>{e.preventDefault();e.stopPropagation();const open=!menu.classList.contains('open');menu.classList.toggle('open',open);picker.classList.toggle('open',open)};document.addEventListener('click',e=>{if(!wrap.isConnected||wrap.contains(e.target))return;menu.classList.remove('open');picker.classList.remove('open')})}
+  updateTripChooser();
 }
 
 async function tripSalesMap(tripId){const ss=await db.collection('sales').where('trip_id','==',tripId).get();return new Map(ss.docs.map(d=>[d.id,{id:d.id,...d.data()}]))}
@@ -90,18 +88,18 @@ async function generateHotelReport(tripId){
 function repairReports(){
   if(state.tab!=='reports')return;
   const sel=q('#v40ReportTrip'),bar=q('.v40ReportBar');if(!sel||!bar)return;
-  const trips=activeTrips(),current=selectedTripId();
-  const signature=trips.map(t=>`${t.id}:${t.name}:${String(t.trip_date||'').slice(0,10)}`).join('|');
+  const trips=activeTrips(),current=selectedTripId(),signature=trips.map(t=>`${t.id}:${t.name}:${String(t.trip_date||'').slice(0,10)}`).join('|');
   if(sel.dataset.tripSignature!==signature){sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');sel.dataset.tripSignature=signature}
   if(current)sel.value=current;state.reportTripFix=sel.value||current;
-  let picker=q('#twTripPicker',bar);if(!picker){picker=document.createElement('button');picker.type='button';picker.id='twTripPicker';picker.className='twTripPicker';bar.insertBefore(picker,sel);picker.onclick=e=>{e.preventDefault();e.stopPropagation();openTripPicker()}}
-  updateTripPickerLabel();
+  ensureTripChooser(bar,sel);
   const bus=q('[data-v40-report="bus"]',bar);if(bus){bus.textContent='Ônibus';bus.onclick=()=>generateBusReport(selectedTripId())}
   const hotel=q('[data-v40-report="hotel"]',bar);if(hotel){hotel.textContent='Hospedagem';hotel.onclick=()=>generateHotelReport(selectedTripId())}
 }
 
 async function mountHomeWeather(){
-  if(state.tab!=='dashboard')return;const content=q('#content');if(!content||q('#twHomeWeather'))return;const box=document.createElement('section');box.id='twHomeWeather';box.className='twWeather';box.innerHTML='<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>Carregando clima local...</h2><p>Atualização automática pela internet.</p></div><span class="twLive">AO VIVO</span></div>';content.insertBefore(box,content.firstChild);try{const d=await forecast(HOME.lat,HOME.lon,4);if(state.tab!=='dashboard'||!box.isConnected)return;const c=d.current||{},day=dailyAt(d,today());box.innerHTML=`<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>${weatherLabel(c.weather_code)}</h2><p>Condição local agora e tendência de chuva para hoje.</p></div><span class="twLive">AO VIVO</span></div><div class="twCurrent"><div class="twTemp">${Math.round(Number(c.temperature_2m||0))}°C</div><div><strong>Sensação ${Math.round(Number(c.apparent_temperature||c.temperature_2m||0))}°C</strong><small>Vento ${Math.round(Number(c.wind_speed_10m||0))} km/h</small></div><div class="twMetric"><strong>${Math.round(Number(day?.max||0))}° / ${Math.round(Number(day?.min||0))}°</strong><small>Máx. / mín.</small></div><div class="twMetric"><strong>${Math.round(Number(day?.rain||0))}%</strong><small>Chance de chuva</small></div><div class="twMetric"><strong>${Number(c.precipitation||0).toFixed(1)} mm</strong><small>Precipitação agora</small></div></div>`}catch(_){box.innerHTML='<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>Clima temporariamente indisponível</h2><p>O restante do sistema continua funcionando normalmente.</p></div></div>'}
+  if(state.tab!=='dashboard')return;const content=q('#content');if(!content||q('#twHomeWeather'))return;
+  const box=document.createElement('section');box.id='twHomeWeather';box.className='twWeather';box.innerHTML='<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>Carregando clima local...</h2><p>Atualização automática pela internet.</p></div><span class="twLive">AO VIVO</span></div>';content.insertBefore(box,content.firstChild);
+  try{const d=await forecast(HOME.lat,HOME.lon,4);if(state.tab!=='dashboard'||!box.isConnected)return;const c=d.current||{},day=dailyAt(d,today());box.innerHTML=`<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>${weatherLabel(c.weather_code)}</h2><p>Condição local agora e tendência de chuva para hoje.</p></div><span class="twLive">AO VIVO</span></div><div class="twCurrent"><div class="twTemp">${Math.round(Number(c.temperature_2m||0))}°C</div><div><strong>Sensação ${Math.round(Number(c.apparent_temperature||c.temperature_2m||0))}°C</strong><small>Vento ${Math.round(Number(c.wind_speed_10m||0))} km/h</small></div><div class="twMetric"><strong>${Math.round(Number(day?.max||0))}° / ${Math.round(Number(day?.min||0))}°</strong><small>Máx. / mín.</small></div><div class="twMetric"><strong>${Math.round(Number(day?.rain||0))}%</strong><small>Chance de chuva</small></div><div class="twMetric"><strong>${Number(c.precipitation||0).toFixed(1)} mm</strong><small>Precipitação agora</small></div></div>`}catch(_){box.innerHTML='<div class="twWeatherHead"><div><span class="eyebrow">PREVISÃO DO TEMPO • RONDONÓPOLIS</span><h2>Clima temporariamente indisponível</h2><p>O restante do sistema continua funcionando normalmente.</p></div></div>'}
 }
 async function tripWeatherRow(t){const date=String(t.trip_date||'').slice(0,10),base=`<div><strong>${esc(t.name||'Passeio')}</strong><small>${brDate(date)} • ${esc(t.destination||'Destino')}</small></div>`;if(!/^\d{4}-\d{2}-\d{2}$/.test(date))return`<article class="twTrip">${base}<div class="twSoon">Data ainda não definida para previsão.</div></article>`;const diff=Math.floor((new Date(`${date}T12:00:00-04:00`)-new Date())/86400000);if(diff<0)return'';if(diff>15)return`<article class="twTrip">${base}<div class="twSoon">🌦️ Previsão detalhada disponível quando faltar até 16 dias para o passeio.</div></article>`;try{const loc=await geocodeTrip(t);if(!loc)return`<article class="twTrip">${base}<div class="twSoon">Local do passeio não identificado para previsão automática.</div></article>`;const d=await forecast(loc.lat,loc.lon,16),w=dailyAt(d,date);if(!w)return`<article class="twTrip">${base}<div class="twSoon">Previsão ainda não publicada para essa data.</div></article>`;return`<article class="twTrip">${base}<div><strong>${weatherLabel(w.code)}</strong><small>${esc(loc.name)}</small></div><div><strong>${Math.round(Number(w.max||0))}° / ${Math.round(Number(w.min||0))}°</strong><small>Máx. / mín.</small></div><div class="twRain">💧 ${Math.round(Number(w.rain||0))}%<small>chance de chuva</small></div></article>`}catch(_){return`<article class="twTrip">${base}<div class="twSoon">Não foi possível consultar a previsão agora.</div></article>`}}
 async function mountTripsWeather(){if(state.tab!=='trips')return;const content=q('#content');if(!content||q('#twTripsWeather'))return;const trips=(state.trips||[]).filter(t=>t.status!=='cancelled'&&String(t.trip_date||'')>=today()).sort((a,b)=>String(a.trip_date||'').localeCompare(String(b.trip_date||''))).slice(0,10);const box=document.createElement('section');box.id='twTripsWeather';box.className='twWeather';box.innerHTML='<div class="twWeatherHead"><div><span class="eyebrow">CLIMA DOS PASSEIOS</span><h3>Previsão por data e destino</h3><p>Mostra automaticamente a previsão quando o passeio entra na janela meteorológica.</p></div></div><div class="twTrips"><div class="twTrip"><div><strong>Carregando previsões...</strong></div></div></div>';content.insertBefore(box,content.firstChild);const rows=await Promise.all(trips.map(tripWeatherRow));if(state.tab!=='trips'||!box.isConnected)return;q('.twTrips',box).innerHTML=rows.filter(Boolean).join('')||'<div class="twTrip"><div><strong>Nenhum passeio futuro encontrado.</strong></div></div>'}
