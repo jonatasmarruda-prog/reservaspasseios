@@ -1,10 +1,23 @@
-/* Compatibilidade entre V6 e V7: rede, notificações, financeiro central e saúde do painel. */
+/* Compatibilidade entre V6 e V7: rede, notificações, financeiro central, despesas recorrentes e saúde do painel. */
 (function(){
+  'use strict';
   const num=v=>Math.max(0,Number(v||0)||0);
-  const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
-  const BUILD='20260911-financecore2';
+  const TZ='America/Cuiaba';
+  const BUILD='20260911-financecore3';
   const ADMIN_SCOPE='business';
+  const RECURRING_SETTINGS='finance_recurring_expenses';
+  let recurringItems=[];
+  let recurringLoaded=false;
+  let recurringEnsuring='';
+
+  function localToday(){return new Date().toLocaleDateString('en-CA',{timeZone:TZ})}
+  function currentFinanceMonth(){return state.financeMonthV42||state.financeMonthV41||localToday().slice(0,7)}
+  function monthExpenseDate(month,day=1){const d=Math.max(1,Math.min(28,Number(day)||1));return `${month}-${String(d).padStart(2,'0')}`}
+  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+  function canFinance(){return ['owner','admin','finance'].includes(state?.role||'')}
+  function canManageRecurring(){return ['owner','admin'].includes(state?.role||'')}
 
   function reservationsForTrip(tripId){return (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled')}
   function activeSeats(tripId){return reservationsForTrip(tripId).reduce((sum,r)=>sum+num(r.seats),0)}
@@ -23,25 +36,26 @@
     ].filter(x=>x.amount>0);
   }
   function plannedCostDetails(trip,seats){
-    const items=normalizedCostItems(trip),fixed=items.filter(x=>x.mode!=='per_person').reduce((sum,x)=>sum+num(x.amount),0),perPerson=items.filter(x=>x.mode==='per_person').reduce((sum,x)=>sum+num(x.amount),0);
+    const items=normalizedCostItems(trip),fixed=items.filter(x=>x.mode!=='per_person').reduce((s,x)=>s+num(x.amount),0),perPerson=items.filter(x=>x.mode==='per_person').reduce((s,x)=>s+num(x.amount),0);
     return{items,fixed,perPerson,total:fixed+(perPerson*num(seats))};
   }
-  function expensePaid(expense){return !['pending','open','unpaid','to_pay','payable'].includes(String(expense?.payment_status||expense?.status||'').toLowerCase())}
-  function expenseMode(expense){
-    if(expense?.cost_mode==='per_person')return'per_person';
-    if(expense?.cost_mode==='fixed')return'fixed';
-    return /aliment|hosped|hotel|camping|seguro|ingresso|entrada|day use|atrativo|refeic|lanche/.test(norm(`${expense?.category||''} ${expense?.description||''}`))?'per_person':'fixed';
+  function expensePaid(e){return !['pending','open','unpaid','to_pay','payable'].includes(String(e?.payment_status||e?.status||'').toLowerCase())}
+  function expenseMode(e){
+    if(e?.cost_mode==='per_person')return'per_person';
+    if(e?.cost_mode==='fixed')return'fixed';
+    return /aliment|hosped|hotel|camping|seguro|ingresso|entrada|day use|atrativo|refeic|lanche/.test(norm(`${e?.category||''} ${e?.description||''}`))?'per_person':'fixed';
   }
-  function expenseAmount(expense,seats){
-    const unit=num(expense?.unit_amount||expense?.amount);
-    if(expenseMode(expense)==='per_person'){
-      const qty=expensePaid(expense)&&num(expense?.quantity_basis)>0?num(expense.quantity_basis):num(seats);
+  function expenseAmount(e,seats){
+    const unit=num(e?.unit_amount||e?.amount);
+    if(expenseMode(e)==='per_person'){
+      const qty=expensePaid(e)&&num(e?.quantity_basis)>0?num(e.quantity_basis):num(seats);
       return unit*qty;
     }
-    return num(expense?.amount)>0?num(expense.amount):unit;
+    return num(e?.amount)>0?num(e.amount):unit;
   }
   function isBusinessExpense(e){return e?.expense_scope===ADMIN_SCOPE||(!e?.trip_id&&String(e?.trip_name||'').toUpperCase()==='ADMINISTRATIVO')}
   function businessExpenses(){return (state.expenses||[]).filter(isBusinessExpense)}
+  function businessExpenseRowsForMonth(month){return businessExpenses().filter(e=>String(e.competence||e.expense_date||e.due_date||'').slice(0,7)===month).sort((a,b)=>String(a.due_date||a.expense_date||'').localeCompare(String(b.due_date||b.expense_date||'')))}
   function businessExpenseTotal(){return businessExpenses().reduce((s,e)=>s+expenseAmount(e,0),0)}
 
   function reservationTotal(r,trip){
@@ -54,19 +68,15 @@
     if(r?.status==='cancelled'||r?.sale_status==='cancelled')return 0;
     const raw=Number(r?.balance_due);
     if(Number.isFinite(raw)&&raw>=0)return raw;
-    const total=reservationTotal(r,trip),paid=num(r?.paid_amount),refunded=num(r?.refunded_amount);
-    return Math.max(0,total-paid+refunded);
+    return Math.max(0,reservationTotal(r,trip)-num(r?.paid_amount)+num(r?.refunded_amount));
   }
-  function totalReceivable(){
-    return (state.reservations||[]).reduce((sum,r)=>sum+reservationReceivable(r,(state.trips||[]).find(t=>t.id===r.trip_id)),0);
-  }
-
+  function totalReceivable(){return (state.reservations||[]).reduce((sum,r)=>sum+reservationReceivable(r,(state.trips||[]).find(t=>t.id===r.trip_id)),0)}
   function revenueForTrip(trip){
-    const rows=reservationsForTrip(trip.id),fromReservations=rows.reduce((sum,r)=>sum+reservationTotal(r,trip),0);
+    const fromReservations=reservationsForTrip(trip.id).reduce((sum,r)=>sum+reservationTotal(r,trip),0);
     return fromReservations>0?fromReservations:num(trip.net_revenue||trip.gross_revenue);
   }
   function tripFinance(trip){
-    const seats=activeSeats(trip.id),planned=plannedCostDetails(trip,seats),rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id),paidRows=rows.filter(expensePaid),openRows=rows.filter(e=>!expensePaid(e)),paid=paidRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0),open=openRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0),actual=paid+open,hasActual=rows.length>0,expense=hasActual?actual:planned.total,revenue=revenueForTrip(trip),receivable=reservationsForTrip(trip.id).reduce((sum,r)=>sum+reservationReceivable(r,trip),0);
+    const seats=activeSeats(trip.id),planned=plannedCostDetails(trip,seats),rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id),paidRows=rows.filter(expensePaid),openRows=rows.filter(e=>!expensePaid(e)),paid=paidRows.reduce((s,e)=>s+expenseAmount(e,seats),0),open=openRows.reduce((s,e)=>s+expenseAmount(e,seats),0),actual=paid+open,hasActual=rows.length>0,expense=hasActual?actual:planned.total,revenue=revenueForTrip(trip),receivable=reservationsForTrip(trip.id).reduce((s,r)=>s+reservationReceivable(r,trip),0);
     return{tripId:trip.id,seats,planned,paid,open,actual,hasActual,expense,revenue,receivable,result:revenue-expense,source:hasActual?'actual':'planned'};
   }
   function refreshTripFinancialPreview(){
@@ -100,56 +110,112 @@
     });
   }
 
-  function currentFinanceMonth(){return state.financeMonthV42||state.financeMonthV41||new Date().toLocaleDateString('en-CA',{timeZone:'America/Cuiaba'}).slice(0,7)}
-  function monthExpenseDate(month,day=1){const d=Math.max(1,Math.min(28,Number(day)||1));return `${month}-${String(d).padStart(2,'0')}`}
-  function businessExpenseRowsForMonth(month){
-    return businessExpenses().filter(e=>String(e.competence||e.expense_date||e.due_date||'').slice(0,7)===month).sort((a,b)=>String(a.due_date||a.expense_date||'').localeCompare(String(b.due_date||b.expense_date||'')));
-  }
   async function reloadExpenses(){
     try{const snap=await db.collection('expenses').get();state.expenses=snap.docs.map(d=>({id:d.id,...d.data()}));return state.expenses}catch(e){console.warn('reload expenses',e);return state.expenses||[]}
   }
-  function canFinance(){return ['owner','admin','finance'].includes(state?.role||'')}
-  function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]))}
+  async function loadRecurringBusinessExpenses(force=false){
+    if(recurringLoaded&&!force)return recurringItems;
+    if(!canManageRecurring()){recurringLoaded=true;recurringItems=[];return recurringItems}
+    try{
+      const snap=await db.collection('settings').doc(RECURRING_SETTINGS).get();
+      recurringItems=snap.exists&&Array.isArray(snap.data()?.items)?snap.data().items:[];
+    }catch(e){console.warn('recurring expenses',e);recurringItems=[]}
+    recurringLoaded=true;return recurringItems;
+  }
+  async function saveRecurringBusinessExpenses(items){
+    recurringItems=items;recurringLoaded=true;
+    await db.collection('settings').doc(RECURRING_SETTINGS).set({items,updated_at:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  }
+  function recurringApplies(item,month){
+    if(item?.active===false)return false;
+    const start=String(item?.start_month||'').slice(0,7),end=String(item?.end_month||'').slice(0,7);
+    return !!start&&month>=start&&(!end||month<=end);
+  }
+  function occurrenceId(seriesId,month){return `business_recurring_${String(seriesId).replace(/[^a-zA-Z0-9_-]/g,'')}_${month.replace('-','')}`}
+  async function ensureRecurringBusinessExpenses(month=currentFinanceMonth(),forcePendingUpdate=false){
+    if(!canManageRecurring()||typeof db==='undefined')return;
+    const key=`${month}|${forcePendingUpdate?'1':'0'}`;if(recurringEnsuring===key)return;
+    recurringEnsuring=key;
+    try{
+      const items=await loadRecurringBusinessExpenses(forcePendingUpdate),existing=businessExpenseRowsForMonth(month),byParent=new Map(existing.filter(e=>e.recurring_parent_id).map(e=>[e.recurring_parent_id,e])),batch=db.batch();let changed=false;
+      for(const item of items.filter(x=>recurringApplies(x,month))){
+        const id=occurrenceId(item.id,month),old=byParent.get(item.id),due=monthExpenseDate(month,item.due_day||10);
+        const payload={expense_scope:ADMIN_SCOPE,trip_id:'',trip_name:'ADMINISTRATIVO',description:item.description||'Despesa fixa',category:item.category||'Outros',cost_mode:'fixed',amount:num(item.amount),unit_amount:num(item.amount),competence:month,expense_date:monthExpenseDate(month,1),due_date:due,recurring_parent_id:item.id,recurring_monthly:true,updated_at:firebase.firestore.FieldValue.serverTimestamp()};
+        if(!old){batch.set(db.collection('expenses').doc(id),{...payload,payment_status:'pending',status:'pending',paid_date:'',created_at:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});changed=true}
+        else if(forcePendingUpdate&&!expensePaid(old)){batch.set(db.collection('expenses').doc(old.id),payload,{merge:true});changed=true}
+      }
+      if(changed){await batch.commit();await reloadExpenses()}
+    }catch(e){console.warn('ensure recurring expenses',e)}finally{recurringEnsuring=''}
+  }
+  window.ensureRecurringBusinessExpenses=ensureRecurringBusinessExpenses;
 
-  window.openBusinessExpenseModal=async function(id=''){
+  window.openBusinessExpenseModal=async function(id='',seriesId=''){
     if(!canFinance())return alert('Seu perfil não pode alterar o financeiro.');
+    await loadRecurringBusinessExpenses();
     let row=id?(state.expenses||[]).find(e=>e.id===id):null;
-    const month=String(row?.competence||row?.expense_date||currentFinanceMonth()).slice(0,7)||currentFinanceMonth();
-    const due=String(row?.due_date||row?.expense_date||monthExpenseDate(month,10)).slice(0,10);
+    let series=seriesId?recurringItems.find(x=>x.id===seriesId):row?.recurring_parent_id?recurringItems.find(x=>x.id===row.recurring_parent_id):null;
+    const recurring=!!series||(!id&&canManageRecurring());
+    const month=String(series?.start_month||row?.competence||row?.expense_date||currentFinanceMonth()).slice(0,7)||currentFinanceMonth();
+    const dueDay=Number(series?.due_day||String(row?.due_date||'').slice(8,10)||10)||10;
+    const due=String(row?.due_date||monthExpenseDate(month,dueDay)).slice(0,10);
     const paid=expensePaid(row||{payment_status:'pending'});
     document.querySelector('#businessExpenseModal')?.remove();
     const back=document.createElement('div');back.id='businessExpenseModal';back.className='modalBack';
-    back.innerHTML=`<div class="modal" style="max-width:720px"><div class="modalHead"><div><span class="eyebrow">FINANCEIRO</span><h2>${id?'Editar':'Nova'} despesa fixa</h2><p>Contadora, seguro de vida, empréstimos, impostos e demais custos administrativos.</p></div><button class="iconClose" type="button" data-close>✕</button></div><form id="businessExpenseForm"><div class="modalBody"><div class="formGrid"><label><span>Descrição</span><input name="description" required value="${escapeHtml(row?.description||'') }" placeholder="Ex.: Contadora"></label><label><span>Categoria</span><select name="category"><option>Contabilidade</option><option>Seguro de vida</option><option>Empréstimo</option><option>Impostos</option><option>Taxas bancárias</option><option>Sistemas / Software</option><option>Marketing</option><option>Outros</option></select></label><label><span>Valor mensal</span><input name="amount" type="number" min="0.01" step="0.01" required value="${num(row?.amount||row?.unit_amount)||''}"></label><label><span>Competência</span><input name="competence" type="month" required value="${escapeHtml(month)}"></label><label><span>Vencimento</span><input name="due_date" type="date" required value="${escapeHtml(due)}"></label><label><span>Status</span><select name="payment_status"><option value="pending">A PAGAR</option><option value="paid">PAGA</option></select></label></div><p style="margin:14px 0 0;color:#667a72;font-size:12px">Esta despesa entra no fechamento mensal como <b>ADMINISTRATIVO</b> e não é misturada com o custo de nenhum passeio.</p></div><div class="modalFoot"><button class="btn ghost" type="button" data-close>Cancelar</button><button class="btn primary" type="submit">Salvar despesa</button></div></form></div>`;
+    back.innerHTML=`<div class="modal" style="max-width:760px"><div class="modalHead"><div><span class="eyebrow">FINANCEIRO</span><h2>${series?'Editar despesa recorrente':id?'Editar despesa':'Nova despesa fixa'}</h2><p>Use mensal para contadora, empréstimo, seguro, impostos e outros pagamentos que se repetem.</p></div><button class="iconClose" type="button" data-close>✕</button></div><form id="businessExpenseForm"><div class="modalBody"><div class="formGrid"><label><span>Descrição</span><input name="description" required value="${escapeHtml(series?.description||row?.description||'')}" placeholder="Ex.: Contadora"></label><label><span>Categoria</span><select name="category"><option>Contabilidade</option><option>Seguro de vida</option><option>Empréstimo</option><option>Impostos</option><option>Taxas bancárias</option><option>Sistemas / Software</option><option>Marketing</option><option>Outros</option></select></label><label><span>Valor mensal</span><input name="amount" type="number" min="0.01" step="0.01" required value="${num(series?.amount||row?.amount||row?.unit_amount)||''}"></label><label><span>Repetição</span><select name="recurrence" ${!canManageRecurring()?'disabled':''}><option value="monthly">TODO MÊS</option><option value="once">SOMENTE ESTE MÊS</option></select></label><label><span>Mês inicial</span><input name="start_month" type="month" required value="${escapeHtml(month)}"></label><label class="endMonthField"><span>Mês final (opcional)</span><input name="end_month" type="month" value="${escapeHtml(series?.end_month||'')}"></label><label class="dueDayField"><span>Dia do vencimento</span><input name="due_day" type="number" min="1" max="28" value="${Math.max(1,Math.min(28,dueDay))}"></label><label class="onceDueField"><span>Vencimento</span><input name="due_date" type="date" value="${escapeHtml(due)}"></label><label class="onceStatusField"><span>Status</span><select name="payment_status"><option value="pending">A PAGAR</option><option value="paid">PAGA</option></select></label></div><p style="margin:14px 0 0;color:#667a72;font-size:12px">Em <b>TODO MÊS</b>, o sistema gera automaticamente a conta daquele mês como <b>A PAGAR</b>. Para empréstimos, você pode informar um mês final. Histórico pago não é alterado.</p></div><div class="modalFoot"><button class="btn ghost" type="button" data-close>Cancelar</button><button class="btn primary" type="submit">Salvar</button></div></form></div>`;
     document.body.appendChild(back);
-    const form=back.querySelector('#businessExpenseForm'),cat=form.category,status=form.payment_status;
-    cat.value=row?.category||'Contabilidade';status.value=paid?'paid':'pending';
+    const form=back.querySelector('#businessExpenseForm');
+    form.category.value=series?.category||row?.category||'Contabilidade';
+    form.payment_status.value=paid?'paid':'pending';
+    form.recurrence.value=recurring?'monthly':'once';
+    const syncFields=()=>{const monthly=form.recurrence.value==='monthly';back.querySelector('.endMonthField').style.display=monthly?'':'none';back.querySelector('.dueDayField').style.display=monthly?'':'none';back.querySelector('.onceDueField').style.display=monthly?'none':'';back.querySelector('.onceStatusField').style.display=monthly?'none':''};
+    form.recurrence.onchange=syncFields;syncFields();
     back.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>back.remove());
     form.onsubmit=async e=>{
-      e.preventDefault();const f=e.currentTarget,amount=num(f.amount.value),competence=f.competence.value,due=f.due_date.value,paymentStatus=f.payment_status.value;
-      if(!amount||!competence||!due)return;
-      const data={expense_scope:ADMIN_SCOPE,trip_id:'',trip_name:'ADMINISTRATIVO',description:f.description.value.trim(),category:f.category.value,cost_mode:'fixed',amount,unit_amount:amount,competence,expense_date:monthExpenseDate(competence,1),due_date:due,payment_status:paymentStatus,status:paymentStatus==='paid'?'paid':'pending',paid_date:paymentStatus==='paid'?(row?.paid_date||new Date().toLocaleDateString('en-CA',{timeZone:'America/Cuiaba'})):'',updated_at:firebase.firestore.FieldValue.serverTimestamp()};
+      e.preventDefault();const f=e.currentTarget,amount=num(f.amount.value),monthly=f.recurrence.value==='monthly',start=f.start_month.value;if(!amount||!start)return;
       try{
-        if(id)await db.collection('expenses').doc(id).update(data);else await db.collection('expenses').add({...data,created_at:firebase.firestore.FieldValue.serverTimestamp()});
-        try{await window.auditV7?.(id?'business_expense_updated':'business_expense_created','expense',id||'',`${data.description} • ${money(amount)}`,{scope:ADMIN_SCOPE,competence})}catch(_){ }
+        if(monthly){
+          if(!canManageRecurring())throw Error('Somente proprietário/administrador pode criar recorrência.');
+          const seriesId=series?.id||`rec_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,7)}`;
+          const item={id:seriesId,description:f.description.value.trim(),category:f.category.value,amount,due_day:Math.max(1,Math.min(28,Number(f.due_day.value)||10)),start_month:start,end_month:f.end_month.value||'',active:true};
+          const next=recurringItems.filter(x=>x.id!==seriesId);next.push(item);await saveRecurringBusinessExpenses(next);await ensureRecurringBusinessExpenses(currentFinanceMonth(),true);
+          try{await window.auditV7?.(series?'recurring_expense_updated':'recurring_expense_created','expense',seriesId,`${item.description} • ${money(amount)}/mês`,{scope:ADMIN_SCOPE,start_month:start,end_month:item.end_month})}catch(_){ }
+        }else{
+          const due=f.due_date.value||monthExpenseDate(start,10),paymentStatus=f.payment_status.value,data={expense_scope:ADMIN_SCOPE,trip_id:'',trip_name:'ADMINISTRATIVO',description:f.description.value.trim(),category:f.category.value,cost_mode:'fixed',amount,unit_amount:amount,competence:start,expense_date:monthExpenseDate(start,1),due_date:due,payment_status:paymentStatus,status:paymentStatus==='paid'?'paid':'pending',paid_date:paymentStatus==='paid'?(row?.paid_date||localToday()):'',recurring_monthly:false,updated_at:firebase.firestore.FieldValue.serverTimestamp()};
+          if(id&&!row?.recurring_parent_id)await db.collection('expenses').doc(id).update(data);else await db.collection('expenses').add({...data,created_at:firebase.firestore.FieldValue.serverTimestamp()});
+          try{await window.auditV7?.(id?'business_expense_updated':'business_expense_created','expense',id||'',`${data.description} • ${money(amount)}`,{scope:ADMIN_SCOPE,competence:start})}catch(_){ }
+        }
         back.remove();await reloadExpenses();renderAdmin();scheduleApply();
-      }catch(err){console.error(err);alert('Não foi possível salvar a despesa fixa. Verifique sua conexão e permissão.')}
+      }catch(err){console.error(err);alert(err?.message||'Não foi possível salvar a despesa fixa.')}
     };
   };
-  window.deleteBusinessExpense=async function(id){
-    if(!canFinance())return;const e=(state.expenses||[]).find(x=>x.id===id);if(!e||!confirm(`Excluir a despesa “${e.description||e.category||'Despesa'}”?`))return;
-    try{await db.collection('expenses').doc(id).delete();try{await window.auditV7?.('business_expense_deleted','expense',id,e.description||e.category||'Despesa',{scope:ADMIN_SCOPE})}catch(_){ }await reloadExpenses();renderAdmin();scheduleApply()}catch(err){console.error(err);alert('Não foi possível excluir a despesa.')}
+  window.toggleBusinessExpensePaid=async function(id){
+    if(!canFinance())return;const e=(state.expenses||[]).find(x=>x.id===id);if(!e)return;
+    const paid=!expensePaid(e);try{await db.collection('expenses').doc(id).update({payment_status:paid?'paid':'pending',status:paid?'paid':'pending',paid_date:paid?localToday():'',updated_at:firebase.firestore.FieldValue.serverTimestamp()});await reloadExpenses();renderAdmin();scheduleApply()}catch(err){console.error(err);alert('Não foi possível atualizar o pagamento.')}
   };
-  function injectBusinessExpensePanel(){
-    if(state?.tab!=='finance')return;const content=document.querySelector('#content');if(!content)return;
-    const month=currentFinanceMonth(),rows=businessExpenseRowsForMonth(month);let box=document.querySelector('#businessExpensesPanel');
+  window.deleteBusinessExpense=async function(id){
+    if(!canFinance())return;const e=(state.expenses||[]).find(x=>x.id===id);if(!e)return;
+    if(e.recurring_parent_id)return window.disableRecurringBusinessExpense(e.recurring_parent_id);
+    if(!confirm(`Excluir a despesa “${e.description||e.category||'Despesa'}”?`))return;
+    try{await db.collection('expenses').doc(id).delete();await reloadExpenses();renderAdmin();scheduleApply()}catch(err){console.error(err);alert('Não foi possível excluir a despesa.')}
+  };
+  window.disableRecurringBusinessExpense=async function(seriesId){
+    if(!canManageRecurring())return alert('Somente proprietário/administrador pode encerrar uma despesa recorrente.');
+    await loadRecurringBusinessExpenses();const item=recurringItems.find(x=>x.id===seriesId);if(!item||!confirm(`Encerrar a recorrência de “${item.description}”? Os meses já registrados serão preservados.`))return;
+    const next=recurringItems.map(x=>x.id===seriesId?{...x,active:false,end_month:currentFinanceMonth()}:x);try{await saveRecurringBusinessExpenses(next);renderAdmin();scheduleApply()}catch(err){console.error(err);alert('Não foi possível encerrar a recorrência.')}
+  };
+
+  async function injectBusinessExpensePanel(){
+    if(state?.tab!=='finance')return;const content=document.querySelector('#content');if(!content)return;const month=currentFinanceMonth();
+    await ensureRecurringBusinessExpenses(month);if(state?.tab!=='finance'||currentFinanceMonth()!==month)return;
+    const rows=businessExpenseRowsForMonth(month);let box=document.querySelector('#businessExpensesPanel');
     if(!box){box=document.createElement('section');box.id='businessExpensesPanel';box.className='panel';const anchor=document.querySelector('#v42FinanceDash',content);anchor?.after?anchor.after(box):content.prepend(box)}
     const total=rows.reduce((s,e)=>s+expenseAmount(e,0),0),paid=rows.filter(expensePaid).reduce((s,e)=>s+expenseAmount(e,0),0),open=rows.filter(e=>!expensePaid(e)).reduce((s,e)=>s+expenseAmount(e,0),0);
-    box.innerHTML=`<div class="panelHead"><div><span class="eyebrow">DESPESAS FIXAS</span><h2>Administrativo • ${escapeHtml(month)}</h2><p>Custos da empresa que não pertencem a um passeio específico e entram no relatório mensal.</p></div><button class="btn primary" onclick="openBusinessExpenseModal()">+ Nova despesa fixa</button></div><div class="dayStats"><div><span>Total do mês</span><strong>${money(total)}</strong></div><div><span>Pago</span><strong>${money(paid)}</strong></div><div><span>A pagar</span><strong>${money(open)}</strong></div></div><div class="tableWrap" style="margin-top:14px"><table class="table"><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${rows.length?rows.map(e=>`<tr><td><strong>${escapeHtml(e.description||'Despesa')}</strong></td><td>${escapeHtml(e.category||'Outros')}</td><td>${String(e.due_date||'').split('-').reverse().join('/')||'—'}</td><td><span class="pill ${expensePaid(e)?'active':'pending'}">${expensePaid(e)?'PAGA':'A PAGAR'}</span></td><td><strong>${money(expenseAmount(e,0))}</strong></td><td><div class="actions"><button onclick="openBusinessExpenseModal('${e.id}')" title="Editar">✎</button><button class="dangerMini" onclick="deleteBusinessExpense('${e.id}')" title="Excluir">⌫</button></div></td></tr>`).join(''):'<tr><td colspan="6">Nenhuma despesa fixa administrativa nesta competência.</td></tr>'}</tbody></table></div>`;
+    box.innerHTML=`<div class="panelHead"><div><span class="eyebrow">DESPESAS FIXAS</span><h2>Administrativo • ${escapeHtml(month)}</h2><p>Contadora, empréstimos, seguros, impostos e outros custos mensais da empresa.</p></div><button class="btn primary" onclick="openBusinessExpenseModal()">+ Nova despesa fixa</button></div><div class="dayStats"><div><span>Total do mês</span><strong>${money(total)}</strong></div><div><span>Pago</span><strong>${money(paid)}</strong></div><div><span>A pagar</span><strong>${money(open)}</strong></div></div><div class="tableWrap" style="margin-top:14px"><table class="table"><thead><tr><th>Descrição</th><th>Categoria</th><th>Vencimento</th><th>Repetição</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${rows.length?rows.map(e=>`<tr><td><strong>${escapeHtml(e.description||'Despesa')}</strong></td><td>${escapeHtml(e.category||'Outros')}</td><td>${String(e.due_date||'').split('-').reverse().join('/')||'—'}</td><td>${e.recurring_parent_id?'<span class="pill active">TODO MÊS</span>':'ÚNICA'}</td><td><button class="pill ${expensePaid(e)?'active':'pending'}" style="border:0;cursor:pointer" onclick="toggleBusinessExpensePaid('${e.id}')">${expensePaid(e)?'PAGA':'A PAGAR'}</button></td><td><strong>${money(expenseAmount(e,0))}</strong></td><td><div class="actions"><button onclick="openBusinessExpenseModal('${e.id}','${e.recurring_parent_id||''}')" title="Editar">✎</button><button class="dangerMini" onclick="deleteBusinessExpense('${e.id}')" title="${e.recurring_parent_id?'Encerrar recorrência':'Excluir'}">⌫</button></div></td></tr>`).join(''):'<tr><td colspan="7">Nenhuma despesa fixa administrativa nesta competência.</td></tr>'}</tbody></table></div>`;
   }
 
   function financeSelfTest(){
     const planned=(items,seats)=>items.filter(x=>x.mode!=='per_person').reduce((s,x)=>s+num(x.amount),0)+items.filter(x=>x.mode==='per_person').reduce((s,x)=>s+num(x.amount),0)*seats;
-    const cases=[planned([{mode:'per_person',amount:50}],13)===650,planned([{mode:'fixed',amount:1000},{mode:'per_person',amount:50}],10)===1500,planned([{mode:'fixed',amount:300}],0)===300,expenseAmount({cost_mode:'per_person',amount:40,status:'pending'},5)===200,expenseAmount({cost_mode:'fixed',amount:400,status:'paid'},5)===400,reservationReceivable({sale_total:500,paid_amount:200,status:'active'},{default_price:0})===300,reservationReceivable({sale_total:500,paid_amount:500,status:'active'},{default_price:0})===0];
+    const cases=[planned([{mode:'per_person',amount:50}],13)===650,planned([{mode:'fixed',amount:1000},{mode:'per_person',amount:50}],10)===1500,planned([{mode:'fixed',amount:300}],0)===300,expenseAmount({cost_mode:'per_person',amount:40,status:'pending'},5)===200,expenseAmount({cost_mode:'fixed',amount:400,status:'paid'},5)===400,reservationReceivable({sale_total:500,paid_amount:200,status:'active'},{default_price:0})===300,recurringApplies({active:true,start_month:'2026-01',end_month:''},'2026-09')===true,recurringApplies({active:true,start_month:'2026-01',end_month:'2026-08'},'2026-09')===false];
     return{ok:cases.every(Boolean),passed:cases.filter(Boolean).length,total:cases.length};
   }
   function systemHealth(){
@@ -170,12 +236,17 @@
     const current=window.renderAdmin;if(typeof current!=='function'||current.__tripCostPreviewFixed)return;
     const wrapped=function(...args){refreshTripFinancialPreview();const out=current.apply(this,args);scheduleApply();return out};wrapped.__tripCostPreviewFixed=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
   }
-  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,tripFinance,totals:financeTotals,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview};
+  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,tripFinance,totals:financeTotals,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview,ensureRecurringBusinessExpenses};
   window.setNetworkUI=function(){const online=navigator.onLine,b=document.querySelector('#networkBadge');if(b){b.textContent=online?'● Online':'● Offline';b.className='networkBadge '+(online?'online':'offline')}const s=document.querySelector('#sync');if(s&&!online){s.textContent='☁ Offline • dados locais';s.classList.add('offline')}};
   window.updateNotificationBadge=function(){const count=(state.notifications||[]).filter(n=>!n.read).length,b=document.querySelector('#notifyCount');if(b)b.textContent=count?String(count):'';const s=document.querySelector('#sideNotifyCount');if(s)s.textContent=count?`(${count})`:''};
+
   installFinalRenderWrapper();
   window.addEventListener('DOMContentLoaded',()=>{installFinalRenderWrapper();scheduleApply();setTimeout(()=>installFinalRenderWrapper(),1200)});
-  document.addEventListener('click',scheduleApply,true);
+  document.addEventListener('click',e=>{
+    const report=e.target?.closest?.('#v42MonthlyReport');
+    if(report){e.preventDefault();e.stopImmediatePropagation();(async()=>{await ensureRecurringBusinessExpenses(currentFinanceMonth());if(typeof window.openMonthlyReportV34==='function')window.openMonthlyReportV34(currentFinanceMonth())})()}
+    else scheduleApply();
+  },true);
   window.addEventListener('online',()=>{setNetworkUI();scheduleApply()});
   window.addEventListener('offline',()=>{setNetworkUI();scheduleApply()});
 })();
