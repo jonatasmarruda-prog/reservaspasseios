@@ -1,0 +1,34 @@
+name: Alertas automáticos de mudança do tempo
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,37 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'automation/weather-alerts.mjs'
+      - '.github/workflows/weather-alerts.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trilheiros-weather-alerts
+  cancel-in-progress: true
+
+jobs:
+  weather-alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Verificar mudança do tempo e avisar celular
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/weather-alerts.mjs
