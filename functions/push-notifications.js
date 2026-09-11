@@ -12,7 +12,7 @@ const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const BASE_URL='https://trilheiros-reservas.web.app';
 const PENDING_URL=`${BASE_URL}/admin?tab=pending`;
 const PEOPLE_URL=`${BASE_URL}/admin?tab=people`;
-const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push6';
+const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push7';
 const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
@@ -20,6 +20,24 @@ function cors(res){
   res.set('Access-Control-Allow-Origin',BASE_URL);
   res.set('Access-Control-Allow-Headers','Authorization, Content-Type');
   res.set('Access-Control-Allow-Methods','POST, OPTIONS');
+}
+
+function paymentLabel(v){
+  const s=String(v||'').toLowerCase();
+  if(s.includes('parcel')||s.includes('install'))return'PIX parcelado';
+  if(s.includes('card')||s.includes('cart'))return'Cartão';
+  if(s.includes('pix'))return'PIX';
+  if(s.includes('cash')||s.includes('dinheiro'))return'Dinheiro';
+  if(s.includes('transfer'))return'Transferência';
+  return String(v||'Pagamento');
+}
+
+function isPendingPayment(s){
+  const status=String(s?.payment_status||'pending').toLowerCase();
+  const paid=Math.max(0,Number(s?.paid_amount||0));
+  const total=Math.max(0,Number(s?.sale_total||0));
+  const balance=Math.max(0,Number(s?.balance_due ?? (total-paid)));
+  return ['pending','partial','awaiting','aguardando'].includes(status)&&balance>0.009;
 }
 
 export const registerPushDevice=onRequest({region:REGION},async(req,res)=>{
@@ -130,20 +148,41 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
   const before=event.data?.before?.exists?event.data.before.data():null;
   const after=event.data?.after?.exists?event.data.after.data():null;
   if(!after||after.sale_status==='cancelled')return;
+
   const oldPaid=Math.max(0,Number(before?.paid_amount||0));
   const newPaid=Math.max(0,Number(after.paid_amount||0));
   const delta=newPaid-oldPaid;
-  if(delta<=0.009)return;
-  const balance=Math.max(0,Number(after.balance_due||0));
-  const customer=String(after.customer_name||'Cliente');
+  const customer=String(after.customer_name||after.responsible_name||'Cliente');
   const trip=String(after.trip_name||'Passeio');
-  const method=String(after.payment_method||'Pagamento');
+  const method=paymentLabel(after.payment_method);
+  const total=Math.max(0,Number(after.sale_total||0));
+  const balance=Math.max(0,Number(after.balance_due ?? Math.max(0,total-newPaid)));
+
+  if(delta>0.009){
+    await sendAdminPush({
+      title:`✅ Pagamento confirmado — ${customer}`,
+      body:`${trip} • ${method} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,
+      url:PENDING_URL,
+      type:'payment_confirmed',
+      tag:`payment-confirmed-${event.params.saleId}-${newPaid.toFixed(2)}`,
+      data:{sale_id:event.params.saleId}
+    });
+    return;
+  }
+
+  const newlyCreated=!before;
+  const becamePending=Boolean(before)&&!isPendingPayment(before)&&isPendingPayment(after);
+  const methodChanged=Boolean(before)&&isPendingPayment(after)&&String(before.payment_method||'')!==String(after.payment_method||'')&&Boolean(after.payment_method);
+  if(!(isPendingPayment(after)&&(newlyCreated||becamePending||methodChanged)))return;
+
+  const requested=Math.max(0,Number(after.requested_amount||after.amount_to_confirm||after.installment_amount||0));
+  const value=requested>0?requested:(balance>0?balance:total);
   await sendAdminPush({
-    title:`💰 Pagamento confirmado — ${customer}`,
-    body:`${trip} • ${method} • ${money(delta)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,
+    title:`💰 ${customer} informou pagamento`,
+    body:`${trip} • ${method}${value>0?` • ${money(value)}`:''} • conferir e confirmar no Gestão`,
     url:PENDING_URL,
-    type:'payment',
-    tag:`payment-${event.params.saleId}-${newPaid.toFixed(2)}`,
+    type:'payment_pending',
+    tag:`payment-pending-${event.params.saleId}`,
     data:{sale_id:event.params.saleId}
   });
 });
