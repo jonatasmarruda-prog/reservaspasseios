@@ -11,8 +11,18 @@
     }
   }
 
+  function loadTripWeather(){
+    if(!location.pathname.startsWith('/admin')||document.querySelector('script[data-admin-weather]'))return;
+    const s=document.createElement('script');
+    s.src='/admin-weather.js?v=20260911-weather1';
+    s.defer=true;
+    s.dataset.adminWeather='1';
+    document.head.appendChild(s);
+  }
+
   attachModalRemove();
-  window.addEventListener('load', attachModalRemove);
+  loadTripWeather();
+  window.addEventListener('load',()=>{attachModalRemove();loadTripWeather()});
 
   // Reaplica a correção sempre que um modal for aberto.
   document.addEventListener('click', function(){
