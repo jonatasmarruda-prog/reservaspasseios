@@ -23,6 +23,10 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
+      - name: Gerar despesas administrativas recorrentes do mês
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/materialize-recurring-expenses.mjs
       - name: Enviar relatório financeiro mensal
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
