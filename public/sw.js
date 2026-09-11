@@ -1,11 +1,9 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260910-push5';
-const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
-const NOTIFICATION_BADGE='/notification-badge.png?v=20260910-push5';
+const CACHE='trilheiros-shell-20260911-push6';
+const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-push6';
 const APP_SHELL=[
   '/offline.html',
   '/manifest.webmanifest?v=20260910-brand7',
-  '/notification-badge.png?v=20260910-push5',
   '/app.css',
   '/premium.css',
   '/admin-v7.css',
@@ -83,7 +81,6 @@ function normalizePushPayload(event){
       title:raw.title||notification.title||webpushNotification.title||data.title,
       body:raw.body||notification.body||webpushNotification.body||data.body,
       icon:raw.icon||notification.icon||webpushNotification.icon||data.icon,
-      badge:raw.badge||notification.badge||webpushNotification.badge||data.badge,
       url:raw.url||data.url||raw?.fcmOptions?.link||raw?.webpush?.fcmOptions?.link
     };
   }catch(_){
@@ -95,7 +92,6 @@ function notificationOptions(data={}){
   return{
     body:data.body||'Há uma nova atualização no Trilheiros Gestão.',
     icon:data.icon||NOTIFICATION_ICON,
-    badge:data.badge||NOTIFICATION_BADGE,
     tag:data.tag||'trilheiros-gestao',
     renotify:data.renotify===true||data.renotify==='true',
     requireInteraction:data.requireInteraction===true||data.requireInteraction==='true',
