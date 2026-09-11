@@ -317,18 +317,19 @@ export const notifyPaymentUpdate=onDocumentWritten({document:'sales/{saleId}',re
   const becamePending=Boolean(before)&&!isPendingPayment(before)&&isPendingPayment(after);
   const methodChanged=Boolean(before)&&isPendingPayment(after)&&String(before.payment_method||'')!==String(after.payment_method||'')&&Boolean(after.payment_method);
   const pendingSignalChanged=Boolean(before)&&isPendingPayment(after)&&[
-    'requested_amount','amount_to_confirm','installment_amount','payment_reference','payment_intent','payment_origin'
+    'requested_amount','amount_to_confirm','installment_amount','payment_reference','payment_intent','payment_origin','payment_trigger','payment_started_at'
   ].some(key=>String(before?.[key]??'')!==String(after?.[key]??''));
+  const canvaPayment=String(after.source||'').includes('public_portal')||Boolean(after.payment_trigger);
   if(!(isPendingPayment(after)&&(newlyCreated||becamePending||methodChanged||pendingSignalChanged)))return;
 
   const requested=Math.max(0,Number(after.requested_amount||after.amount_to_confirm||after.installment_amount||0));
   const value=requested>0?requested:(balance>0?balance:total);
   await sendAdminPush({
-    title:`💰 ${customer} informou pagamento`,
-    body:`${trip} • ${method}${value>0?` • ${money(value)}`:''} • conferir e confirmar no Gestão`,
+    title:canvaPayment?`💰 Novo pagamento — ${customer}`:`💰 ${customer} informou pagamento`,
+    body:canvaPayment?`${trip} • ${method}${value>0?` • ${money(value)}`:''} • aguardando conferência`:`${trip} • ${method}${value>0?` • ${money(value)}`:''} • conferir e confirmar no Gestão`,
     url:PENDING_URL,
     type:'payment_pending',
     tag:`payment-pending-${event.params.saleId}-${String(after.updated_at?.seconds||after.updated_at||Date.now())}`,
-    data:{sale_id:event.params.saleId}
+    data:{sale_id:event.params.saleId,trip_id:after.trip_id||'',source:after.source||''}
   });
 });
