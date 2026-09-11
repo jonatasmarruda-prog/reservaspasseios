@@ -34,33 +34,30 @@ function injectStyle(){
 
 function repairReports(){
   if(state.tab!=='reports')return;
-  const original=q('#v40ReportTrip');if(!original)return;
-  const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));
-  const current=state.reportTripFix||original.value;
-
-  // Substitui o select por um clone limpo para remover listeners antigos que
-  // podiam interceptar pointer/touch e impedir a abertura nativa da lista.
-  const sel=original.dataset.reportFixed==='2'?original:original.cloneNode(false);
-  if(sel!==original)original.replaceWith(sel);
-
+  const sel=q('#v40ReportTrip');if(!sel)return;
   sel.disabled=false;
   sel.removeAttribute('disabled');
-  sel.dataset.reportFixed='2';
   sel.style.pointerEvents='auto';
   sel.style.touchAction='manipulation';
   sel.style.cursor='pointer';
-  sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');
+  if(sel.dataset.reportFixed==='3')return;
+  sel.dataset.reportFixed='3';
 
-  if(current&&trips.some(t=>t.id===current))sel.value=current;
-  else if(trips.length)sel.value=trips[0].id;
+  const trips=(state.trips||[]).filter(t=>t.status!=='cancelled').sort((a,b)=>String(b.trip_date||'').localeCompare(String(a.trip_date||'')));
+  const current=state.reportTripFix||sel.value;
+
+  // Não substitui nem recria o SELECT depois que a tela é renderizada.
+  // Isso evita fechar a lista nativa exatamente no momento do clique/toque.
+  if(!sel.options.length&&trips.length){
+    sel.innerHTML=trips.map(t=>`<option value="${esc(t.id)}">${esc(t.name)} — ${brDate(t.trip_date)}</option>`).join('');
+  }
+  if(current&&[...sel.options].some(o=>o.value===current))sel.value=current;
+  else if(sel.options.length)sel.selectedIndex=0;
   state.reportTripFix=sel.value;
 
-  if(sel.dataset.reportEvents!=='1'){
-    sel.dataset.reportEvents='1';
-    const save=()=>{state.reportTripFix=sel.value};
-    sel.addEventListener('change',save);
-    sel.addEventListener('input',save);
-  }
+  const save=()=>{state.reportTripFix=sel.value};
+  sel.addEventListener('change',save,{passive:true});
+  sel.addEventListener('input',save,{passive:true});
 }
 
 async function mountHomeWeather(){
