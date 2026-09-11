@@ -1,0 +1,38 @@
+name: Resultado final do passeio
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+    - cron: '2-59/5 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - 'automation/send-trip-closure-emails.mjs'
+      - 'public/admin-trip-operations.js'
+      - '.github/workflows/trip-closure-email.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trilheiros-trip-closure-email
+  cancel-in-progress: false
+
+jobs:
+  send-final-result:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Enviar resultado final dos passeios fechados
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: 'Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>'
+        run: node automation/send-trip-closure-emails.mjs
