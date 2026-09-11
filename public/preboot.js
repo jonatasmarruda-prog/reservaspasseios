@@ -18,6 +18,11 @@
     });
 
     if(location.pathname.startsWith('/admin')){
+      const operations=document.createElement('script');
+      operations.src='/admin-trip-operations.js?v=20260911-ops1';
+      operations.defer=true;
+      document.head.appendChild(operations);
+
       const messaging=document.createElement('script');
       messaging.src='/__/firebase/10.14.1/firebase-messaging-compat.js';
       messaging.defer=true;
