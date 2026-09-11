@@ -6,6 +6,8 @@
     "public": "public",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      {"source": "/instagram/webhook", "function": {"functionId": "instagramWebhook", "region": "southamerica-east1"}},
+      {"source": "/api/instagram", "function": {"functionId": "instagramAdminApi", "region": "southamerica-east1"}},
       {"source": "/reservas", "destination": "/reservar.html"},
       {"source": "/reservar", "destination": "/reservar.html"},
       {"source": "/cadastro/**", "destination": "/cadastro.html"},
@@ -20,6 +22,7 @@
       {"source": "/reservation-portal-logo-clean-v27.css", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/admin-*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/admin-*.css", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
+      {"source": "/admin-instagram.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/pdf-*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/trip-dedupe-v43.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
       {"source": "/push-client.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},

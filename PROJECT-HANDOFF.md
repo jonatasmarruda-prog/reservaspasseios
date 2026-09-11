@@ -199,6 +199,25 @@ Commits recentes:
 ## Política de cancelamento automática
 Todo Novo Passeio ou Editar Passeio abre com política padrão quando o campo estiver vazio. Política personalizada deve ser preservada.
 
+## Assistente oficial do Instagram
+Base implementada em 11/09/2026, ainda dependente da criação/configuração do aplicativo Meta e dos quatro segredos do Firebase antes do primeiro deploy das novas Functions.
+
+Arquivos:
+- `functions/instagram-assistant-core.js` — identificação de intenção/passeio e respostas humanizadas sem custo por mensagem;
+- `functions/instagram-assistant.js` — webhook Meta, assinatura, idempotência, Graph API, histórico, limite e encaminhamento humano;
+- `public/admin-instagram.js` e `.css` — painel, simulador, modo sugestão/automático e “Jonatas assume”;
+- `INSTAGRAM-SETUP.md` — ativação Meta/Firebase;
+- `.github/workflows/instagram-assistant-deploy.yml` — deploy manual após os segredos existirem.
+
+Regras obrigatórias:
+- usar somente a API oficial da Meta;
+- nunca usar senha do Instagram ou robô de navegador;
+- nunca confirmar pagamento informado sem conferência bancária;
+- cancelamento, reembolso, reclamação, emergência e informação ausente vão para Jonatas;
+- começar em modo `suggestions` e liberar automático somente após os testes;
+- comentário → Direct fica desligado por padrão;
+- o bot lê os dados atuais de `trips`; completar `difficulty`, `minimum_age`, `included_items`, `departure_time` e preços específicos no passeio quando quiser respostas mais completas.
+
 ## Relatórios de participantes
 Para PDFs enviados a ônibus/atrativos/hospedagem:
 - mostrar Nº;
