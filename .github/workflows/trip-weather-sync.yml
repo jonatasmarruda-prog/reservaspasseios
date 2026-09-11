@@ -1,0 +1,30 @@
+name: Clima diário dos passeios
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 07:05 em Mato Grosso (UTC-4)
+    - cron: '5 11 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trilheiros-trip-weather
+  cancel-in-progress: false
+
+jobs:
+  weather:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Instalar dependências
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Sincronizar clima e enviar alertas
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/sync-trip-weather.mjs
