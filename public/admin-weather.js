@@ -2,21 +2,17 @@
 (function(){
 'use strict';
 if(!location.pathname.startsWith('/admin'))return;
-const TZ='America/Cuiaba';
-const MAX_FORECAST_DAYS=16;
-const CACHE_MS=20*60*1000;
-const cache=new Map();
-const q=(s,r=document)=>r.querySelector(s);
+const TZ='America/Cuiaba',MAX_FORECAST_DAYS=16,CACHE_MS=20*60*1000;
+const cache=new Map(),q=(s,r=document)=>r.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())}
-function daysBetween(a,b){const x=new Date(`${a}T12:00:00Z`),y=new Date(`${b}T12:00:00Z`);return Math.round((y-x)/86400000)}
+function daysBetween(a,b){return Math.round((new Date(`${b}T12:00:00Z`)-new Date(`${a}T12:00:00Z`))/86400000)}
 function brDate(v){const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
 function tripDate(t){return String(t?.trip_date||t?.date||'').slice(0,10)}
-function activeTrip(t){return !['cancelled','canceled','cancelado','cancelada','inactive'].includes(norm(t?.status||t?.trip_status))}
+function activeTrip(t){return !['cancelled','canceled','cancelado','cancelada','inactive','inativo','inativa'].includes(norm(t?.status||t?.trip_status))}
 function placeHint(t){
-  const raw=[t?.destination,t?.location,t?.city,t?.local,t?.name].map(v=>String(v||'').trim()).filter(Boolean);
-  const text=norm(raw.join(' '));
+  const raw=[t?.destination,t?.location,t?.city,t?.local,t?.name].map(v=>String(v||'').trim()).filter(Boolean),text=norm(raw.join(' '));
   if(text.includes('chapada'))return'Chapada dos Guimarães, Mato Grosso, Brasil';
   if(text.includes('salto das nuvens')||text.includes('tangara'))return'Tangará da Serra, Mato Grosso, Brasil';
   if(text.includes('nobres')||text.includes('bom jardim'))return'Nobres, Mato Grosso, Brasil';
@@ -24,77 +20,22 @@ function placeHint(t){
   if(text.includes('jaciara')||text.includes('canion das indias'))return'Jaciara, Mato Grosso, Brasil';
   if(text.includes('barra do garcas'))return'Barra do Garças, Mato Grosso, Brasil';
   if(text.includes('vila bela'))return'Vila Bela da Santíssima Trindade, Mato Grosso, Brasil';
+  if(text.includes('campo verde'))return'Campo Verde, Mato Grosso, Brasil';
+  if(text.includes('alto garcas'))return'Alto Garças, Mato Grosso, Brasil';
+  if(text.includes('primavera do leste'))return'Primavera do Leste, Mato Grosso, Brasil';
   return raw[0]||'';
 }
-function weatherLabel(code){
-  const c=Number(code);
-  if(c===0)return['☀️','Céu limpo'];
-  if([1,2].includes(c))return['🌤️','Poucas nuvens'];
-  if(c===3)return['☁️','Nublado'];
-  if([45,48].includes(c))return['🌫️','Neblina'];
-  if([51,53,55,56,57].includes(c))return['🌦️','Garoa'];
-  if([61,63,65,66,67,80,81,82].includes(c))return['🌧️','Chuva'];
-  if([71,73,75,77,85,86].includes(c))return['🌨️','Neve'];
-  if([95,96,99].includes(c))return['⛈️','Temporal'];
-  return['🌡️','Tempo variável'];
-}
-function riskText(row){
-  const rain=Number(row.precipitation_probability_max||0),sum=Number(row.precipitation_sum||0),wind=Number(row.wind_speed_10m_max||0),code=Number(row.weather_code||0);
-  const alerts=[];
-  if([95,96,99].includes(code))alerts.push('risco de temporal');
-  if(rain>=70||sum>=10)alerts.push('chuva provável');
-  if(wind>=40)alerts.push('vento forte');
-  return alerts.length?`⚠️ Atenção: ${alerts.join(' • ')}`:'✅ Sem alerta meteorológico relevante';
-}
-async function geocode(place){
-  const key=`geo:${place}`;const hit=cache.get(key);if(hit&&Date.now()-hit.at<CACHE_MS)return hit.value;
-  const url=`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=5&language=pt&format=json&countryCode=BR`;
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Falha ao localizar destino');
-  const data=await r.json(),results=Array.isArray(data.results)?data.results:[];
-  const mt=results.find(x=>norm(x.admin1).includes('mato grosso'))||results[0];
-  if(!mt)throw Error('Destino não localizado');
-  const value={lat:mt.latitude,lon:mt.longitude,label:[mt.name,mt.admin1].filter(Boolean).join(' • ')};cache.set(key,{at:Date.now(),value});return value;
-}
-async function forecast(lat,lon){
-  const key=`wx:${lat.toFixed(3)}:${lon.toFixed(3)}`;const hit=cache.get(key);if(hit&&Date.now()-hit.at<CACHE_MS)return hit.value;
-  const daily='weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max';
-  const url=`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=${daily}&timezone=${encodeURIComponent(TZ)}&forecast_days=${MAX_FORECAST_DAYS}`;
-  const r=await fetch(url,{cache:'no-store'});if(!r.ok)throw Error('Falha ao consultar previsão');
-  const d=await r.json(),x=d.daily||{},rows=(x.time||[]).map((date,i)=>({date,weather_code:x.weather_code?.[i],temperature_2m_max:x.temperature_2m_max?.[i],temperature_2m_min:x.temperature_2m_min?.[i],precipitation_probability_max:x.precipitation_probability_max?.[i],precipitation_sum:x.precipitation_sum?.[i],wind_speed_10m_max:x.wind_speed_10m_max?.[i]}));cache.set(key,{at:Date.now(),value:rows});return rows;
-}
-function injectStyle(){if(q('#tripWeatherStyle'))return;const s=document.createElement('style');s.id='tripWeatherStyle';s.textContent=`
-#tripWeatherPanel{margin:18px 0;padding:18px;border:1px solid #d8e7e0;border-radius:18px;background:#f8fbf9;box-shadow:0 8px 28px rgba(5,54,40,.06)}
-#tripWeatherPanel .twHead{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}#tripWeatherPanel h2{margin:3px 0 4px;font-size:20px;color:#073c2e}#tripWeatherPanel p{margin:0;color:#667a72;font-size:12px;line-height:1.45}.twEyebrow{font-size:10px;font-weight:900;letter-spacing:.12em;color:#147553}.twRefresh{border:1px solid #b9d2c7;background:#fff;color:#0b5b43;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}.twGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.twCard{background:#fff;border:1px solid #dfeae5;border-radius:14px;padding:13px;min-height:132px}.twTitle{font-weight:900;color:#173b31;font-size:13px;margin-bottom:4px}.twMeta{font-size:11px;color:#73857e;margin-bottom:9px}.twMain{display:flex;align-items:center;gap:9px;margin:7px 0}.twIcon{font-size:28px}.twTemp{font-size:21px;font-weight:900;color:#0b5b43}.twDetail{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;font-size:11px;color:#4d645b}.twAlert{margin-top:9px;padding:7px 8px;border-radius:9px;background:#eef6f2;color:#245747;font-size:11px;font-weight:800}.twWait{font-size:12px;color:#5f746b;line-height:1.45}.twError{font-size:11px;color:#a1463d;margin-top:7px}.twFoot{margin-top:10px!important;font-size:10px!important;color:#7c8f87!important}@media(max-width:700px){#tripWeatherPanel{padding:14px}.twHead{align-items:center}.twGrid{grid-template-columns:1fr}.twRefresh{padding:7px 9px}}
-`;document.head.appendChild(s)}
-async function renderCard(t,el){
-  const date=tripDate(t),diff=daysBetween(today(),date),place=placeHint(t),name=t?.name||'Passeio';
-  if(!date){el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twWait">Data do passeio não informada.</div>`;return}
-  if(diff>MAX_FORECAST_DAYS-1){const open=Math.max(0,diff-(MAX_FORECAST_DAYS-1));el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📅 ${esc(brDate(date))} • ${esc(place||'Destino a confirmar')}</div><div class="twWait">🔭 A previsão detalhada ficará disponível automaticamente em cerca de <b>${open} dia(s)</b>, quando o passeio entrar na janela meteorológica de ${MAX_FORECAST_DAYS} dias.</div>`;return}
-  if(diff<0){el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twWait">Passeio já realizado.</div>`;return}
-  if(!place){el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twWait">Cadastre o destino/local do passeio para consultar o clima.</div>`;return}
-  el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📅 ${esc(brDate(date))}</div><div class="twWait">Consultando previsão...</div>`;
-  try{
-    const geo=await geocode(place),rows=await forecast(geo.lat,geo.lon),row=rows.find(x=>x.date===date);
-    if(!row)throw Error('Previsão ainda indisponível para essa data');
-    const [icon,label]=weatherLabel(row.weather_code),max=Math.round(Number(row.temperature_2m_max||0)),min=Math.round(Number(row.temperature_2m_min||0)),rain=Math.round(Number(row.precipitation_probability_max||0)),sum=Number(row.precipitation_sum||0).toFixed(1),wind=Math.round(Number(row.wind_speed_10m_max||0));
-    el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📍 ${esc(geo.label)} • 📅 ${esc(brDate(date))}</div><div class="twMain"><span class="twIcon">${icon}</span><div><div class="twTemp">${max}° / ${min}°</div><div class="twMeta">${esc(label)}</div></div></div><div class="twDetail"><span>🌧️ Chuva: <b>${rain}%</b></span><span>💧 Acumulado: <b>${sum} mm</b></span><span>💨 Vento: <b>${wind} km/h</b></span><span>🗓️ Faltam: <b>${diff} dia(s)</b></span></div><div class="twAlert">${esc(riskText(row))}</div>`;
-  }catch(e){el.innerHTML+=`<div class="twError">Não foi possível atualizar agora: ${esc(e.message||'erro de consulta')}.</div>`}
-}
-async function mount(force=false){
-  if(typeof window.state==='undefined'||state?.tab!=='dashboard')return;
-  const content=q('#content');if(!content)return;
-  let host=q('#tripWeatherPanel');
-  if(host&&!force)return;
-  if(host)host.remove();
-  injectStyle();
-  const trips=(state.trips||[]).filter(activeTrip).filter(t=>tripDate(t)>=today()).sort((a,b)=>tripDate(a).localeCompare(tripDate(b))).slice(0,4);
-  host=document.createElement('section');host.id='tripWeatherPanel';host.innerHTML=`<div class="twHead"><div><span class="twEyebrow">CLIMA DOS PASSEIOS</span><h2>Previsão dos próximos passeios</h2><p>Atualização automática para planejamento de trilha, transporte e segurança.</p></div><button class="twRefresh" type="button">↻ Atualizar</button></div><div class="twGrid"></div><p class="twFoot">Fonte: Open-Meteo. Previsões podem mudar; confirme novamente próximo à data e antes da saída.</p>`;
-  const grid=q('.twGrid',host);if(!trips.length)grid.innerHTML='<div class="twCard"><div class="twWait">Nenhum passeio futuro cadastrado.</div></div>';
-  trips.forEach(t=>{const el=document.createElement('article');el.className='twCard';grid.appendChild(el);renderCard(t,el)});
-  q('.twRefresh',host).onclick=()=>{cache.clear();mount(true)};
-  const exec=q('#v40Executive',content);exec?exec.after(host):content.prepend(host);
-}
-let timer=0;function schedule(){clearTimeout(timer);timer=setTimeout(()=>mount(false),90)}
+function weatherLabel(code){const c=Number(code);if(c===0)return['☀️','Céu limpo'];if([1,2].includes(c))return['🌤️','Poucas nuvens'];if(c===3)return['☁️','Nublado'];if([45,48].includes(c))return['🌫️','Neblina'];if([51,53,55,56,57].includes(c))return['🌦️','Garoa'];if([61,63,65,66,67,80,81,82].includes(c))return['🌧️','Chuva'];if([95,96,99].includes(c))return['⛈️','Temporal'];return['🌡️','Tempo variável']}
+function riskText(row){const rain=Number(row?.precipitation_probability_max||0),sum=Number(row?.precipitation_sum||0),wind=Number(row?.wind_speed_10m_max||0),code=Number(row?.weather_code||0),a=[];if([95,96,99].includes(code))a.push('risco de temporal');if(rain>=60||sum>=8)a.push('chuva provável');if(wind>=35)a.push('vento forte');return a.length?`⚠️ Atenção: ${a.join(' • ')}`:'✅ Sem alerta meteorológico relevante'}
+async function geocode(place){const key=`geo:${place}`,hit=cache.get(key);if(hit&&Date.now()-hit.at<CACHE_MS)return hit.value;const r=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=5&language=pt&format=json&countryCode=BR`,{cache:'no-store'});if(!r.ok)throw Error('Falha ao localizar destino');const data=await r.json(),results=Array.isArray(data.results)?data.results:[],mt=results.find(x=>norm(x.admin1).includes('mato grosso'))||results[0];if(!mt)throw Error('Destino não localizado');const value={lat:mt.latitude,lon:mt.longitude,label:[mt.name,mt.admin1].filter(Boolean).join(' • ')};cache.set(key,{at:Date.now(),value});return value}
+async function forecast(lat,lon){const key=`wx:${lat.toFixed(3)}:${lon.toFixed(3)}`,hit=cache.get(key);if(hit&&Date.now()-hit.at<CACHE_MS)return hit.value;const daily='weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max',r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=${daily}&timezone=${encodeURIComponent(TZ)}&forecast_days=${MAX_FORECAST_DAYS}`,{cache:'no-store'});if(!r.ok)throw Error('Falha ao consultar previsão');const d=await r.json(),x=d.daily||{},rows=(x.time||[]).map((date,i)=>({date,weather_code:x.weather_code?.[i],temperature_2m_max:x.temperature_2m_max?.[i],temperature_2m_min:x.temperature_2m_min?.[i],precipitation_probability_max:x.precipitation_probability_max?.[i],precipitation_sum:x.precipitation_sum?.[i],wind_speed_10m_max:x.wind_speed_10m_max?.[i]}));cache.set(key,{at:Date.now(),value:rows});return rows}
+function injectStyle(){if(q('#tripWeatherStyle'))return;const s=document.createElement('style');s.id='tripWeatherStyle';s.textContent=`#tripWeatherPanel{margin:18px 0;padding:18px;border:1px solid #d8e7e0;border-radius:18px;background:#f8fbf9;box-shadow:0 8px 28px rgba(5,54,40,.06)}#tripWeatherPanel .twHead{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;margin-bottom:14px}#tripWeatherPanel h2{margin:3px 0 4px;font-size:20px;color:#073c2e}#tripWeatherPanel p{margin:0;color:#667a72;font-size:12px;line-height:1.45}.twEyebrow{font-size:10px;font-weight:900;letter-spacing:.12em;color:#147553}.twRefresh{border:1px solid #b9d2c7;background:#fff;color:#0b5b43;border-radius:10px;padding:8px 10px;font-weight:800;cursor:pointer}.twGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.twCard{background:#fff;border:1px solid #dfeae5;border-radius:14px;padding:13px;min-height:132px}.twTitle{font-weight:900;color:#173b31;font-size:13px;margin-bottom:4px}.twMeta{font-size:11px;color:#73857e;margin-bottom:9px}.twMain{display:flex;align-items:center;gap:9px;margin:7px 0}.twIcon{font-size:28px}.twTemp{font-size:21px;font-weight:900;color:#0b5b43}.twDetail{display:grid;grid-template-columns:1fr 1fr;gap:4px 8px;font-size:11px;color:#4d645b}.twAlert{margin-top:9px;padding:7px 8px;border-radius:9px;background:#eef6f2;color:#245747;font-size:11px;font-weight:800}.twWait{font-size:12px;color:#5f746b;line-height:1.45}.twError{font-size:11px;color:#a1463d;margin-top:7px}.twFoot{margin-top:10px!important;font-size:10px!important;color:#7c8f87!important}@media(max-width:700px){#tripWeatherPanel{padding:14px}.twGrid{grid-template-columns:1fr}}`;document.head.appendChild(s)}
+async function loadTrips(){if(Array.isArray(window.state?.trips)&&window.state.trips.length)return window.state.trips;if(typeof window.db!=='undefined'){try{const snap=await db.collection('trips').get();return snap.docs.map(d=>({id:d.id,...d.data()}))}catch(e){console.warn('WEATHER_TRIPS',e)}}return[]}
+function syncedRow(t){const w=t?.weather;if(!w||String(w.date||'')!==tripDate(t))return null;return w}
+async function renderCard(t,el){const date=tripDate(t),diff=daysBetween(today(),date),place=placeHint(t),name=t?.name||'Passeio';if(!date){el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twWait">Data do passeio não informada.</div>`;return}if(diff>MAX_FORECAST_DAYS-1){const open=Math.max(0,diff-(MAX_FORECAST_DAYS-1));el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📅 ${esc(brDate(date))} • ${esc(place||'Destino a confirmar')}</div><div class="twWait">🔭 Previsão detalhada disponível em cerca de <b>${open} dia(s)</b>.</div>`;return}if(diff<0)return;if(!place){el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twWait">Cadastre o destino/local do passeio.</div>`;return}el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📅 ${esc(brDate(date))}</div><div class="twWait">Consultando previsão...</div>`;try{let row=syncedRow(t),geo={label:t?.weather?.place||place};if(!row){geo=await geocode(place);const rows=await forecast(geo.lat,geo.lon);row=rows.find(x=>x.date===date)}if(!row)throw Error('Previsão ainda indisponível');const [icon,label]=weatherLabel(row.weather_code),max=Math.round(Number(row.temperature_2m_max||0)),min=Math.round(Number(row.temperature_2m_min||0)),rain=Math.round(Number(row.precipitation_probability_max||0)),sum=Number(row.precipitation_sum||0).toFixed(1),wind=Math.round(Number(row.wind_speed_10m_max||0));el.innerHTML=`<div class="twTitle">${esc(name)}</div><div class="twMeta">📍 ${esc(geo.label)} • 📅 ${esc(brDate(date))}</div><div class="twMain"><span class="twIcon">${icon}</span><div><div class="twTemp">${max}° / ${min}°</div><div class="twMeta">${esc(label)}</div></div></div><div class="twDetail"><span>🌧️ Chuva: <b>${rain}%</b></span><span>💧 Acumulado: <b>${sum} mm</b></span><span>💨 Vento: <b>${wind} km/h</b></span><span>🗓️ Faltam: <b>${diff} dia(s)</b></span></div><div class="twAlert">${esc(riskText(row))}</div>`}catch(e){el.innerHTML+=`<div class="twError">Não foi possível atualizar agora: ${esc(e.message||'erro')}.</div>`}}
+let lastSignature='';
+async function mount(force=false){if(typeof window.state==='undefined'||state?.tab!=='dashboard')return;const content=q('#content');if(!content)return;const all=await loadTrips(),trips=all.filter(activeTrip).filter(t=>tripDate(t)>=today()).sort((a,b)=>tripDate(a).localeCompare(tripDate(b))).slice(0,4),signature=trips.map(t=>`${t.id||t.name}:${tripDate(t)}:${t.weather?.date||''}:${t.weather?.weather_code||''}`).join('|');let host=q('#tripWeatherPanel');if(host&&!force&&signature===lastSignature)return;if(host)host.remove();lastSignature=signature;injectStyle();host=document.createElement('section');host.id='tripWeatherPanel';host.innerHTML=`<div class="twHead"><div><span class="twEyebrow">CLIMA DOS PASSEIOS</span><h2>Previsão dos próximos passeios</h2><p>Sincronização diária automática e alerta no celular quando houver mudança relevante.</p></div><button class="twRefresh" type="button">↻ Atualizar</button></div><div class="twGrid"></div><p class="twFoot">Fonte: Open-Meteo. O monitor diário compara a previsão e alerta chuva, temporal ou vento forte.</p>`;const grid=q('.twGrid',host);if(!trips.length)grid.innerHTML='<div class="twCard"><div class="twWait">Nenhum passeio futuro cadastrado.</div></div>';trips.forEach(t=>{const el=document.createElement('article');el.className='twCard';grid.appendChild(el);renderCard(t,el)});q('.twRefresh',host).onclick=()=>{cache.clear();lastSignature='';mount(true)};const exec=q('#v40Executive',content);exec?exec.after(host):content.prepend(host)}
+let timer=0;function schedule(){clearTimeout(timer);timer=setTimeout(()=>mount(false),180)}
 const mo=new MutationObserver(schedule);mo.observe(document.body,{subtree:true,childList:true});
-window.addEventListener('load',()=>setTimeout(()=>mount(false),350));setTimeout(()=>mount(false),900);
+window.addEventListener('load',()=>setTimeout(()=>mount(true),600));setTimeout(()=>mount(true),1400);setTimeout(()=>mount(false),3500);
 })();
