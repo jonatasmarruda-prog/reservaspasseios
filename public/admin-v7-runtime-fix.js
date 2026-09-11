@@ -2,6 +2,7 @@
 (function(){
   const num=v=>Math.max(0,Number(v||0)||0);
   const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 
   function activeSeats(tripId){
     return (state.reservations||[])
@@ -47,19 +48,72 @@
     return num(expense?.amount)>0?num(expense.amount):unit;
   }
 
+  function revenueForTrip(trip){
+    const rows=(state.reservations||[]).filter(r=>r.trip_id===trip.id&&r.status!=='cancelled');
+    const total=rows.reduce((sum,r)=>{
+      if(num(r.sale_total)>0)return sum+num(r.sale_total);
+      const composed=num(r.paid_amount)+num(r.balance_due)-num(r.refunded_amount);
+      if(composed>0)return sum+composed;
+      return sum+(num(trip.default_price)*Math.max(1,num(r.seats)));
+    },0);
+    return total>0?total:num(trip.net_revenue||trip.gross_revenue);
+  }
+
   function refreshTripFinancialPreview(){
+    if(typeof state==='undefined')return;
     (state.trips||[]).forEach(trip=>{
       const seats=activeSeats(trip.id);
-      const rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id);
+      const actualRows=(state.expenses||[]).filter(e=>e.trip_id===trip.id);
       const planned=plannedCost(trip,seats);
-      const actual=rows.reduce((sum,e)=>sum+expenseAmount(e,seats),0);
-      const displayExpenses=rows.length?actual:planned;
-      const revenue=num(trip.net_revenue);
+      const actual=actualRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0);
+      const displayExpenses=actualRows.length?actual:planned;
+      const revenue=revenueForTrip(trip);
+      trip.net_revenue=revenue;
       trip.expenses=displayExpenses;
       trip.profit=revenue-displayExpenses;
-      trip.display_expenses_source=rows.length?'actual':'planned';
+      trip.display_expenses_source=actualRows.length?'actual':'planned';
       trip.display_planned_cost=planned;
     });
+  }
+
+  function patchDashboardMetrics(){
+    if(typeof state==='undefined')return;
+    const totalExpenses=(state.trips||[]).reduce((sum,t)=>sum+num(t.expenses),0);
+    const totalRevenue=(state.trips||[]).reduce((sum,t)=>sum+num(t.net_revenue),0);
+    const totalProfit=totalRevenue-totalExpenses;
+    document.querySelectorAll('.metric').forEach(card=>{
+      const label=norm(card.querySelector('span')?.textContent||'');
+      const strong=card.querySelector('strong');
+      const small=card.querySelector('small');
+      if(!strong)return;
+      if(label==='despesas'){
+        strong.textContent=money(totalExpenses);
+        if(small)small.textContent='custos previstos/realizados';
+      }
+      if(label==='resultado'){
+        strong.textContent=money(totalProfit);
+        if(small&&totalRevenue>0)small.textContent=`margem ${(totalProfit/totalRevenue*100).toFixed(1)}%`;
+      }
+    });
+  }
+
+  function applyFinancialPreview(){
+    refreshTripFinancialPreview();
+    requestAnimationFrame(()=>patchDashboardMetrics());
+  }
+
+  function installFinalRenderWrapper(){
+    const current=window.renderAdmin;
+    if(typeof current!=='function'||current.__tripCostPreviewFixed)return;
+    const wrapped=function(...args){
+      refreshTripFinancialPreview();
+      const out=current.apply(this,args);
+      requestAnimationFrame(()=>patchDashboardMetrics());
+      return out;
+    };
+    wrapped.__tripCostPreviewFixed=true;
+    window.renderAdmin=wrapped;
+    try{renderAdmin=wrapped}catch(_){ }
   }
 
   window.setNetworkUI=function(){
@@ -69,23 +123,20 @@
     const s=document.querySelector('#sync');
     if(s&&!online){s.textContent='☁ Offline • dados locais';s.classList.add('offline')}
   };
+
   window.updateNotificationBadge=function(){
     const count=(state.notifications||[]).filter(n=>!n.read).length;
     const b=document.querySelector('#notifyCount');if(b)b.textContent=count?String(count):'';
     const s=document.querySelector('#sideNotifyCount');if(s)s.textContent=count?`(${count})`:'';
   };
 
-  const baseRenderAdmin=window.renderAdmin;
-  if(typeof baseRenderAdmin==='function'&&!baseRenderAdmin.__tripCostPreviewFixed){
-    const wrapped=function(...args){
-      refreshTripFinancialPreview();
-      return baseRenderAdmin.apply(this,args);
-    };
-    wrapped.__tripCostPreviewFixed=true;
-    window.renderAdmin=wrapped;
-    try{renderAdmin=wrapped}catch(_){ }
-  }
-
+  installFinalRenderWrapper();
+  window.addEventListener('DOMContentLoaded',()=>{
+    installFinalRenderWrapper();
+    applyFinancialPreview();
+    setTimeout(()=>{installFinalRenderWrapper();applyFinancialPreview()},400);
+  });
+  document.addEventListener('click',()=>setTimeout(applyFinancialPreview,80),true);
   window.addEventListener('online',()=>{setNetworkUI();});
   window.addEventListener('offline',()=>{setNetworkUI();});
 })();
