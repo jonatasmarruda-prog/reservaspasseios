@@ -1,14 +1,14 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260911-stability2';
-const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stability2';
+const CACHE='trilheiros-shell-20260911-stability3';
+const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stability3';
 const APP_SHELL=[
   '/offline.html',
-  '/manifest.webmanifest?v=20260910-brand7',
-  '/app.css',
-  '/premium.css',
-  '/admin-v7.css',
-  '/admin-responsive-v8.css',
-  '/admin-master-v40.css'
+  '/manifest.webmanifest?v=20260911-stability3',
+  '/app.css?v=20260911-stability3',
+  '/premium.css?v=20260911-stability3',
+  '/admin-v7.css?v=20260911-stability3',
+  '/admin-responsive-v8.css?v=20260911-stability3',
+  '/admin-master-v40.css?v=20260911-stability3'
 ];
 
 self.addEventListener('install',event=>{
@@ -31,7 +31,7 @@ self.addEventListener('activate',event=>{
 async function networkFirst(request,offlineFallback=false){
   const cache=await caches.open(CACHE);
   try{
-    const response=await fetch(request);
+    const response=await fetch(request,{cache:'no-store'});
     if(response&&response.ok)cache.put(request,response.clone()).catch(()=>{});
     return response;
   }catch(err){
