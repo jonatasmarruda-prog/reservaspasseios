@@ -22,7 +22,7 @@
   function digits(v){return String(v||'').replace(/\D/g,'')}
   function slug(v){return String(v||'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
   function brDate(v){const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return s||'—';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
-  function appState(){try{return window.state||globalThis.state}catch(_){return null}}
+  function appState(){try{if(typeof state!=='undefined')return state;return window.state||globalThis.state||null}catch(_){return window.state||globalThis.state||null}}
 
   function installRoomEditor(){
     if(typeof window.structureModalV7!=='function'||window.structureModalV7.__roomEditorV2)return false;
@@ -63,7 +63,10 @@
 
     const enhanced=function(tripId){
       const t=(appState()?.trips||[]).find(x=>x.id===tripId);
-      if(!t||typeof window.modal!=='function')return;
+      if(!t||typeof window.modal!=='function'){
+        try{toast('Não foi possível abrir a configuração deste passeio. Atualize a página e tente novamente.','error')}catch(_){ }
+        return;
+      }
       const rooms=Array.isArray(t.rooms)?t.rooms:[];
       const vehicles=Array.isArray(t.vehicles)?t.vehicles:[];
       const vehicleText=vehicles.map(v=>`${v.name||''} | ${v.driver||''} | ${v.plate||''} | ${v.capacity||''}`).join('\n');
