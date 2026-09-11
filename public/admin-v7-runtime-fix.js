@@ -1,32 +1,38 @@
-/* Compatibilidade entre V6 e V7: estado de rede, notificações e resumo financeiro dos passeios. */
+/* Compatibilidade entre V6 e V7: rede, notificações, financeiro central e saúde do painel. */
 (function(){
   const num=v=>Math.max(0,Number(v||0)||0);
   const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
   const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
+  const BUILD='20260911-financecore1';
 
-  function activeSeats(tripId){
-    return (state.reservations||[])
-      .filter(r=>r.trip_id===tripId&&r.status!=='cancelled')
-      .reduce((sum,r)=>sum+num(r.seats),0);
+  function reservationsForTrip(tripId){
+    return (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled');
   }
 
-  function plannedCost(trip,seats){
+  function activeSeats(tripId){
+    return reservationsForTrip(tripId).reduce((sum,r)=>sum+num(r.seats),0);
+  }
+
+  function normalizedCostItems(trip){
     let items=Array.isArray(trip?.cost_items)?trip.cost_items.filter(x=>num(x?.amount)>0):[];
-    if(!items.length){
-      items=[
-        {mode:'fixed',amount:num(trip?.cost_bus_fixed)},
-        {mode:'fixed',amount:num(trip?.cost_guide_fixed)},
-        {mode:'fixed',amount:num(trip?.cost_other_fixed)},
-        {mode:'per_person',amount:num(trip?.cost_lodging_per_person)},
-        {mode:'per_person',amount:num(trip?.cost_activity_per_person)},
-        {mode:'per_person',amount:num(trip?.cost_food_per_person)},
-        {mode:'per_person',amount:num(trip?.cost_insurance_per_person)},
-        {mode:'per_person',amount:num(trip?.cost_other_per_person)}
-      ].filter(x=>x.amount>0);
-    }
+    if(items.length)return items.map(x=>({mode:x?.mode==='per_person'?'per_person':'fixed',amount:num(x?.amount),description:x?.description||x?.category||''}));
+    return [
+      {mode:'fixed',amount:num(trip?.cost_bus_fixed),description:'Transporte'},
+      {mode:'fixed',amount:num(trip?.cost_guide_fixed),description:'Guia'},
+      {mode:'fixed',amount:num(trip?.cost_other_fixed),description:'Outros'},
+      {mode:'per_person',amount:num(trip?.cost_lodging_per_person),description:'Hospedagem'},
+      {mode:'per_person',amount:num(trip?.cost_activity_per_person),description:'Atrativo'},
+      {mode:'per_person',amount:num(trip?.cost_food_per_person),description:'Alimentação'},
+      {mode:'per_person',amount:num(trip?.cost_insurance_per_person),description:'Seguro'},
+      {mode:'per_person',amount:num(trip?.cost_other_per_person),description:'Outros por pessoa'}
+    ].filter(x=>x.amount>0);
+  }
+
+  function plannedCostDetails(trip,seats){
+    const items=normalizedCostItems(trip);
     const fixed=items.filter(x=>x.mode!=='per_person').reduce((sum,x)=>sum+num(x.amount),0);
     const perPerson=items.filter(x=>x.mode==='per_person').reduce((sum,x)=>sum+num(x.amount),0);
-    return fixed+(perPerson*seats);
+    return{items,fixed,perPerson,total:fixed+(perPerson*num(seats))};
   }
 
   function expensePaid(expense){
@@ -42,64 +48,147 @@
   function expenseAmount(expense,seats){
     const unit=num(expense?.unit_amount||expense?.amount);
     if(expenseMode(expense)==='per_person'){
-      const qty=expensePaid(expense)&&num(expense?.quantity_basis)>0?num(expense.quantity_basis):seats;
+      const qty=expensePaid(expense)&&num(expense?.quantity_basis)>0?num(expense.quantity_basis):num(seats);
       return unit*qty;
     }
     return num(expense?.amount)>0?num(expense.amount):unit;
   }
 
   function revenueForTrip(trip){
-    const rows=(state.reservations||[]).filter(r=>r.trip_id===trip.id&&r.status!=='cancelled');
-    const total=rows.reduce((sum,r)=>{
+    const rows=reservationsForTrip(trip.id);
+    const fromReservations=rows.reduce((sum,r)=>{
       if(num(r.sale_total)>0)return sum+num(r.sale_total);
       const composed=num(r.paid_amount)+num(r.balance_due)-num(r.refunded_amount);
       if(composed>0)return sum+composed;
       return sum+(num(trip.default_price)*Math.max(1,num(r.seats)));
     },0);
-    return total>0?total:num(trip.net_revenue||trip.gross_revenue);
+    return fromReservations>0?fromReservations:num(trip.net_revenue||trip.gross_revenue);
+  }
+
+  function tripFinance(trip){
+    const seats=activeSeats(trip.id);
+    const planned=plannedCostDetails(trip,seats);
+    const rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id);
+    const paidRows=rows.filter(expensePaid),openRows=rows.filter(e=>!expensePaid(e));
+    const paid=paidRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0);
+    const open=openRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0);
+    const actual=paid+open;
+    const hasActual=rows.length>0;
+    const expense=hasActual?actual:planned.total;
+    const revenue=revenueForTrip(trip);
+    return{tripId:trip.id,seats,planned,paid,open,actual,hasActual,expense,revenue,result:revenue-expense,source:hasActual?'actual':'planned'};
   }
 
   function refreshTripFinancialPreview(){
-    if(typeof state==='undefined')return;
-    (state.trips||[]).forEach(trip=>{
-      const seats=activeSeats(trip.id);
-      const actualRows=(state.expenses||[]).filter(e=>e.trip_id===trip.id);
-      const planned=plannedCost(trip,seats);
-      const actual=actualRows.reduce((sum,e)=>sum+expenseAmount(e,seats),0);
-      const displayExpenses=actualRows.length?actual:planned;
-      const revenue=revenueForTrip(trip);
-      trip.net_revenue=revenue;
-      trip.expenses=displayExpenses;
-      trip.profit=revenue-displayExpenses;
-      trip.display_expenses_source=actualRows.length?'actual':'planned';
-      trip.display_planned_cost=planned;
+    if(typeof state==='undefined')return[];
+    return (state.trips||[]).map(trip=>{
+      const f=tripFinance(trip);
+      trip.net_revenue=f.revenue;
+      trip.expenses=f.expense;
+      trip.profit=f.result;
+      trip.estimated_cost=f.planned.total;
+      trip.display_expenses_source=f.source;
+      trip.display_planned_cost=f.planned.total;
+      trip.display_paid_expenses=f.paid;
+      trip.display_open_expenses=f.open;
+      return f;
     });
+  }
+
+  function financeTotals(){
+    const trips=refreshTripFinancialPreview();
+    const revenue=trips.reduce((s,x)=>s+x.revenue,0);
+    const expenses=trips.reduce((s,x)=>s+x.expense,0);
+    const result=revenue-expenses;
+    return{trips,revenue,expenses,result,margin:revenue?result/revenue*100:0};
   }
 
   function patchDashboardMetrics(){
     if(typeof state==='undefined')return;
-    const totalExpenses=(state.trips||[]).reduce((sum,t)=>sum+num(t.expenses),0);
-    const totalRevenue=(state.trips||[]).reduce((sum,t)=>sum+num(t.net_revenue),0);
-    const totalProfit=totalRevenue-totalExpenses;
+    const total=financeTotals();
     document.querySelectorAll('.metric').forEach(card=>{
       const label=norm(card.querySelector('span')?.textContent||'');
       const strong=card.querySelector('strong');
       const small=card.querySelector('small');
       if(!strong)return;
       if(label==='despesas'){
-        strong.textContent=money(totalExpenses);
+        strong.textContent=money(total.expenses);
         if(small)small.textContent='custos previstos/realizados';
       }
       if(label==='resultado'){
-        strong.textContent=money(totalProfit);
-        if(small&&totalRevenue>0)small.textContent=`margem ${(totalProfit/totalRevenue*100).toFixed(1)}%`;
+        strong.textContent=money(total.result);
+        if(small)small.textContent=`margem ${total.margin.toFixed(1)}%`;
       }
     });
   }
 
+  function patchV42TripResults(){
+    const byName=new Map((state.trips||[]).map(t=>[norm(t.name),tripFinance(t)]));
+    document.querySelectorAll('.v42Perf').forEach(card=>{
+      const name=norm(card.querySelector('.v42PerfHead strong')?.textContent||'');
+      const f=byName.get(name);if(!f)return;
+      const spans=[...card.querySelectorAll('.v42PerfNums span')];
+      const expenseSpan=spans.find(x=>/^despesas|^previsto|^custos/.test(norm(x.textContent)));
+      const resultEl=card.querySelector('.v42PerfNums b');
+      if(expenseSpan)expenseSpan.textContent=`${f.source==='planned'?'Previsto':'Despesas'} ${money(f.expense)}`;
+      if(resultEl)resultEl.textContent=`Resultado ${money(f.result)}`;
+    });
+  }
+
+  function financeSelfTest(){
+    const planned=(items,seats)=>{
+      const fixed=items.filter(x=>x.mode!=='per_person').reduce((s,x)=>s+num(x.amount),0);
+      const pp=items.filter(x=>x.mode==='per_person').reduce((s,x)=>s+num(x.amount),0);
+      return fixed+pp*seats;
+    };
+    const cases=[
+      planned([{mode:'per_person',amount:50}],13)===650,
+      planned([{mode:'fixed',amount:1000},{mode:'per_person',amount:50}],10)===1500,
+      planned([{mode:'fixed',amount:300}],0)===300,
+      expenseAmount({cost_mode:'per_person',amount:40,status:'pending'},5)===200,
+      expenseAmount({cost_mode:'fixed',amount:400,status:'paid'},5)===400
+    ];
+    return{ok:cases.every(Boolean),passed:cases.filter(Boolean).length,total:cases.length};
+  }
+
+  function systemHealth(){
+    const self=financeSelfTest();
+    const orphanExpenses=(state.expenses||[]).filter(e=>e.trip_id&&!(state.trips||[]).some(t=>t.id===e.trip_id)).length;
+    const duplicateKeys=new Map();
+    (state.trips||[]).forEach(t=>{const k=`${norm(t.name)}|${String(t.trip_date||'').slice(0,10)}`;duplicateKeys.set(k,(duplicateKeys.get(k)||0)+1)});
+    const duplicateTrips=[...duplicateKeys.values()].filter(v=>v>1).length;
+    return{
+      finance:self.ok,
+      firestore:typeof db!=='undefined',
+      auth:typeof auth!=='undefined'&&!!auth.currentUser,
+      online:navigator.onLine,
+      push:typeof Notification==='undefined'?'unsupported':Notification.permission,
+      orphanExpenses,duplicateTrips
+    };
+  }
+
+  function healthDot(ok){return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ok?'#168a62':'#d19a23'};margin-right:6px"></span>`}
+
+  function injectHealthPanel(){
+    if(state?.tab!=='dashboard')return;
+    const content=document.querySelector('#content');if(!content)return;
+    let box=document.querySelector('#systemHealthCard');
+    if(!box){
+      box=document.createElement('section');box.id='systemHealthCard';box.className='panel';box.style.marginTop='16px';
+      content.appendChild(box);
+    }
+    const h=systemHealth();
+    const sync=state.sync instanceof Date?state.sync.toLocaleTimeString('pt-BR'):'aguardando';
+    box.innerHTML=`<div class="panelHead"><div><span class="eyebrow">SAÚDE DO SISTEMA</span><h2>Verificação automática</h2><p>Checagens locais do financeiro, Firebase, sincronização e integridade dos passeios.</p></div><small>Build ${BUILD}</small></div><div class="dayStats"><div><span>${healthDot(h.finance)}Financeiro</span><strong>${h.finance?'OK':'ATENÇÃO'}</strong></div><div><span>${healthDot(h.firestore&&h.auth)}Firebase</span><strong>${h.firestore&&h.auth?'OK':'VERIFICAR'}</strong></div><div><span>${healthDot(h.online)}Conexão</span><strong>${h.online?'Online':'Offline'}</strong></div><div><span>${healthDot(h.orphanExpenses===0&&h.duplicateTrips===0)}Integridade</span><strong>${h.orphanExpenses===0&&h.duplicateTrips===0?'OK':'REVISAR'}</strong></div></div><p style="margin:12px 0 0;color:#667a72;font-size:12px">Sincronização: ${sync} • Push: ${h.push==='granted'?'permitido':h.push==='denied'?'bloqueado':h.push==='default'?'aguardando permissão':h.push} • Despesas sem passeio: ${h.orphanExpenses} • Possíveis duplicidades: ${h.duplicateTrips}</p>`;
+  }
+
   function applyFinancialPreview(){
     refreshTripFinancialPreview();
-    requestAnimationFrame(()=>patchDashboardMetrics());
+    requestAnimationFrame(()=>{
+      patchDashboardMetrics();
+      patchV42TripResults();
+      injectHealthPanel();
+    });
   }
 
   function installFinalRenderWrapper(){
@@ -108,13 +197,15 @@
     const wrapped=function(...args){
       refreshTripFinancialPreview();
       const out=current.apply(this,args);
-      requestAnimationFrame(()=>patchDashboardMetrics());
+      requestAnimationFrame(()=>{patchDashboardMetrics();patchV42TripResults();injectHealthPanel()});
       return out;
     };
     wrapped.__tripCostPreviewFixed=true;
     window.renderAdmin=wrapped;
     try{renderAdmin=wrapped}catch(_){ }
   }
+
+  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,revenueForTrip,tripFinance,totals:financeTotals,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview};
 
   window.setNetworkUI=function(){
     const online=navigator.onLine;
@@ -135,8 +226,9 @@
     installFinalRenderWrapper();
     applyFinancialPreview();
     setTimeout(()=>{installFinalRenderWrapper();applyFinancialPreview()},400);
+    setTimeout(()=>{installFinalRenderWrapper();applyFinancialPreview()},1400);
   });
-  document.addEventListener('click',()=>setTimeout(applyFinancialPreview,80),true);
-  window.addEventListener('online',()=>{setNetworkUI();});
-  window.addEventListener('offline',()=>{setNetworkUI();});
+  document.addEventListener('click',()=>setTimeout(applyFinancialPreview,100),true);
+  window.addEventListener('online',()=>{setNetworkUI();applyFinancialPreview()});
+  window.addEventListener('offline',()=>{setNetworkUI();applyFinancialPreview()});
 })();
