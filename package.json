@@ -1,0 +1,10 @@
+{
+  "name": "trilheiros-reservas",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=20"},
+  "dependencies": {
+    "jose": "^6.1.0",
+    "web-push": "^3.6.7"
+  }
+}
