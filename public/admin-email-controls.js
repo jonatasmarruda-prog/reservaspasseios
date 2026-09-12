@@ -1,4 +1,4 @@
-/* Trilheiros Gestão — controles de e-mail na tela de Vendas */
+/* Trilheiros Gestão — controles de e-mail + disparo imediato pós-pagamento */
 (function(){
 'use strict';
 if(!location.pathname.startsWith('/admin'))return;
@@ -6,11 +6,11 @@ const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>[...r.querySelecto
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
 const n=v=>Math.max(0,Number(v||0)||0);
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
-const IMMEDIATE_EMAIL_URL='https://trilheiros-reservas.vercel.app/api/welcome-email';
+const IMMEDIATE_PAYMENT_URL='https://trilheiros-automacoes.netlify.app/.netlify/functions/payment-confirmed';
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
 function canManageEmail(){return['owner','admin','finance'].includes(String(state?.role||''))}
 function fullyPaid(s){
-  const total=n(s?.sale_total||s?.total_amount||s?.amount),paid=n(s?.paid_amount||s?.amount_paid||s?.received_amount),rawBal=Number(s?.balance_due),bal=Number.isFinite(rawBal)?Math.max(0,rawBal):Math.max(0,total-paid),status=String(s?.payment_status||s?.status||'').toLowerCase(),explicit=['paid','confirmed','approved','completed'].includes(status)||s?.payment_confirmed===true;
+  const total=n(s?.sale_total||s?.total_amount||s?.amount),paid=n(s?.paid_amount||s?.amount_paid||s?.received_amount),rawBal=Number(s?.balance_due),bal=Number.isFinite(rawBal)?Math.max(0,rawBal):Math.max(0,total-paid),status=String(s?.payment_status||s?.status||'').toLowerCase(),explicit=['paid','confirmed','approved','completed','pago','quitado'].includes(status)||s?.payment_confirmed===true;
   return s?.sale_status!=='cancelled'&&bal<=0.009&&(explicit||(total>0&&paid>=total-0.009)||!!s?.payment_completed_at);
 }
 function emailOf(s){return String(s?.customer_email||s?.email||'').trim()}
@@ -33,12 +33,16 @@ function injectStyle(){
 injectStyle();
 
 async function saleById(id){const snap=await db.collection('sales').doc(id).get();return snap.exists?{id:snap.id,...snap.data()}:null}
+async function tripForSale(s){
+  const local=(state?.trips||[]).find(t=>String(t.id)===String(s?.trip_id));if(local)return local;
+  if(!s?.trip_id)return null;
+  try{const snap=await db.collection('trips').doc(String(s.trip_id)).get();return snap.exists?{id:snap.id,...snap.data()}:null}catch(_){return null}
+}
 async function queuePaidWelcome(id,{silent=false}={}){
   if(!id||typeof db==='undefined')return false;
   const ref=db.collection('sales').doc(id),snap=await ref.get();if(!snap.exists)return false;
   const s={id:snap.id,...snap.data()};
-  if(!fullyPaid(s))return false;
-  if(s.welcome_email_sent_at||s.welcome_email_status==='sent')return false;
+  if(!fullyPaid(s)||s.welcome_email_sent_at||s.welcome_email_status==='sent')return false;
   const stamp=firebase.firestore.FieldValue.serverTimestamp(),patch={};
   if(!s.payment_completed_at)patch.payment_completed_at=stamp;
   if(validEmail(emailOf(s))){
@@ -52,27 +56,71 @@ async function queuePaidWelcome(id,{silent=false}={}){
 }
 window.queuePaidWelcomeEmail=queuePaidWelcome;
 
-async function sendPaidWelcomeImmediate(id,{silent=false,retries=2}={}){
+async function buildImmediatePayload(id){
+  const s=await saleById(id);if(!s)throw Error('Venda não encontrada.');
+  const t=await tripForSale(s);
+  let subscription=null;
+  try{subscription=await window.getTrilheirosWebPushSubscription?.()}catch(_){subscription=null}
+  const sale={
+    customer_name:s.customer_name||s.responsible_name||'',
+    responsible_name:s.responsible_name||s.customer_name||'',
+    customer_email:s.customer_email||s.email||'',
+    email:s.email||s.customer_email||'',
+    participants:Array.isArray(s.participants)?s.participants:[],
+    trip_name:s.trip_name||t?.name||'',
+    destination:s.destination||t?.destination||'',
+    trip_date:s.trip_date||t?.trip_date||'',
+    protocol:s.protocol||'',
+    sale_total:n(s.sale_total||s.total_amount||s.amount),
+    paid_amount:n(s.paid_amount||s.amount_paid||s.received_amount),
+    balance_due:Math.max(0,Number.isFinite(Number(s.balance_due))?Number(s.balance_due):n(s.sale_total)-n(s.paid_amount)),
+    payment_status:s.payment_status||s.status||'',
+    payment_method:s.payment_method||'',
+    payment_confirmed:s.payment_confirmed===true,
+    sale_status:s.sale_status||''
+  };
+  return{s,body:{saleId:id,sale,subscription}};
+}
+
+async function markImmediateResult(id,data,s){
+  const ref=db.collection('sales').doc(id),stamp=firebase.firestore.FieldValue.serverTimestamp(),del=firebase.firestore.FieldValue.delete(),patch={immediate_dispatch_at:stamp};
+  if(data?.email?.sent){
+    patch.welcome_email_status='sent';patch.welcome_email_sent_at=stamp;patch.welcome_email_to=emailOf(s);patch.welcome_email_version=7;patch.welcome_email_error=del;
+    if(data.email.id)patch.welcome_email_resend_id=data.email.id;
+  }else if(fullyPaid(s)&&validEmail(emailOf(s))&&data?.email?.skipped!==true){patch.welcome_email_status='pending'}
+  if(data?.push?.sent){patch.immediate_push_status='sent';patch.immediate_push_sent_at=stamp}
+  else if(data?.push?.expired){patch.immediate_push_status='expired'}
+  await ref.set(patch,{merge:true}).catch(()=>{});
+}
+
+async function dispatchPaymentImmediate(id,{silent=false,retries=2}={}){
   if(!id)throw Error('Venda não informada.');
-  const user=window.firebase?.auth?.().currentUser;if(!user||user.isAnonymous)throw Error('Faça login novamente para enviar o e-mail.');
+  const user=window.firebase?.auth?.().currentUser;if(!user||user.isAnonymous)throw Error('Faça login novamente para concluir o disparo.');
   let lastError=null;
   for(let attempt=0;attempt<=retries;attempt++){
     try{
-      const token=await user.getIdToken(attempt>0);
-      const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);
+      const {s,body}=await buildImmediatePayload(id),token=await user.getIdToken(attempt>0),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),14000);
       let response;
-      try{response=await fetch(IMMEDIATE_EMAIL_URL,{method:'POST',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({saleId:id})})}finally{clearTimeout(timer)}
+      try{response=await fetch(IMMEDIATE_PAYMENT_URL,{method:'POST',cache:'no-store',signal:controller.signal,headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify(body)})}finally{clearTimeout(timer)}
       const data=await response.json().catch(()=>({}));
-      if(!response.ok)throw Error(data.error||`Falha no envio (${response.status}).`);
-      if(data.sent||data.alreadySent){if(!silent)notify(data.alreadySent?'E-mail de boas-vindas já estava enviado.':'✅ E-mail de boas-vindas enviado agora.','success');return data}
-      if(data.processing){await new Promise(r=>setTimeout(r,900));continue}
+      if(!response.ok)throw Error(data.error||`Falha no disparo imediato (${response.status}).`);
+      await markImmediateResult(id,data,s);
+      if(!silent){
+        if(data?.email?.sent&&data?.push?.sent)notify('✅ Pagamento confirmado: e-mail e notificação enviados agora.','success');
+        else if(data?.email?.sent)notify('✅ E-mail de boas-vindas enviado imediatamente.','success');
+        else if(data?.push?.sent)notify('✅ Notificação enviada imediatamente.','success');
+      }
       return data;
     }catch(e){lastError=e;if(attempt<retries)await new Promise(r=>setTimeout(r,700*(attempt+1)))}
   }
-  if(!silent)notify(`Pagamento confirmado, mas o e-mail imediato falhou: ${lastError?.message||'erro de envio'}. O backup automático continuará tentando.`,'error');
-  throw lastError||Error('Falha no envio imediato.');
+  try{
+    const s=await saleById(id);if(s&&fullyPaid(s)&&validEmail(emailOf(s)))await db.collection('sales').doc(id).set({welcome_email_status:'pending',welcome_email_error:String(lastError?.message||'Falha no envio imediato').slice(0,500),immediate_dispatch_failed_at:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  }catch(_){ }
+  if(!silent)notify(`Pagamento confirmado, mas o disparo imediato falhou: ${lastError?.message||'erro de envio'}. O backup automático continuará tentando.`,'error');
+  throw lastError||Error('Falha no disparo imediato.');
 }
-window.sendPaidWelcomeImmediate=sendPaidWelcomeImmediate;
+window.dispatchPaymentImmediate=dispatchPaymentImmediate;
+window.sendPaidWelcomeImmediate=dispatchPaymentImmediate;
 
 window.requestWelcomeEmailV37=async function(id){
   try{
@@ -82,12 +130,10 @@ window.requestWelcomeEmailV37=async function(id){
     const email=emailOf(s);if(!validEmail(email))throw Error('Esta venda não possui um e-mail válido.');
     if((s.welcome_email_sent_at||s.welcome_email_status==='sent')&&!confirm(`Reenviar o e-mail de boas-vindas para ${email}?`))return;
     const stamp=firebase.firestore.FieldValue.serverTimestamp(),del=firebase.firestore.FieldValue.delete();
-    const patch={welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del};
-    if(!s.payment_completed_at)patch.payment_completed_at=stamp;
-    await db.collection('sales').doc(id).update(patch);
-    await sendPaidWelcomeImmediate(id);
+    await db.collection('sales').doc(id).update({welcome_email_status:'pending',welcome_email_resend_requested_at:stamp,welcome_email_requested_at:stamp,welcome_email_error:del,welcome_email_sent_at:del,welcome_email_resend_id:del,payment_completed_at:s.payment_completed_at||stamp});
+    await dispatchPaymentImmediate(id);
     if(typeof window.renderSalesPageV37==='function')window.renderSalesPageV37();
-  }catch(e){if(!String(e?.message||'').includes('Falha no envio'))notify(e.message||'Não foi possível solicitar o e-mail.','error')}
+  }catch(e){if(!String(e?.message||'').includes('disparo imediato'))notify(e.message||'Não foi possível solicitar o e-mail.','error')}
 };
 
 async function enhanceSalesEmail(){
@@ -113,35 +159,28 @@ function watchPaymentCompletion(id){
     if(stopped||!snap.exists)return;const s=snap.data()||{};
     if(!fullyPaid(s))return;
     stopped=true;unsub();
-    try{await queuePaidWelcome(id,{silent:true});await sendPaidWelcomeImmediate(id,{silent:true})}catch(e){console.warn('EMAIL_PAYMENT_IMMEDIATE',e)}
+    try{await queuePaidWelcome(id,{silent:true});await dispatchPaymentImmediate(id,{silent:true})}catch(e){console.warn('EMAIL_PAYMENT_IMMEDIATE',e)}
   },()=>{});
   setTimeout(()=>{if(!stopped){stopped=true;unsub()}},10*60*1000);
 }
 
-/* Pendências V35: confirmou e quitou, o envio ao Resend acontece na mesma ação. */
+/* Pendências: qualquer confirmação dispara notificação; quitação também dispara e-mail no mesmo clique. */
 const originalConfirm=window.confirmSyncedPaymentV35;
 if(typeof originalConfirm==='function'&&!originalConfirm.__welcomeQueue){
   const wrappedConfirm=async function(tripId,id,saleId,...args){
-    const sid=saleId||id;
-    const result=await originalConfirm.call(this,tripId,id,saleId,...args);
+    const sid=saleId||id,result=await originalConfirm.call(this,tripId,id,saleId,...args);
     try{
       const sale=await saleById(sid);
-      if(sale&&fullyPaid(sale)&&validEmail(emailOf(sale))){await queuePaidWelcome(sid,{silent:true});await sendPaidWelcomeImmediate(sid)}
-    }catch(e){console.warn('WELCOME_AFTER_PENDING_CONFIRM',e)}
+      if(sale){if(fullyPaid(sale)&&validEmail(emailOf(sale)))await queuePaidWelcome(sid,{silent:true});await dispatchPaymentImmediate(sid)}
+    }catch(e){console.warn('PAYMENT_IMMEDIATE_AFTER_CONFIRM',e)}
     return result;
   };
-  wrappedConfirm.__welcomeQueue=true;
-  window.confirmSyncedPaymentV35=wrappedConfirm;
-  try{globalThis.confirmSyncedPaymentV35=wrappedConfirm}catch(_){ }
+  wrappedConfirm.__welcomeQueue=true;window.confirmSyncedPaymentV35=wrappedConfirm;try{globalThis.confirmSyncedPaymentV35=wrappedConfirm}catch(_){ }
 }
 
 const originalPay=window.openPaymentV22;
-if(typeof originalPay==='function'&&!originalPay.__emailWatch){
-  const wrapped=function(id,...args){watchPaymentCompletion(id);return originalPay.call(this,id,...args)};wrapped.__emailWatch=true;window.openPaymentV22=wrapped;
-}
+if(typeof originalPay==='function'&&!originalPay.__emailWatch){const wrapped=function(id,...args){watchPaymentCompletion(id);return originalPay.call(this,id,...args)};wrapped.__emailWatch=true;window.openPaymentV22=wrapped}
 const originalRender=window.renderSalesPageV37;
-if(typeof originalRender==='function'&&!originalRender.__emailStatus){
-  const wrapped=async function(...args){const out=await originalRender.apply(this,args);await enhanceSalesEmail();return out};wrapped.__emailStatus=true;window.renderSalesPageV37=wrapped;window.renderSalesPageV21=wrapped;try{renderSalesPageV21=wrapped}catch(_){ }
-}
+if(typeof originalRender==='function'&&!originalRender.__emailStatus){const wrapped=async function(...args){const out=await originalRender.apply(this,args);await enhanceSalesEmail();return out};wrapped.__emailStatus=true;window.renderSalesPageV37=wrapped;window.renderSalesPageV21=wrapped;try{renderSalesPageV21=wrapped}catch(_){ }}
 setTimeout(enhanceSalesEmail,450);
 })();
