@@ -4,10 +4,11 @@
   const FCM_VAPID='BHkqY6PmyREIcUGPdsfmdDDCf5Zsjb7qjrjRU3HwOz0M5RPFxqIW4Onyr0bC49PpQW2iPeoFz-vge1v5voVHiGE';
   const REGISTER_URL='https://southamerica-east1-trilheiros-reservas.cloudfunctions.net/registerPushDevice';
   const TOKEN_KEY='trilheiros_fcm_token_v1';
-  const WEB_PUSH_PUBLIC='BAIvFGE4hYwcwmthwWsDDipGdqM4AItZq_4uXj5cehAsgfRJkMVM3dgV7Ftv0n_wO5BAV9VlD3JqHiTTWd7snFA';
+  const WEB_PUSH_PUBLIC='BKO4HsShdL-gS2uZdoahQMU75NKAsIlBBJ7Z6JJ7J5ZjI-KcRV9WNznDDII4im1ILIKRNXEo6mBrttsGyffwCF4';
+  const WEB_PUSH_VERSION='v2';
   const WEB_PUSH_SW='/webpush-sw.js';
   const WEB_PUSH_SCOPE='/push-native/';
-  const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260912-push-immediate1';
+  const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260912-push-immediate2';
   let running=false,lastAttempt=0,nativeRunning=false;
 
   function b64ToUint8(v){
@@ -44,9 +45,12 @@
       const reg=await navigator.serviceWorker.register(WEB_PUSH_SW,{scope:WEB_PUSH_SCOPE,updateViaCache:'none'});
       await reg.update().catch(()=>{});
       let sub=await reg.pushManager.getSubscription();
+      const migrated=localStorage.getItem('trilheiros_webpush_key_version')===WEB_PUSH_VERSION;
+      if(sub&&!migrated){try{await sub.unsubscribe()}catch(_){ }sub=null;localStorage.removeItem('trilheiros_webpush_subscription_v1')}
       if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToUint8(WEB_PUSH_PUBLIC)});
       const json=sub.toJSON();
-      localStorage.setItem('trilheiros_webpush_subscription_v1',JSON.stringify(json));
+      localStorage.setItem('trilheiros_webpush_subscription_v2',JSON.stringify(json));
+      localStorage.setItem('trilheiros_webpush_key_version',WEB_PUSH_VERSION);
       localStorage.setItem('trilheiros_webpush_registered_at',new Date().toISOString());
       window.__trilheirosWebPushReady=true;
       return json;
@@ -59,7 +63,7 @@
 
   window.getTrilheirosWebPushSubscription=async function(){
     const live=await registerNativePush(false);if(live)return live;
-    try{return JSON.parse(localStorage.getItem('trilheiros_webpush_subscription_v1')||'null')}catch(_){return null}
+    try{return JSON.parse(localStorage.getItem('trilheiros_webpush_subscription_v2')||'null')}catch(_){return null}
   };
   window.registerTrilheirosNativePush=registerNativePush;
 
@@ -95,7 +99,7 @@
   }
 
   window.registerTrilheirosPush=registerPush;
-  function schedule(){setTimeout(()=>registerPush(false),700);setTimeout(()=>registerPush(true),3500);setTimeout(()=>registerPush(true),12000)}
+  function schedule(){setTimeout(()=>registerPush(false),700);setTimeout(()=>registerPush(true),3500);setTimeout(()=>registerPush(true),12000);setTimeout(()=>registerNativePush(true),1600)}
   window.addEventListener('load',schedule,{once:true});
   window.addEventListener('focus',()=>registerPush(false));
   window.addEventListener('online',()=>registerPush(true));
