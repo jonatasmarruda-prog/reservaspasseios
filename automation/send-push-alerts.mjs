@@ -16,7 +16,6 @@ const hash=v=>createHash('sha256').update(String(v||'')).digest('hex');
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 const stampMs=v=>{try{if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(v.seconds)return Number(v.seconds)*1000;const d=new Date(v);return Number.isNaN(d.getTime())?0:d.getTime()}catch{return 0}};
 const recent=v=>{const ms=stampMs(v);return ms>0&&now-ms<=LOOKBACK_MS};
-const payLabel=v=>{const s=String(v||'').toLowerCase();if(s.includes('parcel')||s.includes('install'))return'PIX parcelado';if(s.includes('card')||s.includes('cart'))return'Cartão';if(s.includes('pix'))return'PIX';return String(v||'Pagamento')};
 const todayStr=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
 const dayMs=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||'').slice(0,10))?Date.parse(`${String(s).slice(0,10)}T12:00:00-04:00`):0;
 const daysUntil=date=>{const a=dayMs(todayStr),b=dayMs(date);return a&&b?Math.round((b-a)/86400000):null};
@@ -58,8 +57,12 @@ async function sendPush({key,title,body,url,type='system'}){
   if(!devices.length){await ref.set({status:'no_devices',updated_at:FV.serverTimestamp()},{merge:true});return{skipped:true,noDevices:true}}
   const message={
     tokens:devices.map(x=>x.token),
-    data:{title,body,url,tag:key,type,timestamp:String(Date.now())},
-    webpush:{headers:{Urgency:'high'},notification:{title,body,icon:'https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png',tag:key,renotify:true,requireInteraction:false},fcmOptions:{link:url}}
+    data:{title,body,url,tag:key,type,timestamp:String(Date.now()),renotify:'true'},
+    webpush:{
+      headers:{Urgency:'high',TTL:'86400'},
+      notification:{title,body,icon:'https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png',tag:key,renotify:true,requireInteraction:false},
+      fcmOptions:{link:url}
+    }
   };
   const result=await messaging.sendEachForMulticast(message);
   const invalid=[];
@@ -110,17 +113,17 @@ for(const doc of salesSnap.docs){
   checked++;
 
   if(!cancelled&&isPortal&&['pending','partial',''].includes(status)&&balance>0.009&&paid<=0.009){
-    const r=await sendPush({key:`pending:${s.id}`,title:`💰 Novo pagamento — ${name}`,body:`${trip} • ${payLabel(s.payment_method)} • ${money(total||balance)} • aguardando conferência`,url:`${BASE_URL}/admin?tab=pending`,type:'pending_payment'});
+    const r=await sendPush({key:`pending:${s.id}`,title:'💰 Novo pagamento',body:String(name),url:`${BASE_URL}/admin?tab=pending`,type:'pending_payment'});
     if(!r?.skipped)sent++;
   }
   if(!cancelled&&status==='partial'&&paid>0&&balance>0.009){
     const anchor=Math.round(paid*100);
-    const r=await sendPush({key:`partial:${s.id}:${anchor}`,title:`💳 Pagamento parcial — ${name}`,body:`${trip} • ${payLabel(s.payment_method)} • recebido ${money(paid)} • falta ${money(balance)}`,url:`${BASE_URL}/admin?tab=pending`,type:'partial_payment'});
+    const r=await sendPush({key:`partial:${s.id}:${anchor}`,title:'💰 Novo pagamento',body:String(name),url:`${BASE_URL}/admin?tab=pending`,type:'partial_payment'});
     if(!r?.skipped)sent++;
   }
   if(!cancelled&&['paid','confirmed','approved','completed','pago','quitado'].includes(status)&&paid>0){
     const anchor=stampMs(s.payment_completed_at)||Math.round(paid*100);
-    const r=await sendPush({key:`paid:${s.id}:${anchor}`,title:`✅ Pagamento confirmado — ${name}`,body:`${trip} • ${payLabel(s.payment_method)} • ${money(paid)}${balance>0.009?` • saldo ${money(balance)}`:' • quitado'}`,url:`${BASE_URL}/admin?tab=pending`,type:'payment_confirmed'});
+    const r=await sendPush({key:`paid:${s.id}:${anchor}`,title:'💰 Novo pagamento',body:String(name),url:`${BASE_URL}/admin?tab=pending`,type:'payment_confirmed'});
     if(!r?.skipped)sent++;
   }
 }
