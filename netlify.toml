@@ -8,3 +8,5 @@
   for = "/.netlify/functions/*"
   [headers.values]
     Cache-Control = "no-store"
+
+# redeploy imediato 2026-09-12
