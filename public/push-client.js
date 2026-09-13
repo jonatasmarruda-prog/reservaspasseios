@@ -4,6 +4,8 @@
 const FCM_VAPID='BHkqY6PmyREIcUGPdsfmdDDCf5Zsjb7qjrjRU3HwOz0M5RPFxqIW4Onyr0bC49PpQW2iPeoFz-vge1v5voVHiGE';
 const REGISTER_URL='https://southamerica-east1-trilheiros-reservas.cloudfunctions.net/registerPushDevice';
 const TOKEN_KEY='trilheiros_fcm_token_v1';
+const FCM_SW='/firebase-messaging-sw.js';
+const FCM_SCOPE='/fcm-push/';
 const WEB_PUSH_PUBLIC='BKO4HsShdL-gS2uZdoahQMU75NKAsIlBBJ7Z6JJ7J5ZjI-KcRV9WNznDDII4im1ILIKRNXEo6mBrttsGyffwCF4';
 const WEB_PUSH_VERSION='v2';
 const WEB_PUSH_SW='/webpush-sw.js';
@@ -22,11 +24,7 @@ async function saveTokenFree(token,user){
     localStorage.setItem('trilheiros_push_owner_saved','1');
     database.collection('push_devices').doc(tokenId(token)).set({token,owner_uid:user.uid,owner_email:user.email||'',active:true,platform:'web-pwa-android',source:'admin_push_client',updated_at:FV.serverTimestamp()},{merge:true}).catch(()=>{});
     return true;
-  }catch(err){
-    localStorage.setItem('trilheiros_push_owner_saved','0');
-    console.warn('Registro push gratuito:',err?.message||err);
-    return false;
-  }
+  }catch(err){localStorage.setItem('trilheiros_push_owner_saved','0');console.warn('Registro push gratuito:',err?.message||err);return false}
 }
 
 async function registerNativePush(force=false){
@@ -34,22 +32,13 @@ async function registerNativePush(force=false){
   if(!('serviceWorker'in navigator)||!('PushManager'in window)||!('Notification'in window)||Notification.permission!=='granted')return null;
   nativeRunning=true;
   try{
-    const reg=await navigator.serviceWorker.register(WEB_PUSH_SW,{scope:WEB_PUSH_SCOPE,updateViaCache:'none'});
-    await reg.update().catch(()=>{});
-    let sub=await reg.pushManager.getSubscription();
-    const migrated=localStorage.getItem('trilheiros_webpush_key_version')===WEB_PUSH_VERSION;
+    const reg=await navigator.serviceWorker.register(WEB_PUSH_SW,{scope:WEB_PUSH_SCOPE,updateViaCache:'none'});await reg.update().catch(()=>{});
+    let sub=await reg.pushManager.getSubscription();const migrated=localStorage.getItem('trilheiros_webpush_key_version')===WEB_PUSH_VERSION;
     if(sub&&!migrated){try{await sub.unsubscribe()}catch(_){}sub=null}
     if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64ToUint8(WEB_PUSH_PUBLIC)});
-    const json=sub.toJSON();
-    localStorage.setItem('trilheiros_webpush_subscription_v2',JSON.stringify(json));
-    localStorage.setItem('trilheiros_webpush_key_version',WEB_PUSH_VERSION);
-    localStorage.setItem('trilheiros_webpush_registered_at',new Date().toISOString());
-    window.__trilheirosWebPushReady=true;
-    return json;
-  }catch(err){window.__trilheirosWebPushReady=false;if(force)console.warn('Web Push imediato:',err?.message||err);return null}
-  finally{nativeRunning=false}
+    const json=sub.toJSON();localStorage.setItem('trilheiros_webpush_subscription_v2',JSON.stringify(json));localStorage.setItem('trilheiros_webpush_key_version',WEB_PUSH_VERSION);localStorage.setItem('trilheiros_webpush_registered_at',new Date().toISOString());window.__trilheirosWebPushReady=true;return json;
+  }catch(err){window.__trilheirosWebPushReady=false;if(force)console.warn('Web Push imediato:',err?.message||err);return null}finally{nativeRunning=false}
 }
-
 window.getTrilheirosWebPushSubscription=async function(){const live=await registerNativePush(false);if(live)return live;try{return JSON.parse(localStorage.getItem('trilheiros_webpush_subscription_v2')||'null')}catch(_){return null}};
 window.registerTrilheirosNativePush=registerNativePush;
 
@@ -61,34 +50,15 @@ async function registerPush(force=false){
   if(!force&&Date.now()-lastAttempt<15000)return false;
   running=true;lastAttempt=Date.now();
   try{
-    const reg=(await navigator.serviceWorker.getRegistration('/'))||await navigator.serviceWorker.ready;
-    if(!reg)throw Error('SERVICE_WORKER_NOT_READY');
-    await reg.update().catch(()=>{});
-    const token=await firebase.messaging().getToken({vapidKey:FCM_VAPID,serviceWorkerRegistration:reg});
-    if(!token)throw Error('FCM_TOKEN_EMPTY');
-    const directSaved=await saveTokenFree(token,user);
-    let functionSaved=false;
-    if(!directSaved){
-      try{const idToken=await user.getIdToken(true),r=await fetch(REGISTER_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json',Authorization:`Bearer ${idToken}`},body:JSON.stringify({token,platform:'web-pwa-android'})}),j=await r.json().catch(()=>({}));functionSaved=!!(r.ok&&j.ok)}catch(_){}
-    }
+    const reg=await navigator.serviceWorker.register(FCM_SW,{scope:FCM_SCOPE,updateViaCache:'none'});await reg.update().catch(()=>{});
+    const token=await firebase.messaging().getToken({vapidKey:FCM_VAPID,serviceWorkerRegistration:reg});if(!token)throw Error('FCM_TOKEN_EMPTY');
+    const directSaved=await saveTokenFree(token,user);let functionSaved=false;
+    if(!directSaved){try{const idToken=await user.getIdToken(true),r=await fetch(REGISTER_URL,{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json',Authorization:`Bearer ${idToken}`},body:JSON.stringify({token,platform:'web-pwa-android'})}),j=await r.json().catch(()=>({}));functionSaved=!!(r.ok&&j.ok)}catch(_){}}
     if(!directSaved&&!functionSaved)throw Error('PUSH_REGISTER_FAILED');
-    localStorage.setItem(TOKEN_KEY,token);
-    localStorage.setItem('trilheiros_fcm_registered_at',new Date().toISOString());
-    localStorage.setItem('trilheiros_fcm_registration_mode',directSaved?'free-firestore':'cloud-function');
-    window.__trilheirosPushReady=true;
-    await registerNativePush(force).catch(()=>null);
-    window.dispatchEvent(new CustomEvent('trilheiros:push-ready'));
-    return true;
-  }catch(err){window.__trilheirosPushReady=false;console.warn('Push em segundo plano:',err?.message||err);await registerNativePush(force).catch(()=>null);return false}
-  finally{running=false}
+    localStorage.setItem(TOKEN_KEY,token);localStorage.setItem('trilheiros_fcm_registered_at',new Date().toISOString());localStorage.setItem('trilheiros_fcm_registration_mode',directSaved?'free-firestore':'cloud-function');window.__trilheirosPushReady=true;await registerNativePush(force).catch(()=>null);window.dispatchEvent(new CustomEvent('trilheiros:push-ready'));return true;
+  }catch(err){window.__trilheirosPushReady=false;console.warn('Push em segundo plano:',err?.message||err);await registerNativePush(force).catch(()=>null);return false}finally{running=false}
 }
-
 window.registerTrilheirosPush=registerPush;
 function schedule(){setTimeout(()=>registerPush(true),800);setTimeout(()=>registerNativePush(true),1600);setTimeout(()=>registerPush(true),4500);setTimeout(()=>registerPush(true),12000)}
-window.addEventListener('load',schedule,{once:true});
-window.addEventListener('focus',()=>registerPush(false));
-window.addEventListener('online',()=>registerPush(true));
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')registerPush(false)});
-document.addEventListener('click',event=>{if(event.target?.closest?.('#mobileNotifyEnable,#mobileNotifyTest'))setTimeout(()=>{registerPush(true);registerNativePush(true)},500)},true);
-try{firebase.auth().onAuthStateChanged(user=>{if(user&&!user.isAnonymous)setTimeout(()=>registerPush(true),500)})}catch(_){}
+window.addEventListener('load',schedule,{once:true});window.addEventListener('focus',()=>registerPush(false));window.addEventListener('online',()=>registerPush(true));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')registerPush(false)});document.addEventListener('click',event=>{if(event.target?.closest?.('#mobileNotifyEnable,#mobileNotifyTest'))setTimeout(()=>{registerPush(true);registerNativePush(true)},500)},true);try{firebase.auth().onAuthStateChanged(user=>{if(user&&!user.isAnonymous)setTimeout(()=>registerPush(true),500)})}catch(_){}
 })();
