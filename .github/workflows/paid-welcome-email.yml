@@ -10,6 +10,7 @@ on:
     branches: [main]
     paths:
       - 'automation/send-paid-welcome-emails.mjs'
+      - 'automation/backfill-link-registration-source.mjs'
       - 'public/admin-reservation-sync-v35.js'
       - 'public/admin-email-controls.js'
       - '.github/workflows/paid-welcome-email.yml'
@@ -32,7 +33,11 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
-      - name: Enviar boas-vindas para reservas quitadas
+      - name: Preparar inscrições antigas feitas pelo link
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/backfill-link-registration-source.mjs
+      - name: Enviar boas-vindas e confirmações pendentes
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
