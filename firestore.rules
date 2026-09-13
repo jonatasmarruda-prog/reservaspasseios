@@ -215,6 +215,10 @@ service cloud.firestore {
       allow read, write: if canManage();
     }
 
+    match /push_devices/{deviceId} {
+      allow read, create, update, delete: if canManage();
+    }
+
     match /audit_logs/{logId} {
       allow read, create: if canManage();
       allow update, delete: if false;
