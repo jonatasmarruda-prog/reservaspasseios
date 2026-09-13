@@ -16,6 +16,11 @@
     for(let i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;
   }
 
+  function tokenId(token){
+    let h=0;for(let i=0;i<token.length;i++)h=((h<<5)-h)+token.charCodeAt(i)|0;
+    return `owner_${Math.abs(h)}_${token.slice(-18).replace(/[^a-zA-Z0-9_-]/g,'')}`;
+  }
+
   function patchNotificationIcon(){
     try{
       const proto=globalThis.ServiceWorkerRegistration?.prototype;
@@ -30,8 +35,12 @@
   async function saveTokenFree(token,user){
     try{
       const database=typeof db!=='undefined'?db:(window.firebase?.firestore?.());if(!database)return false;
-      const FV=firebase.firestore.FieldValue;
-      await database.collection('settings').doc('push_device_owner').set({tokens:FV.arrayUnion(token),owner_uid:user.uid,owner_email:user.email||'',active:true,platform:'web-pwa-android',updated_at:FV.serverTimestamp()},{merge:true});
+      const FV=firebase.firestore.FieldValue,stamp=FV.serverTimestamp();
+      const deviceRef=database.collection('push_devices').doc(tokenId(token));
+      await Promise.all([
+        database.collection('settings').doc('push_device_owner').set({tokens:FV.arrayUnion(token),owner_uid:user.uid,owner_email:user.email||'',active:true,platform:'web-pwa-android',updated_at:stamp},{merge:true}),
+        deviceRef.set({token,owner_uid:user.uid,owner_email:user.email||'',active:true,platform:'web-pwa-android',source:'admin_push_client',updated_at:stamp,created_at:stamp},{merge:true})
+      ]);
       return true;
     }catch(err){console.warn('Registro push gratuito:',err?.message||err);return false}
   }
@@ -76,7 +85,9 @@
     if(!force&&Date.now()-lastAttempt<15000)return false;
     running=true;lastAttempt=Date.now();
     try{
-      const reg=await navigator.serviceWorker.ready;await reg.update().catch(()=>{});
+      const reg=(await navigator.serviceWorker.getRegistration('/'))||await navigator.serviceWorker.ready;
+      if(!reg)throw new Error('SERVICE_WORKER_NOT_READY');
+      await reg.update().catch(()=>{});
       const messaging=firebase.messaging();
       const token=await messaging.getToken({vapidKey:FCM_VAPID,serviceWorkerRegistration:reg});
       if(!token)throw new Error('FCM_TOKEN_EMPTY');
