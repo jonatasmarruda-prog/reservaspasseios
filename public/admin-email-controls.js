@@ -3,7 +3,7 @@
 'use strict';
 if(!location.pathname.startsWith('/admin'))return;
 const q=(s,r=document)=>r.querySelector(s),qa=(s,r=document)=>[...r.querySelectorAll(s)];
-const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const n=v=>Math.max(0,Number(v||0)||0);
 const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
 const IMMEDIATE_PAYMENT_URL='https://trilheiros-automacoes.netlify.app/.netlify/functions/payment-confirmed';
@@ -33,10 +33,32 @@ function injectStyle(){
 injectStyle();
 
 async function saleById(id){const snap=await db.collection('sales').doc(id).get();return snap.exists?{id:snap.id,...snap.data()}:null}
+async function reservationByIds(tripId,id){
+  if(!tripId||!id)return null;
+  try{const snap=await db.collection('trips').doc(String(tripId)).collection('reservations').doc(String(id)).get();return snap.exists?{id:snap.id,trip_id:tripId,...snap.data()}:null}catch(_){return null}
+}
 async function tripForSale(s){
   const local=(state?.trips||[]).find(t=>String(t.id)===String(s?.trip_id));if(local)return local;
   if(!s?.trip_id)return null;
   try{const snap=await db.collection('trips').doc(String(s.trip_id)).get();return snap.exists?{id:snap.id,...snap.data()}:null}catch(_){return null}
+}
+async function ensureSaleFromReservation(tripId,id,saleId){
+  const sid=String(saleId||id||'');if(!sid)return null;
+  const existing=await saleById(sid);if(existing)return existing;
+  const r=await reservationByIds(tripId,id);if(!r)return null;
+  const t=(state?.trips||[]).find(x=>String(x.id)===String(tripId))||null;
+  const stamp=firebase.firestore.FieldValue.serverTimestamp();
+  const total=n(r.sale_total||r.total_amount||r.amount),paid=n(r.paid_amount||r.amount_paid||r.received_amount),balance=Number.isFinite(Number(r.balance_due))?Math.max(0,Number(r.balance_due)):Math.max(0,total-paid);
+  const sale={
+    trip_id:String(tripId||r.trip_id||''),trip_name:r.trip_name||t?.name||'',trip_date:r.trip_date||t?.trip_date||'',
+    customer_name:r.responsible_name||r.customer_name||r.participants?.[0]?.full_name||'',customer_email:r.email||r.customer_email||'',customer_cpf:r.responsible_cpf||r.customer_cpf||'',
+    seats:n(r.seats)||Math.max(1,Array.isArray(r.participants)?r.participants.length:1),sale_total:total,paid_amount:paid,balance_due:balance,refunded_amount:n(r.refunded_amount),
+    payment_method:r.payment_method||'pix',payment_status:r.payment_status||'pending',installment_total:r.installment_total||null,next_due_date:r.next_due_date||'',payment_history:Array.isArray(r.payment_history)?r.payment_history:[],received_date:r.received_date||'',
+    registration_status:r.registration_status||'completed',sale_status:r.status==='cancelled'?'cancelled':'active',protocol:r.protocol||'',category:r.category||'',participants:Array.isArray(r.participants)?r.participants:[],
+    source:r.source||'public_portal_recovered',payment_trigger:r.payment_trigger||'admin_recovered',notes:'Venda reconstruída automaticamente a partir da reserva para confirmação e e-mail.',created_at:r.created_at||stamp,updated_at:stamp
+  };
+  await db.collection('sales').doc(sid).set(sale,{merge:true});
+  return{id:sid,...sale};
 }
 async function queuePaidWelcome(id,{silent=false}={}){
   if(!id||typeof db==='undefined')return false;
@@ -164,13 +186,15 @@ function watchPaymentCompletion(id){
   setTimeout(()=>{if(!stopped){stopped=true;unsub()}},10*60*1000);
 }
 
-/* Pendências: qualquer confirmação dispara notificação; quitação também dispara e-mail no mesmo clique. */
+/* Pendências: reservas do link público sempre conseguem confirmar e, na quitação, enviar e-mail. */
 const originalConfirm=window.confirmSyncedPaymentV35;
 if(typeof originalConfirm==='function'&&!originalConfirm.__welcomeQueue){
   const wrappedConfirm=async function(tripId,id,saleId,...args){
-    const sid=saleId||id,result=await originalConfirm.call(this,tripId,id,saleId,...args);
+    const sid=saleId||id;
+    try{await ensureSaleFromReservation(tripId,id,sid)}catch(e){console.warn('RECOVER_PORTAL_SALE_BEFORE_CONFIRM',e)}
+    const result=await originalConfirm.call(this,tripId,id,saleId,...args);
     try{
-      const sale=await saleById(sid);
+      const sale=await ensureSaleFromReservation(tripId,id,sid);
       if(sale){if(fullyPaid(sale)&&validEmail(emailOf(sale)))await queuePaidWelcome(sid,{silent:true});await dispatchPaymentImmediate(sid)}
     }catch(e){console.warn('PAYMENT_IMMEDIATE_AFTER_CONFIRM',e)}
     return result;
