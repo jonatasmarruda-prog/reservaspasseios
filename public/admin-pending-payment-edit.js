@@ -78,7 +78,7 @@ window.deleteUnpaidPendingV35=async function(tripId,id,saleId){
    const [rs,ss,ts]=await Promise.all([tx.get(resRef),tx.get(saleRef),tx.get(tripRef)]);if(!rs.exists&&!ss.exists)throw Error('Pendência já foi excluída.');
    const rd=rs.exists?rs.data()||{}:{},sd=ss.exists?ss.data()||{}:{},received=round(Math.max(n(rd.paid_amount),n(sd.paid_amount)));if(received>0.009)throw Error('Existe pagamento confirmado nesta reserva. A exclusão foi bloqueada para proteger o financeiro.');
    seats=Math.max(1,Math.round(n(rd.seats||sd.seats)||1));
-   if(ts.exists){const td=ts.data()||{},totalSpots=Math.max(0,Math.round(n(td.total_spots))),used=Math.max(0,Math.round(n(td.used_spots))),special=Math.max(0,Math.round(n(td.special_seat_count||(td.special_seat_reserved?1:0))),newUsed=Math.max(special,used-seats),newRemaining=totalSpots>0?Math.max(0,totalSpots-newUsed):Math.max(0,Math.round(n(td.remaining_spots))+seats);tx.update(tripRef,{used_spots:newUsed,remaining_spots:newRemaining,updated_at:stamp});}
+   if(ts.exists){const td=ts.data()||{},totalSpots=Math.max(0,Math.round(n(td.total_spots))),used=Math.max(0,Math.round(n(td.used_spots))),special=Math.max(0,Math.round(n(td.special_seat_count||(td.special_seat_reserved?1:0)))),newUsed=Math.max(special,used-seats),newRemaining=totalSpots>0?Math.max(0,totalSpots-newUsed):Math.max(0,Math.round(n(td.remaining_spots))+seats);tx.update(tripRef,{used_spots:newUsed,remaining_spots:newRemaining,updated_at:stamp});}
    if(rs.exists)tx.delete(resRef);if(ss.exists)tx.delete(saleRef);
   });
   if(Array.isArray(state.reservations))state.reservations=state.reservations.filter(x=>!(x.trip_id===tripId&&x.id===id));

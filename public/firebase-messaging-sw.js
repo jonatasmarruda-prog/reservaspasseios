@@ -3,7 +3,7 @@ importScripts('/__/firebase/10.14.1/firebase-app-compat.js');
 importScripts('/__/firebase/10.14.1/firebase-messaging-compat.js');
 importScripts('/__/firebase/init.js');
 
-const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 let messaging=null;
 try{messaging=firebase.messaging()}catch(err){console.error('FCM_SW_INIT',err)}
 

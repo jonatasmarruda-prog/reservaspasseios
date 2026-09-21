@@ -6,7 +6,7 @@
     role:'GUIA DE TURISMO',
     reservedSeats:1
   };
-  const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
   window.TRILHEIROS_SPECIAL_PASSENGER=SPECIAL;
 
   const digits=v=>String(v||'').replace(/\D/g,'');

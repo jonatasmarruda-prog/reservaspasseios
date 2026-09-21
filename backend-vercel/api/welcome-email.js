@@ -4,7 +4,7 @@ import {getAdmin,getDb,verifyFirebaseBearer} from './_lib/firebase.js';
 const OWNER_EMAIL='trilheiros.roomt@gmail.com';
 const EMAIL_FROM='Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>';
 const EMAIL_REPLY_TO='trilheiros.roomt@gmail.com';
-const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 const WHATSAPP='5566996926174';
 const allowedOrigins=new Set(['https://trilheiros-reservas.web.app','https://trilheiros-reservas.firebaseapp.com']);
 const clean=v=>String(v??'').trim();

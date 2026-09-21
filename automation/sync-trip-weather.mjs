@@ -13,7 +13,7 @@ const TZ='America/Cuiaba';
 const MAX_FORECAST_DAYS=16;
 const BASE_URL='https://trilheiros-reservas.web.app';
 const WEATHER_URL=`${BASE_URL}/admin`;
-const ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const clean=v=>String(v??'').trim();
 const num=v=>Number(v||0)||0;

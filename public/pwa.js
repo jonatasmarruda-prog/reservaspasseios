@@ -1,8 +1,8 @@
 /* Trilheiros Gestão — PWA, atualização e notificações personalizadas */
 (function(){
   'use strict';
-  const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
-  const NOTIFICATION_ICON='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stable-admin1';
+  const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
+  const NOTIFICATION_ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stable-admin1';
   const NOTIF_KEY='trilheiros_admin_notifications_v6';
   let deferredPrompt=null,swRegistration=null,salesUnsub=null,salesBaseline=false,authBound=false,authBindTries=0;
   const saleState=new Map();

@@ -11,7 +11,7 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const today=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Cuiaba'});
 const GUIDE_NAME='Jonatas Marques de Arruda';
 const GUIDE_ROLE='GUIA DE TURISMO';
-const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 
 function payKind(v){v=String(v||'').toLowerCase();if(v.includes('install')||v.includes('parcel'))return'pix_installment';if(v.includes('card')||v.includes('cart'))return'card';if(v.includes('pix'))return'pix';if(v.includes('cash')||v.includes('dinheiro'))return'cash';return'other'}
 const PAY_LABEL={pix:'PIX',card:'CARTÃO',pix_installment:'PIX PARCELADO',cash:'DINHEIRO',other:'OUTRO'};

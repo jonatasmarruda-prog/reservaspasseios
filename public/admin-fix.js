@@ -4,7 +4,7 @@
 
   const GUIDE_NAME='Jonatas';
   const GUIDE_ROLE='GUIA DE TURISMO';
-  const LOGO_URL='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO_URL='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
   const PAY_LABEL={pix:'PIX',card:'CARTÃO',pix_installment:'PIX PARCELADO',cash:'DINHEIRO',transfer:'TRANSFERÊNCIA',other:'OUTRO'};
   const STATUS_LABEL={paid:'PAGO',partial:'PARCIAL',pending:'PENDENTE',refunded:'REEMBOLSADO',cancelled:'CANCELADO'};
   let premiumLogoPromise=null;

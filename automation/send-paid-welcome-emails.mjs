@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
-const LOGO='https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 const WHATSAPP='5566996926174';
 const TZ='America/Cuiaba';
 const LOCK_MS=20*60*1000;

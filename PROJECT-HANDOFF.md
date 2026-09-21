@@ -9,6 +9,7 @@ Atualizado em 2026-09-11.
 - App: `https://trilheiros-reservas.web.app`
 - Admin: `https://trilheiros-reservas.web.app/admin`
 - Canva reservas: `https://trilheirosderondonopolis.my.canva.site/`
+- Logo oficial: `https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png`
 
 ## Regra operacional principal
 O site do Canva é a frente de reservas. Ao clicar em PIX/cartão/PIX parcelado, os dados devem ser enviados silenciosamente ao Trilheiros Gestão.

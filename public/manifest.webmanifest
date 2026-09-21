@@ -11,8 +11,8 @@
   "orientation": "portrait-primary",
   "categories": ["business", "travel", "productivity"],
   "icons": [
-    {"src":"https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7","sizes":"192x192","type":"image/png","purpose":"any"},
-    {"src":"https://i.postimg.cc/JnF2F9Hw/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7","sizes":"512x512","type":"image/png","purpose":"any"}
+    {"src":"https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7","sizes":"512x512","type":"image/png","purpose":"any"}
   ],
   "shortcuts": [
     {"name":"Pendências","short_name":"Pendências","url":"/admin?tab=pending"},
