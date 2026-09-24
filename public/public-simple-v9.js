@@ -1,6 +1,6 @@
 /* Trilheiros de Rondonópolis — Cadastro público simples V9 */
 (function(){
-  const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
   const onlyDigits=v=>String(v||'').replace(/\D/g,'');
   const validEmail=v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v||'').trim());
   function validCPF(v){

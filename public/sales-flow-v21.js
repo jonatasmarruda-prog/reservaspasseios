@@ -1,6 +1,6 @@
 /* Trilheiros Gestão V21 — Venda paga -> link -> cadastro dos passageiros */
 (function(){
-  const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
   const q=(s,r=document)=>r.querySelector(s);
   const qa=(s,r=document)=>[...r.querySelectorAll(s)];
   const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));

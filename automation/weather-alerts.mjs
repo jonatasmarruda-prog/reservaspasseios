@@ -10,7 +10,7 @@ const messaging=admin.messaging();
 
 const TZ='America/Cuiaba';
 const BASE_URL='https://trilheiros-reservas.web.app';
-const ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260912-weather-alert2';
+const ICON='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png?v=20260912-weather-alert2';
 const HOME={id:'rondonopolis',name:'Rondonópolis',lat:-16.4708,lon:-54.6356};
 const ALERT_COOLDOWN=2*60*60*1000;
 const SEVERE_CODES=new Set([65,67,82,95,96,99]);

@@ -1,8 +1,8 @@
 /* Trilheiros Gestão — PWA, atualização e notificações personalizadas */
 (function(){
   'use strict';
-  const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260910-brand7';
-  const NOTIFICATION_ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stable-admin1';
+  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png?v=20260923-logo1';
+  const NOTIFICATION_ICON='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png?v=20260923-logo1';
   const NOTIF_KEY='trilheiros_admin_notifications_v6';
   let deferredPrompt=null,swRegistration=null,salesUnsub=null,salesBaseline=false,authBound=false,authBindTries=0;
   const saleState=new Map();
@@ -51,7 +51,7 @@
   async function registerServiceWorker(){
     if(!('serviceWorker' in navigator))return null;
     try{
-      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260911-stable-admin1',{updateViaCache:'none'});
+      swRegistration=await navigator.serviceWorker.register('/sw.js?v=20260923-logo1',{updateViaCache:'none'});
       const update=()=>swRegistration?.update?.().catch(()=>{});
       if('requestIdleCallback' in window)requestIdleCallback(update,{timeout:2500});else setTimeout(update,1200);
       return swRegistration;

@@ -9,7 +9,7 @@ const REGION='southamerica-east1';
 const RESEND_API_KEY=defineSecret('RESEND_API_KEY');
 const EMAIL_FROM='Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>';
 const EMAIL_REPLY_TO='trilheiros.roomt@gmail.com';
-const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
 const WHATSAPP='5566996926174';
 
 const clean=v=>String(v??'').trim();

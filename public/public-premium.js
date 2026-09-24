@@ -2,7 +2,7 @@
 (function(){
   function publicLogo(){
     return `<a class="publicBrand" href="/" aria-label="Trilheiros de Rondonópolis">
-      <img src="https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis" class="publicLogo">
+      <img src="https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis" class="publicLogo">
       <div class="publicBrandCopy"><strong>TRILHEIROS DE RONDONÓPOLIS</strong><span>Experiências • Natureza • Segurança</span></div>
     </a>`;
   }

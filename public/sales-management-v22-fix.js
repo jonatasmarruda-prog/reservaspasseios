@@ -119,7 +119,7 @@
     if(!cancelledSale)return;
     const app=document.getElementById('app');if(!app)return;
     if(app.querySelector('[data-cancelled-sale-v221="1"]'))return;
-    app.innerHTML=`<main class="salePublicPageV21"><header class="salePublicTopV21"><img src="https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis"><div><strong>TRILHEIROS DE RONDONÓPOLIS</strong><span>Cadastro do passeio</span></div></header><section class="salePublicMessageV21" data-cancelled-sale-v221="1"><h1>Este link foi encerrado</h1><p>A venda foi cancelada e as vagas já foram devolvidas ao passeio. Se precisar de atendimento, fale com os Trilheiros.</p></section></main>`;
+    app.innerHTML=`<main class="salePublicPageV21"><header class="salePublicTopV21"><img src="https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png" alt="Trilheiros de Rondonópolis"><div><strong>TRILHEIROS DE RONDONÓPOLIS</strong><span>Cadastro do passeio</span></div></header><section class="salePublicMessageV21" data-cancelled-sale-v221="1"><h1>Este link foi encerrado</h1><p>A venda foi cancelada e as vagas já foram devolvidas ao passeio. Se precisar de atendimento, fale com os Trilheiros.</p></section></main>`;
   }
 
   function guardCancelledSale(){

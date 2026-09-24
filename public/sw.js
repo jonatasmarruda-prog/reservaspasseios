@@ -1,9 +1,9 @@
 /* Trilheiros Gestão — Service Worker otimizado */
-const CACHE='trilheiros-shell-20260911-stable-admin1';
-const NOTIFICATION_ICON='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png?v=20260911-stable-admin1';
+const CACHE='trilheiros-shell-20260923-logo1';
+const NOTIFICATION_ICON='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png?v=20260923-logo1';
 const APP_SHELL=[
   '/offline.html',
-  '/manifest.webmanifest?v=20260911-stable-admin1',
+  '/manifest.webmanifest?v=20260923-logo1',
   '/app.css?v=20260911-stable-admin1',
   '/premium.css?v=20260911-stable-admin1',
   '/admin-v7.css?v=20260911-stable-admin1',

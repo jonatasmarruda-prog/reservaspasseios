@@ -5,7 +5,7 @@ const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
 const DESTINATION='trilheiros.roomt@gmail.com';
-const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
 const TZ='America/Cuiaba';
 
 if(!rawService||!resendKey||!emailFrom){console.error('Relatório final não configurado: faltam credenciais.');process.exit(1)}

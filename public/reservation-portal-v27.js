@@ -5,7 +5,7 @@
 (function(){
 'use strict';
 
-const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
 const PIX_KEY='trilheiros.roomt@gmail.com';
 const WHATSAPP='5566996926174';
 const GUIDE_NAME='Jonatas Marques de Arruda';
