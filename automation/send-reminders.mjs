@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
+const adminCopyEmail=cleanEnv(process.env.ADMIN_COPY_EMAIL).toLowerCase();
 const LOGO='https://i.postimg.cc/65Q2jp4c/LOGO-TRILHEIROS-Photoroom.png';
 const WHATSAPP='5566996926174';
 const GOOGLE_REVIEW_URL='https://g.page/r/CcB9GU8M5QY6EAE/review';
@@ -11,6 +12,8 @@ const TZ='America/Cuiaba';
 const HOUR=60*60*1000;
 const LOCK_MS=20*60*1000;
 const MAX_ATTEMPTS=6;
+
+function cleanEnv(v){return String(v??'').trim()}
 
 if(!rawService||!resendKey||!emailFrom){
   console.error('Automação de e-mails não configurada: faltam FIREBASE_SERVICE_ACCOUNT, RESEND_API_KEY ou EMAIL_FROM.');
@@ -98,18 +101,29 @@ async function claimDispatch({kind,saleRef,tripRef,anchor,email}){
     attempt=attempts+1;tx.set(ref,{kind,status:'sending',sale_id:saleRef.id,trip_id:tripRef.id,event_anchor:anchor,email,attempts:attempt,last_attempt_at:FieldValue.serverTimestamp(),updated_at:FieldValue.serverTimestamp(),created_at:d.created_at||FieldValue.serverTimestamp(),error:FieldValue.delete()},{merge:true});claimed=true;
   });return{claimed,ref,id,attempt};
 }
+async function claimAdminCopy({kind,tripRef,anchor,email}){
+  const id=dispatchId(kind,email,tripRef.id,anchor),ref=db.collection('email_dispatches').doc(id);let claimed=false,attempt=0;
+  await db.runTransaction(async tx=>{
+    const tripSnap=await tx.get(tripRef),dispatchSnap=await tx.get(ref);if(!tripSnap.exists)return;
+    const trip={id:tripSnap.id,...tripSnap.data()};if(isCancelled(trip)||trip.email_reminder_enabled===false)return;
+    const d=dispatchSnap.exists?dispatchSnap.data()||{}:{};if(d.status==='sent')return;const attempts=Number(d.attempts||0);if(attempts>=MAX_ATTEMPTS)return;
+    const last=stampMs(d.last_attempt_at),next=stampMs(d.next_retry_at);if(d.status==='sending'&&last&&Date.now()-last<LOCK_MS)return;if(next&&Date.now()<next)return;
+    attempt=attempts+1;tx.set(ref,{kind,status:'sending',admin_copy:true,trip_id:tripRef.id,event_anchor:anchor,email,attempts:attempt,last_attempt_at:FieldValue.serverTimestamp(),updated_at:FieldValue.serverTimestamp(),created_at:d.created_at||FieldValue.serverTimestamp(),error:FieldValue.delete()},{merge:true});claimed=true;
+  });return{claimed,ref,id,attempt};
+}
 async function markFailure(ref,err,attempt){const message=String(err?.message||err).slice(0,900);await ref.set({status:'error',error:message,failed_at:FieldValue.serverTimestamp(),next_retry_at:admin.firestore.Timestamp.fromDate(new Date(Date.now()+backoffMs(attempt))),updated_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});return message}
 async function markSent(ref,payload,email){await ref.set({status:'sent',sent_at:FieldValue.serverTimestamp(),resend_id:payload?.id||'',email,updated_at:FieldValue.serverTimestamp(),next_retry_at:FieldValue.delete(),error:FieldValue.delete()},{merge:true})}
 
 const today=localToday();
 const [salesSnap,tripsSnap]=await Promise.all([db.collection('sales').limit(1500).get(),db.collection('trips').limit(500).get()]);
 const trips=new Map(tripsSnap.docs.map(d=>[d.id,{ref:d.ref,data:{id:d.id,...d.data()}}]));
-let pre3Sent=0,pre1Sent=0,postSent=0,failed=0,skipped=0,missingDate=0;
+let pre3Sent=0,pre1Sent=0,postSent=0,adminCopiesSent=0,failed=0,skipped=0,missingDate=0;
+let missingTrip=0,inactiveOrUnpaid=0,invalidEmails=0;
 
 for(const saleDoc of salesSnap.docs){
-  const sale={id:saleDoc.id,...saleDoc.data()},tripEntry=trips.get(sale.trip_id);if(!tripEntry){skipped++;continue}
-  const {ref:tripRef,data:trip}=tripEntry;if(isCancelled(sale)||isCancelled(trip)||!paidInFull(sale)){skipped++;continue}
-  const email=clean(sale.customer_email||sale.email).toLowerCase();if(!validEmail(email)){skipped++;continue}
+  const sale={id:saleDoc.id,...saleDoc.data()},tripEntry=trips.get(sale.trip_id);if(!tripEntry){skipped++;missingTrip++;continue}
+  const {ref:tripRef,data:trip}=tripEntry;if(isCancelled(sale)||isCancelled(trip)||!paidInFull(sale)){skipped++;inactiveOrUnpaid++;continue}
+  const email=clean(sale.customer_email||sale.email).toLowerCase();if(!validEmail(email)){skipped++;invalidEmails++;continue}
   const start=isoDate(trip.trip_date),end=isoDate(trip.trip_end_date||trip.trip_date);if(!start){missingDate++;continue}
   const daysUntil=daysBetween(today,start),daysAfter=end?daysBetween(end,today):NaN;
 
@@ -127,5 +141,21 @@ for(const saleDoc of salesSnap.docs){
   }
 }
 
-console.log(`Automação concluída. Pré 3 dias=${pre3Sent} | Pré 1 dia=${pre1Sent} | Pós 1 dia=${postSent} | Falhas=${failed} | Ignorados=${skipped} | Sem data=${missingDate}`);
+if(validEmail(adminCopyEmail)){
+  const previewSale={customer_name:'Jonatas',participants:[{full_name:'Jonatas'}],protocol:'CÓPIA ADMINISTRATIVA'};
+  for(const {ref:tripRef,data:trip} of trips.values()){
+    if(isCancelled(trip)||trip.email_reminder_enabled===false)continue;
+    const start=isoDate(trip.trip_date);if(!start)continue;
+    const days=daysBetween(today,start);if(days!==3&&days!==1)continue;
+    const kind=`admin_copy_pre_trip_${days}d`,c=await claimAdminCopy({kind,tripRef,anchor:start,email:adminCopyEmail});
+    if(c.claimed)try{
+      const template=preTemplate(previewSale,trip,days);
+      const payload=await sendResend({to:adminCopyEmail,...template,subject:`🔎 Cópia do administrador — ${template.subject}`,key:`admin-copy-${c.id}`});
+      await markSent(c.ref,payload,adminCopyEmail);adminCopiesSent++;
+    }catch(err){failed++;await markFailure(c.ref,err,c.attempt)}
+  }
+}
+
+console.log(`Automação concluída. Pré 3 dias=${pre3Sent} | Pré 1 dia=${pre1Sent} | Pós 1 dia=${postSent} | Cópias admin=${adminCopiesSent} | Falhas=${failed} | Ignorados=${skipped} | Sem data=${missingDate}`);
+console.log(`Diagnóstico sem dados pessoais. Sem passeio=${missingTrip} | Inativa/não quitada=${inactiveOrUnpaid} | E-mail inválido=${invalidEmails}`);
 if(failed)process.exitCode=1;

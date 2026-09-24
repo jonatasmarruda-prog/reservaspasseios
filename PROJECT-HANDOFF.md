@@ -161,6 +161,8 @@ Motor unificado: `automation/send-reminders.mjs`.
 
 Workflow ativo: `.github/workflows/email-reminders.yml`, executado de hora em hora, com cálculo de negócio em `America/Cuiaba`.
 
+O administrador recebe em `jonatasmarruda@gmail.com` uma única cópia de conferência por passeio e por lembrete pré-trilha (3 dias e 1 dia). A cópia usa registro próprio em `email_dispatches`, portanto as execuções repetidas do workflow não duplicam o envio.
+
 Regras:
 - pré-trilha: somente quando o início real do passeio estiver entre 24 e 48 horas;
 - pós-trilha: 24 horas após o término real, com janela de recuperação até 72 horas;
