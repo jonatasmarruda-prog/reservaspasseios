@@ -4,7 +4,7 @@
 
   const GUIDE_NAME='Jonatas';
   const GUIDE_ROLE='GUIA DE TURISMO';
-  const LOGO_URL='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO_URL='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
   const PAY_LABEL={pix:'PIX',card:'CARTÃO',pix_installment:'PIX PARCELADO',cash:'DINHEIRO',transfer:'TRANSFERÊNCIA',other:'OUTRO'};
   const STATUS_LABEL={paid:'PAGO',partial:'PARCIAL',pending:'PENDENTE',refunded:'REEMBOLSADO',cancelled:'CANCELADO'};
   let premiumLogoPromise=null;

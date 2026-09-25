@@ -1,5 +1,5 @@
 /* Trilheiros Gestão — service worker exclusivo para Web Push imediato */
-const ICON='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+const ICON='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));

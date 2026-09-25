@@ -9,7 +9,8 @@ Atualizado em 2026-09-11.
 - App: `https://trilheiros-reservas.web.app`
 - Admin: `https://trilheiros-reservas.web.app/admin`
 - Canva reservas: `https://trilheirosderondonopolis.my.canva.site/`
-- Logo oficial: `https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png`
+- Logo oficial: `https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1` (arquivo próprio do Firebase Hosting; não voltar a usar host externo nos e-mails).
+- Cópias administrativas dos e-mails usam uma revisão separada no identificador de envio, permitindo validar mudanças de template sem reenviar mensagens aos passageiros.
 
 ## Regra operacional principal
 O site do Canva é a frente de reservas. Ao clicar em PIX/cartão/PIX parcelado, os dados devem ser enviados silenciosamente ao Trilheiros Gestão.

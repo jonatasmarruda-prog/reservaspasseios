@@ -4,7 +4,7 @@
 
   const GUIDE_NAME='Jonatas Marques de Arruda';
   const GUIDE_ROLE='GUIA DE TURISMO';
-  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 
   const q=s=>document.querySelector(s);
   const qa=s=>[...document.querySelectorAll(s)];

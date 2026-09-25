@@ -1,6 +1,6 @@
 /* Trilheiros Gestão V10 — resumo público, Minha Viagem Premium, WhatsApp e parcelas */
 (function(){
-  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
   const $q=s=>document.querySelector(s);
   const $qa=s=>[...document.querySelectorAll(s)];
   const digits=v=>String(v||'').replace(/\D/g,'');

@@ -6,7 +6,7 @@
     role:'GUIA DE TURISMO',
     reservedSeats:1
   };
-  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
   window.TRILHEIROS_SPECIAL_PASSENGER=SPECIAL;
 
   const digits=v=>String(v||'').replace(/\D/g,'');

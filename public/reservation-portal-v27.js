@@ -5,7 +5,7 @@
 (function(){
 'use strict';
 
-const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 const PIX_KEY='trilheiros.roomt@gmail.com';
 const WHATSAPP='5566996926174';
 const GUIDE_NAME='Jonatas Marques de Arruda';

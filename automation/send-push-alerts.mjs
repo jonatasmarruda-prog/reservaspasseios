@@ -60,7 +60,7 @@ async function sendPush({key,title,body,url,type='system'}){
     data:{title,body,url,tag:key,type,timestamp:String(Date.now()),renotify:'true'},
     webpush:{
       headers:{Urgency:'high',TTL:'86400'},
-      notification:{title,body,icon:'https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png',tag:key,renotify:true,requireInteraction:false},
+      notification:{title,body,icon:'https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1',tag:key,renotify:true,requireInteraction:false},
       fcmOptions:{link:url}
     }
   };

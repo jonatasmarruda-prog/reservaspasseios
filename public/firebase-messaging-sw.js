@@ -3,7 +3,7 @@ importScripts('/__/firebase/10.14.1/firebase-app-compat.js');
 importScripts('/__/firebase/10.14.1/firebase-messaging-compat.js');
 importScripts('/__/firebase/init.js');
 
-const ICON='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+const ICON='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 let messaging=null;
 try{messaging=firebase.messaging()}catch(err){console.error('FCM_SW_INIT',err)}
 

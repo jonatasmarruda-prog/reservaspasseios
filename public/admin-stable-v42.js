@@ -15,7 +15,7 @@ const PAY={pix:'PIX',card:'CARTÃO',pix_installment:'PIX PARCELADO',cash:'DINHEI
 const installmentFallback={salto_nuvens:2,nobres_bom_jardim:2,rio_cristalino:3,jaciara_canyon:3};
 const GUIDE_NAME='Jonatas Marques de Arruda';
 const GUIDE_ROLE='GUIA DE TURISMO';
-const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 let pendingLoading=false,financeLoading=false;
 state.financeMonthV42=state.financeMonthV42||state.financeMonthV41||monthNow();
 

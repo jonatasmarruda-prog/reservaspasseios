@@ -1,6 +1,6 @@
 /* Trilheiros Gestão V16 — PDFs sempre abrem na prévia antes de baixar/compartilhar */
 (function(){
-  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
   const digits=v=>String(v||'').replace(/\D/g,'');
   const slug=v=>String(v||'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
   const dateLabel=v=>typeof date==='function'?date(v):String(v||'');

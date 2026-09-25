@@ -5,7 +5,8 @@ const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
 const adminCopyEmail=cleanEnv(process.env.ADMIN_COPY_EMAIL).toLowerCase();
-const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
+const EMAIL_TEMPLATE_REVISION='20260925-hosted-logo1';
 const WHATSAPP='5566996926174';
 const GOOGLE_REVIEW_URL='https://g.page/r/CcB9GU8M5QY6EAE/review';
 const TZ='America/Cuiaba';
@@ -147,7 +148,7 @@ if(validEmail(adminCopyEmail)){
     if(isCancelled(trip)||trip.email_reminder_enabled===false)continue;
     const start=isoDate(trip.trip_date);if(!start)continue;
     const days=daysBetween(today,start);if(days!==3&&days!==1)continue;
-    const kind=`admin_copy_pre_trip_${days}d`,c=await claimAdminCopy({kind,tripRef,anchor:start,email:adminCopyEmail});
+    const kind=`admin_copy_${EMAIL_TEMPLATE_REVISION}_pre_trip_${days}d`,c=await claimAdminCopy({kind,tripRef,anchor:start,email:adminCopyEmail});
     if(c.claimed)try{
       const template=preTemplate(previewSale,trip,days);
       const payload=await sendResend({to:adminCopyEmail,...template,subject:`🔎 Cópia do administrador — ${template.subject}`,key:`admin-copy-${c.id}`});

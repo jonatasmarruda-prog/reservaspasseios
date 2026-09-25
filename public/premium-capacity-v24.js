@@ -1,6 +1,6 @@
 /* Trilheiros Gestão V24 — lotação profissional + guia nº 01 em todos os PDFs */
 (function(){
-  const LOGO='https://i.postimg.cc/QMTGhj3s/LOGO-TRILHEIROS-Photoroom.png';
+  const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
   const GUIDE={
     key:'trilheiros-guia-jonatas',
     name:'Jonatas Marques de Arruda',
