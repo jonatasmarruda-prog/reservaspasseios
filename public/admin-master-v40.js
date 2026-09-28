@@ -169,7 +169,13 @@ window.recalculateTripClosure=recalculateTripClosure;
 async function toggleCloseTrip(tripId){
   if(!canManage())return notify('Somente proprietário ou administrador pode fechar passeios.','error');const t=(state.trips||[]).find(x=>x.id===tripId);if(!t)return;
   if(t.financial_locked){if(!confirm('Reabrir o financeiro deste passeio? Despesas e custos poderão ser alterados novamente.'))return;try{const stamp=firebase.firestore.FieldValue.serverTimestamp();await db.collection('trips').doc(tripId).update({financial_locked:false,status:t.trip_date<today()?'completed':'open',financial_reopened_at:stamp,updated_at:stamp});t.financial_locked=false;await audit('update','trip',tripId,'Fechamento financeiro reaberto.');notify('Financeiro reaberto.','success');renderAdmin()}catch(e){notify(e.message||e,'error')}return}
-  const [sales,expenses]=await Promise.all([getSales(),getExpenses()]),f=tripFinancial(t,sales,expenses);if(f.receivable>0.009&&!confirm(`Ainda há ${money(f.receivable)} a receber. Deseja fechar mesmo assim?`))return;if(f.openExp>0.009&&!confirm(`Ainda há ${money(f.openExp)} em contas a pagar. Fechar mesmo assim?`))return;const source=f.costSource==='planned'?'custos cadastrados no passeio':'despesas reais lançadas';if(!confirm(`Fechar ${t.name}?\n\nCusto considerado (${source}): ${money(f.costApplied)}.\nLucro final: ${money(f.profitActual)}.\n\nO resultado será preservado até você reabrir.`))return;
+  const [sales,expenses]=await Promise.all([getSales(),getExpenses()]),f=tripFinancial(t,sales,expenses);
+  const hasConfiguredCost=(Array.isArray(t.cost_items)&&t.cost_items.some(x=>n(x?.amount)>0))||[t.cost_bus_fixed,t.cost_guide_fixed,t.cost_other_fixed,t.cost_lodging_per_person,t.cost_activity_per_person,t.cost_food_per_person,t.cost_insurance_per_person,t.cost_other_per_person].some(x=>n(x)>0)||expenses.some(e=>e.trip_id===t.id&&expenseAmount(e,{[t.id]:f.seats})>0);
+  if(hasConfiguredCost&&f.costApplied<=0.009)return notify('Há custos cadastrados neste passeio, mas o cálculo retornou custo zero. O fechamento foi bloqueado para evitar lucro incorreto.','error');
+  if(!hasConfiguredCost&&!confirm('Nenhum custo foi cadastrado para este passeio. Deseja fechar com custo R$ 0,00?'))return;
+  if(f.receivable>0.009&&!confirm(`Ainda há ${money(f.receivable)} a receber. Deseja fechar mesmo assim?`))return;
+  if(f.openExp>0.009&&!confirm(`Ainda há ${money(f.openExp)} em contas a pagar. Fechar mesmo assim?`))return;
+  const source=f.costSource==='planned'?'custos cadastrados no passeio':'despesas reais lançadas';if(!confirm(`Fechar ${t.name}?\n\nCusto considerado (${source}): ${money(f.costApplied)}.\nLucro final: ${money(f.profitActual)}.\n\nO resultado será preservado até você reabrir.`))return;
   try{await saveFinancialClosure(t,f)}catch(e){notify(e.message||'Erro ao fechar passeio.','error')}
 }
 
