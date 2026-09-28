@@ -76,9 +76,12 @@
     const fromReservations=reservationsForTrip(trip.id).reduce((sum,r)=>sum+reservationTotal(r,trip),0);
     return fromReservations>0?fromReservations:num(trip.net_revenue||trip.gross_revenue);
   }
+  function receivedForTrip(trip){
+    return reservationsForTrip(trip.id).reduce((sum,r)=>sum+Math.max(0,num(r?.paid_amount)-num(r?.refunded_amount)),0);
+  }
   function tripFinance(trip){
-    const seats=activeSeats(trip.id),planned=plannedCostDetails(trip,seats),rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id),paidRows=rows.filter(expensePaid),openRows=rows.filter(e=>!expensePaid(e)),paid=paidRows.reduce((s,e)=>s+expenseAmount(e,seats),0),open=openRows.reduce((s,e)=>s+expenseAmount(e,seats),0),actual=paid+open,hasActual=rows.length>0,expense=hasActual?actual:planned.total,revenue=revenueForTrip(trip),receivable=reservationsForTrip(trip.id).reduce((s,r)=>s+reservationReceivable(r,trip),0);
-    return{tripId:trip.id,seats,planned,paid,open,actual,hasActual,expense,revenue,receivable,result:revenue-expense,source:hasActual?'actual':'planned'};
+    const seats=activeSeats(trip.id),planned=plannedCostDetails(trip,seats),rows=(state.expenses||[]).filter(e=>e.trip_id===trip.id),paidRows=rows.filter(expensePaid),openRows=rows.filter(e=>!expensePaid(e)),paid=paidRows.reduce((s,e)=>s+expenseAmount(e,seats),0),open=openRows.reduce((s,e)=>s+expenseAmount(e,seats),0),actual=paid+open,hasActual=rows.length>0,expense=Math.max(planned.total,actual),sold=revenueForTrip(trip),received=receivedForTrip(trip),receivable=reservationsForTrip(trip.id).reduce((s,r)=>s+reservationReceivable(r,trip),0);
+    return{tripId:trip.id,seats,planned,paid,open,actual,hasActual,expense,revenue:received,sold,received,receivable,result:received-expense,projectedResult:sold-planned.total,source:hasActual&&actual>=planned.total?'actual':'planned'};
   }
   function refreshTripFinancialPreview(){
     if(typeof state==='undefined')return[];
@@ -254,7 +257,7 @@
     const current=window.renderAdmin;if(typeof current!=='function'||current.__tripCostPreviewFixed)return;
     const wrapped=function(...args){refreshTripFinancialPreview();const out=current.apply(this,args);scheduleApply();return out};wrapped.__tripCostPreviewFixed=true;window.renderAdmin=wrapped;try{renderAdmin=wrapped}catch(_){ }
   }
-  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,tripFinance,totals:financeTotals,monthlyPaidClosure,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview,ensureRecurringBusinessExpenses};
+  window.TrilheirosFinance={BUILD,activeSeats,plannedCostDetails,expenseAmount,expensePaid,expenseMode,reservationTotal,reservationReceivable,totalReceivable,revenueForTrip,receivedForTrip,tripFinance,totals:financeTotals,monthlyPaidClosure,selfTest:financeSelfTest,health:systemHealth,refresh:applyFinancialPreview,ensureRecurringBusinessExpenses};
   window.setNetworkUI=function(){const online=navigator.onLine,b=document.querySelector('#networkBadge');if(b){b.textContent=online?'● Online':'● Offline';b.className='networkBadge '+(online?'online':'offline')}const s=document.querySelector('#sync');if(s&&!online){s.textContent='☁ Offline • dados locais';s.classList.add('offline')}};
   window.updateNotificationBadge=function(){const count=(state.notifications||[]).filter(n=>!n.read).length,b=document.querySelector('#notifyCount');if(b)b.textContent=count?String(count):'';const s=document.querySelector('#sideNotifyCount');if(s)s.textContent=count?`(${count})`:''};
 
