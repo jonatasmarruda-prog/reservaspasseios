@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
+const targetTripId=cleanEnv(process.env.TARGET_TRIP_ID);
+const targetBusCost=numEnv(process.env.TARGET_BUS_COST);
 const DESTINATIONS=['trilheiros.roomt@gmail.com','jonatasmarruda@gmail.com'];
 const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 const TZ='America/Cuiaba';
@@ -14,8 +16,11 @@ if(!admin.apps.length)admin.initializeApp({credential:admin.credential.cert(serv
 const db=admin.firestore();
 const FieldValue=admin.firestore.FieldValue;
 
+function cleanEnv(v){return String(v??'').trim()}
+function numEnv(v){return Math.max(0,Number(v||0)||0)}
 const clean=v=>String(v??'').trim();
 const num=v=>Math.max(0,Number(v||0)||0);
+const norm=v=>clean(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 const money=v=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(Number(v||0));
 function stampMs(v){try{if(!v)return 0;if(typeof v.toMillis==='function')return v.toMillis();if(v.seconds)return Number(v.seconds)*1000;const d=new Date(v);return Number.isNaN(d.getTime())?0:d.getTime()}catch{return 0}}
@@ -23,6 +28,12 @@ function brDate(v){const ms=stampMs(v);if(ms){return new Intl.DateTimeFormat('pt
 function expensePaid(e){return !['pending','open','unpaid','to_pay','payable'].includes(String(e?.payment_status||e?.status||'').toLowerCase())}
 function expenseMode(e){if(e?.cost_mode==='per_person')return'per_person';if(e?.cost_mode==='fixed')return'fixed';return /aliment|hosped|hotel|camping|seguro|ingresso|entrada|day use|atrativo|refeic|lanche/i.test(`${e?.category||''} ${e?.description||''}`)?'per_person':'fixed'}
 function expenseTotal(e,clients){const unit=num(e?.unit_amount||e?.amount);if(expenseMode(e)==='per_person'){const qty=num(e?.quantity_basis)>0?num(e.quantity_basis):num(clients);return unit*qty}return num(e?.amount)>0?num(e.amount):unit}
+function closureExpenseTotal(e,clients){if(e?.cost_mode==='per_person'&&e?.dynamic_per_person!==false&&!expensePaid(e))return num(e?.unit_amount||e?.amount)*num(clients);return num(e?.amount)>0?num(e.amount):num(e?.unit_amount)}
+function activeSale(s){return s?.sale_status!=='cancelled'}
+function saleTotal(s){return num(s?.sale_total)>0?num(s.sale_total):num(s?.paid_amount)}
+function netPaid(s){return Math.max(0,num(s?.paid_amount)-num(s?.refunded_amount))}
+function saleBalance(s){if(!activeSale(s))return 0;const value=Number(s?.balance_due);return Number.isFinite(value)?Math.max(0,value):Math.max(0,saleTotal(s)-num(s?.paid_amount))}
+function costSummary(items,clients){const fixed=items.filter(x=>x?.mode!=='per_person').reduce((sum,x)=>sum+num(x?.amount),0),perPerson=items.filter(x=>x?.mode==='per_person').reduce((sum,x)=>sum+num(x?.amount),0);return{fixed,perPerson,total:fixed+perPerson*num(clients)}}
 function dispatchId(tripId,closedAt){return createHash('sha256').update(`trip_closure|${tripId}|${stampMs(closedAt)||clean(closedAt)}`).digest('hex')}
 function plannedCostRows(trip,clients){
   let items=Array.isArray(trip?.cost_items)?trip.cost_items:[];
@@ -67,6 +78,21 @@ async function processTrip(doc){
   }
 }
 
+async function repairTargetClosure(){
+  if(!targetTripId)return;
+  if(!targetBusCost)throw new Error('TARGET_BUS_COST deve ser maior que zero.');
+  const ref=db.collection('trips').doc(targetTripId),snap=await ref.get();if(!snap.exists)throw new Error(`Passeio não encontrado: ${targetTripId}`);
+  const trip={id:snap.id,...snap.data()},items=Array.isArray(trip.cost_items)?trip.cost_items.map(x=>({...x})):[];
+  const index=items.findIndex(x=>/onibus|transporte/.test(norm(x?.category||x?.description))&&x?.mode!=='per_person');
+  if(index>=0)items[index]={...items[index],mode:'fixed',amount:targetBusCost};else items.push({category:'Ônibus / Transporte',mode:'fixed',amount:targetBusCost});
+  const [salesSnap,expensesSnap]=await Promise.all([db.collection('sales').where('trip_id','==',targetTripId).get(),db.collection('expenses').where('trip_id','==',targetTripId).get()]);
+  const sales=salesSnap.docs.map(d=>({id:d.id,...d.data()})),expenses=expensesSnap.docs.map(d=>({id:d.id,...d.data()})),active=sales.filter(activeSale),clients=active.reduce((sum,s)=>sum+num(s.seats),0),sold=active.reduce((sum,s)=>sum+saleTotal(s),0),received=active.reduce((sum,s)=>sum+netPaid(s),0),receivable=active.reduce((sum,s)=>sum+saleBalance(s),0),refunds=sales.reduce((sum,s)=>sum+num(s.refunded_amount),0),cost=costSummary(items,clients),paid=expenses.filter(expensePaid).reduce((sum,e)=>sum+closureExpenseTotal(e,clients),0),open=expenses.filter(e=>!expensePaid(e)).reduce((sum,e)=>sum+closureExpenseTotal(e,clients),0),actual=paid+open,costActual=Math.max(cost.total,actual),costSource=actual>=cost.total&&expenses.length?'actual':'planned',profit=received-costActual,projected=sold-cost.total,margin=received>0?profit/received*100:0,ticket=clients>0?sold/clients:num(trip.default_price),contribution=ticket-cost.perPerson,breakEven=contribution>0?Math.ceil(cost.fixed/contribution):null,capacity=Math.max(0,num(trip.total_spots)-1),stamp=FieldValue.serverTimestamp();
+  const closure={version:'v40.2',closed_at:new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),clients,sold,received,receivable,refunds,cost_projected:cost.total,cost_actual:costActual,cost_expenses_actual:actual,cost_source:costSource,expenses_paid:paid,expenses_open:open,profit_actual:profit,profit_projected:projected,margin_percent:Number(margin.toFixed(2)),ticket_average:ticket,break_even_clients:breakEven,cash_result:profit};
+  await ref.update({cost_items:items,cost_bus_fixed:targetBusCost,cost_fixed_total:cost.fixed,cost_per_person_total:cost.perPerson,estimated_cost:cost.fixed+cost.perPerson*capacity,financial_locked:true,financial_closure:closure,financial_closed_at:stamp,financial_recalculated_at:stamp,financial_closure_email_status:'pending',financial_closure_email_sent_at:FieldValue.delete(),financial_closure_email_resend_id:FieldValue.delete(),financial_closure_email_error:FieldValue.delete(),status:'completed',updated_at:stamp});
+  console.log(`Fechamento recalculado: ${trip.name} | clientes ${clients} | custo ${costActual.toFixed(2)} | resultado ${profit.toFixed(2)}`);
+}
+
+await repairTargetClosure();
 const snap=await db.collection('trips').where('financial_closure_email_status','==','pending').limit(20).get();
 let failures=0;for(const doc of snap.docs){try{await processTrip(doc)}catch(e){failures++;console.error(`Falha ${doc.id}:`,e?.message||e)}}
 console.log(`Fechamentos processados: ${snap.size}; falhas: ${failures}`);if(failures)process.exitCode=1;

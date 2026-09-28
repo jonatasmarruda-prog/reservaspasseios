@@ -2,6 +2,15 @@ name: Resultado final do passeio
 
 on:
   workflow_dispatch:
+    inputs:
+      trip_id:
+        description: 'ID do passeio a recalcular antes do envio (opcional)'
+        required: false
+        type: string
+      bus_cost:
+        description: 'Novo custo total de ônibus/transporte (opcional)'
+        required: false
+        type: string
   schedule:
     - cron: '*/5 * * * *'
     - cron: '2-59/5 * * * *'
@@ -35,4 +44,6 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           EMAIL_FROM: 'Trilheiros de Rondonópolis <reservas@trilheirosderondonopolis.com.br>'
+          TARGET_TRIP_ID: ${{ github.event_name == 'push' && 'chapada_guimaraes' || inputs.trip_id }}
+          TARGET_BUS_COST: ${{ github.event_name == 'push' && '3500' || inputs.bus_cost }}
         run: node automation/send-trip-closure-emails.mjs

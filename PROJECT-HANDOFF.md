@@ -114,6 +114,8 @@ Campos monetários de custos e despesas aceitam formato brasileiro (`5.000`, `5.
 
 O e-mail de fechamento financeiro deve ser entregue tanto em `trilheiros.roomt@gmail.com` quanto em `jonatasmarruda@gmail.com`. O envio só processa passeios com `financial_closure_email_status: pending`; fechamentos antigos sem esse campo precisam ser recalculados ou reenfileirados explicitamente, para não enviar retratos financeiros desatualizados.
 
+O workflow `Resultado final do passeio` aceita execução manual com `trip_id` e `bus_cost`: quando preenchidos, atualiza apenas o custo fixo de ônibus/transporte daquele passeio, recalcula o fechamento com vendas, recebimentos e demais custos atuais e então envia o novo relatório. Use essa opção somente com valor confirmado pelo administrador.
+
 ## Financeiro e Pendências
 A V42 usa `sales` + `expenses` e mostra:
 - faturado;
