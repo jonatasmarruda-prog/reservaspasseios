@@ -112,7 +112,7 @@ No fechamento final, o custo considerado é o maior entre as despesas reais lan�
 
 Campos monetários de custos e despesas aceitam formato brasileiro (`5.000`, `5.000,00`, `39,98`) e formato técnico com ponto decimal (`39.98`). Não use `type="number"` nesses campos, pois em alguns celulares `5.000` era salvo como `5`.
 
-O e-mail de fechamento financeiro deve ser entregue tanto em `trilheiros.roomt@gmail.com` quanto em `jonatasmarruda@gmail.com`. O envio só processa passeios com `financial_closure_email_status: pending`; fechamentos antigos sem esse campo precisam ser recalculados ou reenfileirados explicitamente, para não enviar retratos financeiros desatualizados.
+O e-mail de fechamento financeiro deve ser entregue tanto em `trilheiros.roomt@gmail.com` quanto em `jonatasmarruda@gmail.com`. O envio só processa passeios com `financial_closure_email_status: pending`; fechamentos antigos sem esse campo precisam ser recalculados ou reenfileirados explicitamente, para não enviar retratos financeiros desatualizados. O painel agora exibe o status do relatório no fechamento e oferece **Reenviar relatório por e-mail**; cada reenvio incrementa `financial_closure_email_revision`, gerando uma nova chave idempotente sem duplicar envios normais.
 
 O workflow `Resultado final do passeio` aceita execução manual com `trip_id` e `bus_cost`: quando preenchidos, atualiza apenas o custo fixo de ônibus/transporte daquele passeio, recalcula o fechamento com vendas, recebimentos e demais custos atuais e então envia o novo relatório. Use essa opção somente com valor confirmado pelo administrador.
 
@@ -128,7 +128,8 @@ A V42 usa `sales` + `expenses` e mostra:
 - formas de pagamento;
 - despesas por categoria;
 - resultado por passeio;
-- relatório mensal detalhado.
+- relatório mensal detalhado;
+- lucro por passeio e lucro mensal usando `recebido - custo total considerado`, onde o custo considerado é `max(custo previsto, despesas lançadas)`. O saldo de caixa continua separado e usa somente despesas efetivamente pagas.
 
 Reservas do Canva devem mostrar automaticamente nome, participantes, passeio, tipo/opção, forma de pagamento, valor total, valor já confirmado, saldo e próxima parcela quando aplicável.
 
