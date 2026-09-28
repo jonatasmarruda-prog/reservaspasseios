@@ -27,6 +27,13 @@ function selectedTrip(){
   return tripById(id)||null;
 }
 function missingChecklist(t){const c=t?.checklist||{};return CHECKLIST.filter(([k])=>!c[k])}
+function closureEmailLabel(t){
+  const s=String(t?.financial_closure_email_status||'').toLowerCase();
+  if(s==='sent')return'RELATÓRIO ENVIADO';
+  if(s==='pending'||s==='sending')return'RELATÓRIO NA FILA';
+  if(s==='error'||t?.financial_closure_email_error)return'ERRO NO E-MAIL';
+  return'RELATÓRIO PENDENTE';
+}
 function schedule(delay=70){clearTimeout(renderTimer);renderTimer=setTimeout(()=>{injectStyle();patchNavigation();patchDayMode()},delay)}
 function setText(el,text){if(el&&el.textContent!==text)el.textContent=text}
 function digits(v){return String(v||'').replace(/\D/g,'')}
@@ -130,7 +137,7 @@ function patchDayMode(){
   else if(d<=3&&missing.length){readiness=`${missing.length} PENDÊNCIA(S)`;readinessClass='warn'}
   else if(d<=3){readiness='PRONTO PARA VIAJAR';readinessClass='ok'}
   const when=d===0?'HOJE':d===1?'AMANHÃ':d>1&&d<999?`FALTAM ${d} DIAS`:d<0?`PASSOU HÁ ${Math.abs(d)} DIA(S)`:'DATA A CONFIRMAR';
-  const signature=[t.id,present,total,missing.map(x=>x[0]).join(','),d,t.financial_locked?'1':'0',closure.received||0,closure.cost_actual||0,closure.profit_actual||0,closure.margin_percent||0].join('|');
+  const signature=[t.id,present,total,missing.map(x=>x[0]).join(','),d,t.financial_locked?'1':'0',closure.received||0,closure.cost_actual||0,closure.profit_actual||0,closure.margin_percent||0,t.financial_closure_email_status||'',t.financial_closure_email_revision||0].join('|');
 
   let summary=q('#tripOpsSummary',content);
   if(!summary){summary=document.createElement('section');summary.id='tripOpsSummary';summary.className='tripOpsSummary';const grid=q('.dayGrid',content);grid?content.insertBefore(summary,grid):content.prepend(summary)}
@@ -139,8 +146,21 @@ function patchDayMode(){
   summary.innerHTML=`
     <article class="tripOpsCard"><span class="opsEyebrow">✅ EMBARQUE / CHECK-IN</span><h3>${present}/${total} embarcados</h3><p>Participantes carregados automaticamente do passeio selecionado.</p><strong class="opsValue">${total?Math.round(present/total*100):0}%</strong><span class="tripOpsStatus ${present===total&&total?'ok':''}">${present===total&&total?'CHECK-IN COMPLETO':'CHECK-IN EM ANDAMENTO'}</span><div class="tripOpsActions"><button type="button" onclick="focusTripCheckin()">Abrir lista de embarque</button></div></article>
     <article class="tripOpsCard"><span class="opsEyebrow">⚠️ CHECKLIST PRÉ-VIAGEM</span><h3>${when}</h3><p>${d>=0&&d<=3?'Checklist automático ativo. Confira os itens antes da saída.':'O sistema acompanha a data do passeio e destaca pendências automaticamente.'}</p><strong class="opsValue">${CHECKLIST.length-missing.length}/${CHECKLIST.length}</strong><span class="tripOpsStatus ${readinessClass}">${readiness}</span><div class="tripOpsActions"><button type="button" class="secondary" onclick="focusTripChecklist()">Ver checklist</button></div></article>
-    <article class="tripOpsCard"><span class="opsEyebrow">💰 RESULTADO FINAL</span><h3>${t.financial_locked?'Passeio fechado':'Fechamento automático'}</h3><p>${t.financial_locked?'Resultado financeiro preservado e relatório enviado/colocado na fila de e-mail.':'Ao finalizar, o sistema calcula automaticamente: recebido menos o custo total cadastrado no passeio.'}</p>${t.financial_locked?`<div class="tripOpsFinalGrid"><div><span>RECEBIDO</span><b>${money(closure.received)}</b></div><div><span>CUSTO TOTAL</span><b>${money(closure.cost_actual)}</b></div><div><span>LUCRO FINAL</span><b>${money(closure.profit_actual)}</b></div><div><span>MARGEM</span><b>${Number(closure.margin_percent||0).toFixed(1)}%</b></div></div><span class="tripOpsStatus closed">RESULTADO FINAL SALVO</span>${canManage()?`<div class="tripOpsActions"><button type="button" class="gold" onclick="recalculateTripClosure('${String(t.id).replace(/'/g,'')}')">Recalcular fechamento</button></div>`:''}`:`<strong class="opsValue">${d<=0?'Pronto':'Após a viagem'}</strong><span class="tripOpsStatus ${d<0?'warn':''}">${d<=0?'PODE FINALIZAR':'AGUARDANDO A DATA'}</span>${canManage()?`<div class="tripOpsActions"><button type="button" class="gold" ${d>0?'disabled style="opacity:.55;cursor:not-allowed"':''} onclick="finalizeTripOperations('${String(t.id).replace(/'/g,'')}')">Finalizar passeio e calcular</button></div>`:''}`}</article>`;
+    <article class="tripOpsCard"><span class="opsEyebrow">💰 RESULTADO FINAL</span><h3>${t.financial_locked?'Passeio fechado':'Fechamento automático'}</h3><p>${t.financial_locked?'Resultado financeiro preservado e relatório enviado/colocado na fila de e-mail.':'Ao finalizar, o sistema calcula automaticamente: recebido menos o custo total cadastrado no passeio.'}</p>${t.financial_locked?`<div class="tripOpsFinalGrid"><div><span>RECEBIDO</span><b>${money(closure.received)}</b></div><div><span>CUSTO TOTAL</span><b>${money(closure.cost_actual)}</b></div><div><span>LUCRO FINAL</span><b>${money(closure.profit_actual)}</b></div><div><span>MARGEM</span><b>${Number(closure.margin_percent||0).toFixed(1)}%</b></div></div><span class="tripOpsStatus closed">RESULTADO FINAL SALVO</span><span class="tripOpsStatus ${String(t.financial_closure_email_status||'').toLowerCase()==='sent'?'ok':String(t.financial_closure_email_error||'')?'warn':''}">${closureEmailLabel(t)}</span>${canManage()?`<div class="tripOpsActions"><button type="button" class="gold" onclick="recalculateTripClosure('${String(t.id).replace(/'/g,'')}')">Recalcular fechamento</button><button type="button" class="secondary" onclick="resendTripClosureEmail('${String(t.id).replace(/'/g,'')}')">Reenviar relatório por e-mail</button></div>`:''}`:`<strong class="opsValue">${d<=0?'Pronto':'Após a viagem'}</strong><span class="tripOpsStatus ${d<0?'warn':''}">${d<=0?'PODE FINALIZAR':'AGUARDANDO A DATA'}</span>${canManage()?`<div class="tripOpsActions"><button type="button" class="gold" ${d>0?'disabled style="opacity:.55;cursor:not-allowed"':''} onclick="finalizeTripOperations('${String(t.id).replace(/'/g,'')}')">Finalizar passeio e calcular</button></div>`:''}`}</article>`;
 }
+
+window.resendTripClosureEmail=async function(tripId){
+  const t=tripById(tripId);if(!t||typeof db==='undefined')return;
+  if(!canManage()){if(typeof toast==='function')toast('Somente proprietário ou administrador pode reenviar o relatório.','error');return}
+  if(!t.financial_locked||!t.financial_closure){if(typeof toast==='function')toast('Finalize o passeio antes de reenviar o relatório.','error');return}
+  if(!confirm('Reenviar o relatório financeiro de '+(t.name||'este passeio')+' por e-mail?'))return;
+  try{
+    const stamp=firebase.firestore.FieldValue.serverTimestamp(),inc=firebase.firestore.FieldValue.increment(1),del=firebase.firestore.FieldValue.delete();
+    await db.collection('trips').doc(tripId).update({financial_closure_email_revision:inc,financial_closure_email_status:'pending',financial_closure_email_requested_at:stamp,financial_closure_email_requested_by:auth?.currentUser?.email||'',financial_closure_email_sent_at:del,financial_closure_email_resend_id:del,financial_closure_email_error:del,updated_at:stamp});
+    t.financial_closure_email_revision=Number(t.financial_closure_email_revision||0)+1;t.financial_closure_email_status='pending';delete t.financial_closure_email_error;delete t.financial_closure_email_sent_at;delete t.financial_closure_email_resend_id;
+    if(typeof toast==='function')toast('Relatório colocado novamente na fila de e-mail.','success');schedule(20);
+  }catch(e){console.warn('TRIP_CLOSURE_EMAIL_RESEND',e);if(typeof toast==='function')toast(e.message||'Não foi possível reenviar o relatório agora.','error')}
+};
 
 async function requestClosureEmail(tripId){
   if(typeof db==='undefined')return;
