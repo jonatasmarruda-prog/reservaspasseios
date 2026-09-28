@@ -108,6 +108,8 @@ Padrões:
 
 Custos por pessoa multiplicam a quantidade de clientes. Custos totais entram uma única vez. Despesas reais ficam sempre vinculadas ao `trip_id` e devem ser exibidas somente dentro do respectivo passeio.
 
+No fechamento final, despesas reais lançadas têm prioridade. Quando não existir nenhum lançamento real em `expenses`, o fechamento deve aplicar automaticamente o total de `cost_items` já cadastrado no passeio; nunca gravar custo zero se houver custos previstos. Passeios já fechados podem usar “Recalcular fechamento”, que preserva vendas e custos, atualiza o retrato financeiro e gera uma nova fila de e-mail com o resultado corrigido.
+
 ## Financeiro e Pendências
 A V42 usa `sales` + `expenses` e mostra:
 - faturado;
