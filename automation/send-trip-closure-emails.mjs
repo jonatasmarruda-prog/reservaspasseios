@@ -34,7 +34,7 @@ function saleTotal(s){return num(s?.sale_total)>0?num(s.sale_total):num(s?.paid_
 function netPaid(s){return Math.max(0,num(s?.paid_amount)-num(s?.refunded_amount))}
 function saleBalance(s){if(!activeSale(s))return 0;const value=Number(s?.balance_due);return Number.isFinite(value)?Math.max(0,value):Math.max(0,saleTotal(s)-num(s?.paid_amount))}
 function costSummary(items,clients){const fixed=items.filter(x=>x?.mode!=='per_person').reduce((sum,x)=>sum+num(x?.amount),0),perPerson=items.filter(x=>x?.mode==='per_person').reduce((sum,x)=>sum+num(x?.amount),0);return{fixed,perPerson,total:fixed+perPerson*num(clients)}}
-function dispatchId(tripId,closedAt){return createHash('sha256').update(`trip_closure|${tripId}|${stampMs(closedAt)||clean(closedAt)}`).digest('hex')}
+function dispatchId(tripId,closedAt,revision=0){return createHash('sha256').update(`trip_closure|${tripId}|${stampMs(closedAt)||clean(closedAt)}|rev:${num(revision)}`).digest('hex')}
 function plannedCostRows(trip,clients){
   let items=Array.isArray(trip?.cost_items)?trip.cost_items:[];
   if(!items.length)items=[
@@ -64,9 +64,9 @@ function template(trip,expenses){
 
 async function processTrip(doc){
   const ref=doc.ref,trip={id:doc.id,...doc.data()};if(!trip.financial_locked||!trip.financial_closure)return;
-  const id=dispatchId(doc.id,trip.financial_closed_at||trip.financial_closure?.closed_at),dispatchRef=db.collection('email_dispatches').doc(id);
+  const id=dispatchId(doc.id,trip.financial_closed_at||trip.financial_closure?.closed_at,trip.financial_closure_email_revision||0),dispatchRef=db.collection('email_dispatches').doc(id);
   let claimed=false;
-  await db.runTransaction(async tx=>{const snap=await tx.get(dispatchRef),d=snap.exists?snap.data()||{}:{};if(d.status==='sent'||d.status==='sending')return;tx.set(dispatchRef,{kind:'trip_financial_closure',trip_id:doc.id,source_ref:ref.path,status:'sending',attempts:Number(d.attempts||0)+1,last_attempt_at:FieldValue.serverTimestamp(),updated_at:FieldValue.serverTimestamp(),created_at:d.created_at||FieldValue.serverTimestamp()},{merge:true});claimed=true});
+  await db.runTransaction(async tx=>{const snap=await tx.get(dispatchRef),d=snap.exists?snap.data()||{}:{};if(d.status==='sent'||d.status==='sending')return;tx.set(dispatchRef,{kind:'trip_financial_closure',trip_id:doc.id,source_ref:ref.path,email_revision:num(trip.financial_closure_email_revision||0),status:'sending',attempts:Number(d.attempts||0)+1,last_attempt_at:FieldValue.serverTimestamp(),updated_at:FieldValue.serverTimestamp(),created_at:d.created_at||FieldValue.serverTimestamp()},{merge:true});claimed=true});
   if(!claimed)return;
   try{
     const expSnap=await db.collection('expenses').where('trip_id','==',doc.id).get(),expenses=expSnap.docs.map(d=>({id:d.id,...d.data()})),mail=template(trip,expenses),sent=await sendResend({...mail,key:`trip-closure-${id}`});
