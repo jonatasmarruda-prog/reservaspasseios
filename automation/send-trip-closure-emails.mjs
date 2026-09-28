@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 const rawService=process.env.FIREBASE_SERVICE_ACCOUNT||'';
 const resendKey=process.env.RESEND_API_KEY||'';
 const emailFrom=process.env.EMAIL_FROM||'';
-const DESTINATION='trilheiros.roomt@gmail.com';
+const DESTINATIONS=['trilheiros.roomt@gmail.com','jonatasmarruda@gmail.com'];
 const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 const TZ='America/Cuiaba';
 
@@ -36,7 +36,7 @@ function plannedCostRows(trip,clients){
 async function sendResend({subject,html,text,key}){
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
   try{
-    const resp=await fetch('https://api.resend.com/emails',{method:'POST',signal:controller.signal,headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({from:emailFrom,to:[DESTINATION],reply_to:'trilheiros.roomt@gmail.com',subject,html,text})});
+    const resp=await fetch('https://api.resend.com/emails',{method:'POST',signal:controller.signal,headers:{Authorization:`Bearer ${resendKey}`,'Content-Type':'application/json','Idempotency-Key':key},body:JSON.stringify({from:emailFrom,to:DESTINATIONS,reply_to:'trilheiros.roomt@gmail.com',subject,html,text})});
     const body=await resp.text();if(!resp.ok)throw new Error(`Resend ${resp.status}: ${body.slice(0,500)}`);try{return JSON.parse(body||'{}')}catch{return{}}
   }finally{clearTimeout(timer)}
 }

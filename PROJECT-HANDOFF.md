@@ -112,6 +112,8 @@ No fechamento final, o custo considerado é o maior entre as despesas reais lan�
 
 Campos monetários de custos e despesas aceitam formato brasileiro (`5.000`, `5.000,00`, `39,98`) e formato técnico com ponto decimal (`39.98`). Não use `type="number"` nesses campos, pois em alguns celulares `5.000` era salvo como `5`.
 
+O e-mail de fechamento financeiro deve ser entregue tanto em `trilheiros.roomt@gmail.com` quanto em `jonatasmarruda@gmail.com`. O envio só processa passeios com `financial_closure_email_status: pending`; fechamentos antigos sem esse campo precisam ser recalculados ou reenfileirados explicitamente, para não enviar retratos financeiros desatualizados.
+
 ## Financeiro e Pendências
 A V42 usa `sales` + `expenses` e mostra:
 - faturado;
