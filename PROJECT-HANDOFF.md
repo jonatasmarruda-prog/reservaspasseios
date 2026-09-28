@@ -110,6 +110,8 @@ Custos por pessoa multiplicam a quantidade de clientes. Custos totais entram uma
 
 No fechamento final, o custo considerado é o maior entre as despesas reais lançadas e o total de `cost_items` cadastrado no passeio. Assim, lançamentos reais parciais nunca apagam ônibus, transporte, alimentação, atrativos ou outros custos previstos; nunca grave custo zero se houver custos cadastrados. Passeios já fechados podem usar “Recalcular fechamento”, que preserva vendas e custos, atualiza o retrato financeiro e gera uma nova fila de e-mail com o resultado corrigido. Essa regra vale para todos os passeios: `lucro atual = valor recebido - custo total considerado`; o painel mantém também `lucro previsto = valor vendido - custo previsto`, sem misturar pagamentos pendentes com dinheiro já recebido.
 
+Campos monetários de custos e despesas aceitam formato brasileiro (`5.000`, `5.000,00`, `39,98`) e formato técnico com ponto decimal (`39.98`). Não use `type="number"` nesses campos, pois em alguns celulares `5.000` era salvo como `5`.
+
 ## Financeiro e Pendências
 A V42 usa `sales` + `expenses` e mostra:
 - faturado;
