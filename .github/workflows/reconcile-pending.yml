@@ -1,4 +1,4 @@
-name: Liberar reservas pendentes expiradas
+name: Conferir reservas pendentes antigas
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  reconcile-pending:
+  review-pending:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
           node-version: 20
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
-      - name: Liberar reservas sem pagamento confirmado
+      - name: Sinalizar reservas sem pagamento confirmado
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           PENDING_HOLD_MINUTES: '60'
