@@ -7,7 +7,7 @@ admin.initializeApp({credential:admin.credential.cert(service)});
 const db=admin.firestore(),FV=admin.firestore.FieldValue;
 const cutoff=Date.now()-minutes*60000;
 const snap=await db.collection('sales').where('payment_status','==','pending').get();
-let released=0,skipped=0,failed=0;
+let flagged=0,skipped=0,failed=0;
 for(const doc of snap.docs){
   const s=doc.data();
   if(s.sale_status==='cancelled'||s.sale_status==='expired'){skipped++;continue}
@@ -19,21 +19,17 @@ for(const doc of snap.docs){
   try{
     const saleRef=doc.ref,tripRef=db.collection('trips').doc(s.trip_id),resRef=tripRef.collection('reservations').doc(doc.id);
     await db.runTransaction(async tx=>{
-      const [ss,ts,rs]=await Promise.all([tx.get(saleRef),tx.get(tripRef),tx.get(resRef)]);
-      if(!ss.exists||!ts.exists||!rs.exists)return;
-      const sd=ss.data(),td=ts.data(),rd=rs.data();
+      const [ss,rs]=await Promise.all([tx.get(saleRef),tx.get(resRef)]);
+      if(!ss.exists)return;
+      const sd=ss.data(),rd=rs.exists?rs.data():{};
       if(sd.payment_status!=='pending'||Number(sd.paid_amount||0)>0||sd.sale_status==='cancelled'||rd.status==='cancelled')return;
-      const seats=Math.max(0,Number(sd.seats||rd.seats||0));
       const now=FV.serverTimestamp();
-      const guideFloor=td.special_seat_counted===true?1:0;
-      const used=Math.max(guideFloor,Number(td.used_spots||guideFloor)-seats);
-      const remaining=Math.max(0,Number(td.total_spots||0)>0?Number(td.total_spots)-used:Number(td.remaining_spots||0)+seats);
-      tx.update(saleRef,{sale_status:'cancelled',payment_status:'cancelled',balance_due:0,cancel_reason:`Pagamento não confirmado em ${minutes} minutos — vaga liberada automaticamente`,expired_at:now,cancelled_at:now,updated_at:now});
-      tx.update(resRef,{status:'cancelled',payment_status:'cancelled',balance_due:0,cancel_reason:`Pagamento não confirmado em ${minutes} minutos — vaga liberada automaticamente`,expired_at:now,updated_at:now});
-      tx.update(tripRef,{used_spots:used,remaining_spots:remaining,updated_at:now});
+      const reason=`Pagamento ainda não confirmado após ${minutes} minutos — conferir manualmente antes de liberar a vaga`;
+      tx.update(saleRef,{payment_review_required:true,payment_alert_pending:true,payment_review_reason:reason,payment_review_flagged_at:now,updated_at:now});
+      if(rs.exists)tx.update(resRef,{payment_review_required:true,payment_alert_pending:true,payment_review_reason:reason,payment_review_flagged_at:now,updated_at:now});
     });
-    released++;
+    flagged++;
   }catch(e){failed++;console.error(`Falha ${doc.id}:`,e.message)}
 }
-console.log(`Pendências liberadas: ${released} | ignoradas: ${skipped} | falhas: ${failed}`);
+console.log(`Pendências sinalizadas para conferência: ${flagged} | ignoradas: ${skipped} | falhas: ${failed}`);
 if(failed)process.exitCode=1;
