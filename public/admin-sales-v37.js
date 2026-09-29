@@ -72,7 +72,7 @@ window.restoreAutoCancelledSaleV37=async function(id){
     });
     try{await window.auditV7?.('restore','sale',id,'Venda restaurada após cancelamento automático de pendência.')}catch(_){}
     notify('Pendência restaurada. Confira o pagamento antes de confirmar.','success');
-    renderSalesPageV37?.();
+    window.renderSalesPageV37?.();
   }catch(e){notify(e.message||'Não foi possível restaurar a pendência.','error')}
 };
 
