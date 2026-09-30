@@ -1,8 +1,45 @@
 (()=>{
 const {supabaseClient,CFG}=window.ReceiptsApp;const root=document.getElementById('root');let S={profile:null,settings:null,requests:[],receipts:[],view:'dashboard'};
 function roleName(r){return r==='admin'?'Administrador':'Contabilidade'}
-async function boot(){const {data:{session}}=await supabaseClient.auth.getSession();if(!session){login();return}const {data:p}=await supabaseClient.from('profiles').select('*').eq('id',session.user.id).single();if(!p){await supabaseClient.auth.signOut();root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="notice error">Seu usuário ainda não foi ativado. Use a página de primeiro acesso.</div><a class="btn btn-primary" href="setup.html">Ativar acesso</a></div></div>';return}S.profile={...p,email:session.user.email};await load();shell()}
-function login(){root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso administrativo</h1><p>Entre para consultar recibos, criar solicitações e gerar PDFs.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required></div><div style="height:12px"></div><div class="field"><label>Senha</label><input name="password" type="password" required></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><p style="text-align:center;margin-top:16px"><a href="setup.html">Primeiro acesso</a></p></div></div>';document.getElementById('login').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,{error}=await supabaseClient.auth.signInWithPassword({email:f.email.value.trim(),password:f.password.value});if(error){const x=document.getElementById('loginErr');x.textContent='Não foi possível entrar. Confira e-mail e senha.';x.classList.remove('hidden');return}boot()}}
+function withTimeout(promise,ms=4000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
+async function boot(){
+  login();
+  if(!supabaseClient){
+    const x=document.getElementById('loginErr');
+    if(x){x.textContent='Não foi possível conectar ao serviço de dados. Atualize a página e tente novamente.';x.classList.remove('hidden')}
+    return;
+  }
+  try{
+    const result=await withTimeout(supabaseClient.auth.getSession(),3500);
+    const session=result?.data?.session;
+    if(!session)return;
+    const {data:p,error}=await withTimeout(supabaseClient.from('profiles').select('*').eq('id',session.user.id).single(),5000);
+    if(error||!p){await supabaseClient.auth.signOut();return}
+    S.profile={...p,email:session.user.email};
+    await load();
+    shell();
+  }catch(err){
+    console.warn('Inicialização do painel:',err);
+  }
+}
+function login(){
+  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso administrativo</h1><p>Entre para consultar recibos, criar solicitações e gerar PDFs.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email"></div><div style="height:12px"></div><div class="field"><label>Senha</label><input name="password" type="password" required autocomplete="current-password"></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form></div></div>';
+  document.getElementById('login').onsubmit=async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,btn=form.querySelector('button'),x=document.getElementById('loginErr');
+    x.classList.add('hidden');
+    if(!supabaseClient){x.textContent='Serviço de dados indisponível. Atualize a página.';x.classList.remove('hidden');return}
+    btn.disabled=true;btn.textContent='Entrando...';
+    try{
+      const {error}=await withTimeout(supabaseClient.auth.signInWithPassword({email:form.email.value.trim(),password:form.password.value}),8000);
+      if(error)throw error;
+      await boot();
+    }catch(err){
+      x.textContent=err?.message==='timeout'?'A conexão demorou demais. Tente novamente.':'Não foi possível entrar. Confira e-mail e senha.';
+      x.classList.remove('hidden');
+    }finally{btn.disabled=false;btn.textContent='Entrar no painel'}
+  };
+}
 async function load(){const [a,b,c]=await Promise.all([supabaseClient.from('app_settings').select('*').eq('id',1).single(),supabaseClient.from('receipt_requests').select('*').order('created_at',{ascending:false}),supabaseClient.from('receipts').select('*').order('created_at',{ascending:false})]);S.settings=a.data||{};S.requests=b.data||[];S.receipts=c.data||[]}
 function shell(){const admin=S.profile.role==='admin';root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos</button><button data-v="requests">Solicitações</button>${admin?'<button data-v="new">+ Novo recibo</button><button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div id="content"></div></main></div>`;root.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render()});document.getElementById('logout').onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};render()}
 function reqFor(r){return S.requests.find(q=>q.id===r.request_id)||{}}
