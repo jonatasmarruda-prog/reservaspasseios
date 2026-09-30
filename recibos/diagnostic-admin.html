@@ -1,0 +1,5 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Admin Diagnostic</title><link rel="stylesheet" href="styles.css"></head><body><pre id="diag">starting</pre><div id="root"><div>initial root</div></div><script>
+window.__errs=[];window.addEventListener('error',e=>{window.__errs.push((e.message||'error')+' @ '+(e.filename||'')+':'+(e.lineno||''));});window.addEventListener('unhandledrejection',e=>{window.__errs.push('promise: '+(e.reason?.message||String(e.reason)));});
+</script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script src="config.js"></script><script src="common.js"></script><script src="pdf.js"></script><script src="admin.js"></script><script>
+setTimeout(()=>{document.getElementById('diag').textContent='errors='+JSON.stringify(window.__errs)+'\nroot='+document.getElementById('root').innerText.slice(0,1000)},3500);
+</script></body></html>
