@@ -1,3 +1,4 @@
+(()=>{
 const {supabaseClient,CFG}=window.ReceiptsApp;const root=document.getElementById('root');let S={profile:null,settings:null,requests:[],receipts:[],view:'dashboard'};
 function roleName(r){return r==='admin'?'Administrador':'Contabilidade'}
 async function boot(){const {data:{session}}=await supabaseClient.auth.getSession();if(!session){login();return}const {data:p}=await supabaseClient.from('profiles').select('*').eq('id',session.user.id).single();if(!p){await supabaseClient.auth.signOut();root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="notice error">Seu usuário ainda não foi ativado. Use a página de primeiro acesso.</div><a class="btn btn-primary" href="setup.html">Ativar acesso</a></div></div>';return}S.profile={...p,email:session.user.email};await load();shell()}
@@ -24,3 +25,4 @@ function openReceipt(id){const r=S.receipts.find(x=>x.id===id),q=reqFor(r);modal
 function modal(html){const el=document.createElement('div');el.className='modal-backdrop';el.innerHTML='<div class="modal">'+html+'</div>';document.body.appendChild(el);el.onclick=e=>{if(e.target===el||e.target.closest('[data-close]'))el.remove()}}
 function exportCSV(){const rows=filtered(),head=['Recibo','Data','Fornecedor','CPF/CNPJ','Passeio','Categoria','Valor','Forma'],body=rows.map(r=>{const q=reqFor(r);return[r.receipt_code,dateBR(r.created_at),r.legal_name,formatCpfCnpj(r.cpf_cnpj),q.event_name,q.category,Number(r.amount_received).toFixed(2).replace('.',','),r.payment_method]});const csv='\ufeff'+[head,...body].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='recibos_trilheiros.csv';a.click()}
 boot();
+})();
