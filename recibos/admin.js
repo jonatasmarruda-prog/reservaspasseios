@@ -14,7 +14,7 @@ async function boot(){
     const session=result?.data?.session;
     if(!session)return;
     const {data:p,error}=await withTimeout(supabaseClient.from('profiles').select('*').eq('id',session.user.id).single(),5000);
-    if(error||!p){await supabaseClient.auth.signOut();return}
+    if(error||!p||!['admin','accounting'].includes(p.role)){await supabaseClient.auth.signOut();const x=document.getElementById('loginErr');if(x){x.textContent='Este usuário não possui acesso autorizado ao sistema.';x.classList.remove('hidden')}return}
     S.profile={...p,email:session.user.email};
     await load();
     shell();
@@ -23,10 +23,21 @@ async function boot(){
   }
 }
 function login(){
-  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso administrativo</h1><p>Entre para consultar recibos, criar solicitações e gerar PDFs.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email"></div><div style="height:12px"></div><div class="field"><label>Senha</label><input name="password" type="password" required autocomplete="current-password"></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form></div></div>';
+  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha">👁</button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
+
+  const eye=document.getElementById('toggleLoginPassword');
+  eye.onclick=()=>{
+    const input=document.getElementById('loginPassword');
+    const show=input.type==='password';
+    input.type=show?'text':'password';
+    eye.textContent=show?'🙈':'👁';
+    eye.setAttribute('aria-label',show?'Ocultar senha':'Mostrar senha');
+    eye.title=show?'Ocultar senha':'Mostrar senha';
+  };
+
   document.getElementById('login').onsubmit=async e=>{
     e.preventDefault();
-    const form=e.currentTarget,btn=form.querySelector('button'),x=document.getElementById('loginErr');
+    const form=e.currentTarget,btn=form.querySelector('button.btn-primary'),x=document.getElementById('loginErr');
     x.classList.add('hidden');
     if(!supabaseClient){x.textContent='Serviço de dados indisponível. Atualize a página.';x.classList.remove('hidden');return}
     btn.disabled=true;btn.textContent='Entrando...';
