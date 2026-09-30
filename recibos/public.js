@@ -1,3 +1,4 @@
+(()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const app=document.getElementById('app');
 const token=new URLSearchParams(location.search).get('token');
@@ -61,3 +62,4 @@ async function submit(e){
  screen('Recibo enviado com sucesso','Protocolo: '+code+'. As informações foram salvas. Este link foi encerrado e não pode mais ser usado.','success');
 }
 load();
+})();
