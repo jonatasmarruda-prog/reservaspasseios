@@ -2,3 +2,14 @@
 .brand-logo{width:48px;height:48px;object-fit:contain;display:block;flex:0 0 auto}.brand-logo-large{width:58px;height:58px}.brand-loading{margin-bottom:18px}@media(max-width:640px){.brand-logo{width:44px;height:44px}.brand-logo-large{width:54px;height:54px}}
 
 .password-field{position:relative;display:flex;align-items:center}.password-field input{padding-right:52px}.password-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:38px;height:38px;border:0;border-radius:10px;background:#eef2ef;color:#223229;font-size:18px;display:grid;place-items:center;cursor:pointer}.password-eye:hover{background:#e2e9e4}
+
+.password-field{position:relative}
+.password-field input{padding-right:56px!important}
+.password-eye{
+ position:absolute!important;right:8px!important;top:50%!important;transform:translateY(-50%)!important;
+ width:42px!important;height:42px!important;border:0!important;border-radius:10px!important;
+ background:#eef2ef!important;color:#173b27!important;display:flex!important;align-items:center!important;
+ justify-content:center!important;z-index:5!important;padding:9px!important;
+}
+.password-eye svg{width:24px!important;height:24px!important;fill:currentColor!important;display:block}
+.password-eye:active{background:#dce8df!important}
