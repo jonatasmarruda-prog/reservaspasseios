@@ -1,3 +1,4 @@
+(()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const form=document.getElementById('setupForm'),msg=document.getElementById('msg');
 function show(t,k='info'){msg.textContent=t;msg.className='notice '+k}
@@ -18,3 +19,4 @@ form.onsubmit=async e=>{
     show(text,'error');
   }finally{btn.disabled=false;btn.textContent='Criar acesso'}
 };
+})();
