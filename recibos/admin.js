@@ -23,14 +23,20 @@ async function boot(){
   }
 }
 function login(){
-  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha">👁</button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
+  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha">
+<svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8Z"/></svg>
+<svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="m3.3 2 18.7 18.7-1.3 1.3-3.1-3.1A11.5 11.5 0 0 1 12 20C7 20 3 15.5 2 13a12.8 12.8 0 0 1 4.2-5.3L2 3.3 3.3 2Zm5.2 8.5a4 4 0 0 0 5 5l-5-5ZM12 6c5 0 9 4.5 10 7a13.5 13.5 0 0 1-2.6 3.8l-2.1-2.1A4 4 0 0 0 11.3 9L9 6.7A10.8 10.8 0 0 1 12 6Z"/></svg>
+</button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
 
   const eye=document.getElementById('toggleLoginPassword');
   eye.onclick=()=>{
     const input=document.getElementById('loginPassword');
     const show=input.type==='password';
     input.type=show?'text':'password';
-    eye.textContent=show?'🙈':'👁';
+    const openIcon=eye.querySelector('.eye-open');
+    const closedIcon=eye.querySelector('.eye-closed');
+    if(openIcon) openIcon.style.display=show?'none':'block';
+    if(closedIcon) closedIcon.style.display=show?'block':'none';
     eye.setAttribute('aria-label',show?'Ocultar senha':'Mostrar senha');
     eye.title=show?'Ocultar senha':'Mostrar senha';
   };
