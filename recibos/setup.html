@@ -2,10 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Primeiro acesso | Trilheiros</title>
+<title>Acesso restrito | Trilheiros</title>
 <meta name="theme-color" content="#102b1c">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<link rel="stylesheet" href="styles.css?v=20260930-1955">
+<link rel="stylesheet" href="styles.css?v=20260930-2000">
 </head>
 <body>
 <div class="login-wrap">
@@ -14,53 +14,11 @@
       <img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis">
       <div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div>
     </div>
-
-    <h1 style="margin-bottom:6px">Primeiro acesso</h1>
-    <p style="margin-top:0">Cadastre seu e-mail e crie uma senha para acessar o painel de recibos.</p>
-
-    <form id="setupForm">
-      <div class="field">
-        <label class="required">E-mail</label>
-        <input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail">
-        <div class="help">Este e-mail será usado sempre que você entrar no painel.</div>
-      </div>
-
-      <div style="height:14px"></div>
-
-      <div class="field">
-        <label class="required">Criar senha</label>
-        <div class="password-field">
-          <input id="newPassword" name="password" type="password" minlength="8" required autocomplete="new-password" placeholder="Mínimo 8 caracteres">
-          <button class="password-eye" type="button" data-toggle-password="newPassword" aria-label="Mostrar senha" title="Mostrar senha">👁</button>
-        </div>
-        <div class="help">Use pelo menos 8 caracteres.</div>
-      </div>
-
-      <div style="height:14px"></div>
-
-      <div class="field">
-        <label class="required">Confirmar senha</label>
-        <div class="password-field">
-          <input id="confirmPassword" name="confirm_password" type="password" minlength="8" required autocomplete="new-password" placeholder="Digite novamente a senha">
-          <button class="password-eye" type="button" data-toggle-password="confirmPassword" aria-label="Mostrar senha" title="Mostrar senha">👁</button>
-        </div>
-        <div class="help">Digite exatamente a mesma senha criada acima.</div>
-      </div>
-
-      <input type="hidden" name="code" value="">
-      <div id="msg" class="notice hidden"></div>
-
-      <div class="actions">
-        <button class="btn btn-primary" style="width:100%">Criar meu acesso</button>
-      </div>
-    </form>
-
-    <p style="text-align:center;margin-top:18px">Já possui cadastro? <a href="admin.html?v=20260930-1955">Entrar no painel</a></p>
+    <h1>Acesso restrito</h1>
+    <p>O cadastro público foi desativado. Este sistema permite somente dois perfis autorizados:</p>
+    <div class="notice info"><strong>Administrador</strong> — acesso total<br><strong>Contabilidade</strong> — consulta de recibos, relatórios e PDFs</div>
+    <div class="actions"><a class="btn btn-primary" style="width:100%;text-decoration:none" href="admin.html?v=20260930-2000">Ir para o login</a></div>
   </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=20260930-1955"></script>
-<script src="common.js?v=20260930-1955"></script>
-<script src="setup.js?v=20260930-1955"></script>
 </body>
 </html>
