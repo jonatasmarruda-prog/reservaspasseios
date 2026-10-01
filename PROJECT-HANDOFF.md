@@ -71,6 +71,11 @@ Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem v
 - Build do shell: `20260911-stable-admin1`. HTML não é armazenado e JS/CSS sempre revalidam; o Service Worker usa network-first para arquivos de aplicação.
 
 ## Cadastro único de participantes — 01/10/2026
+- Regra operacional: dentro do mesmo passeio, o mesmo CPF representa um único participante. O preenchimento pelo Canva e depois pelo link deve completar o cadastro existente, nunca gerar uma segunda pessoa/vaga.
+- O check-in operacional já deduplica participantes pelo CPF antes de contar nomes.
+- O e-mail de confirmação de cadastro informa que a vaga está reservada no sistema e inclui botão para a página pública da política de cancelamento do passeio.
+- O lembrete de 3 dias inclui novamente a política de cancelamento. Participantes adicionais com e-mail próprio também entram na régua de 3 dias, 1 dia e pós-passeio, sem repetir o mesmo endereço.
+- A política pública é exibida em `/politica/<tripId>` e continua acessível independentemente do formulário de cadastro.
 - Canva/portal e link direto passam a usar CPF como identificador principal do participante, com e-mail individual por participante.
 - O portal agora coleta nome, CPF e e-mail de cada pessoa da reserva.
 - O link `/cadastro/<tripId>` também coleta CPF, nome e e-mail de cada participante.
