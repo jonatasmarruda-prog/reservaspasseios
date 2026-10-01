@@ -1,32 +1,50 @@
 (()=>{
 const {supabaseClient,CFG}=window.ReceiptsApp;const root=document.getElementById('root');let S={profile:null,settings:null,requests:[],receipts:[],view:'dashboard'};
 function roleName(r){return r==='admin'?'Administrador':'Contabilidade'}
-function withTimeout(promise,ms=4000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
-async function boot(){
-  login();
-  if(!supabaseClient){
-    const x=document.getElementById('loginErr');
-    if(x){x.textContent='Não foi possível conectar ao serviço de dados. Atualize a página e tente novamente.';x.classList.remove('hidden')}
-    return;
-  }
+function withTimeout(promise,ms=7000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
+
+async function enterPanel(session){
+  const x=document.getElementById('loginErr');
   try{
-    const result=await withTimeout(supabaseClient.auth.getSession(),3500);
-    const session=result?.data?.session;
-    if(!session)return;
-    const {data:p,error}=await withTimeout(supabaseClient.from('profiles').select('*').eq('id',session.user.id).single(),5000);
-    if(error||!p||!['admin','accounting'].includes(p.role)){await supabaseClient.auth.signOut();const x=document.getElementById('loginErr');if(x){x.textContent='Este usuário não possui acesso autorizado ao sistema.';x.classList.remove('hidden')}return}
+    if(!session?.user?.id) throw new Error('Sessão inválida.');
+    const {data:p,error}=await withTimeout(
+      supabaseClient.from('profiles').select('*').eq('id',session.user.id).single(),
+      7000
+    );
+    if(error) throw error;
+    if(!p||!['admin','accounting'].includes(p.role)) throw new Error('Usuário sem acesso autorizado.');
+
     S.profile={...p,email:session.user.email};
     await load();
     shell();
   }catch(err){
-    console.warn('Inicialização do painel:',err);
+    console.error('Falha ao abrir painel:',err);
+    if(x){
+      x.textContent=err?.message==='timeout'
+        ?'Seu login foi aceito, mas o painel demorou para carregar. Toque em Entrar novamente.'
+        :'Login realizado, mas não foi possível abrir o painel. Atualize a página e tente novamente.';
+      x.classList.remove('hidden');
+    }
   }
 }
+
+async function boot(){
+  login();
+  if(!supabaseClient){
+    const x=document.getElementById('loginErr');
+    if(x){x.textContent='Não foi possível conectar ao serviço de dados.';x.classList.remove('hidden')}
+    return;
+  }
+  try{
+    const {data}=await withTimeout(supabaseClient.auth.getSession(),4000);
+    if(data?.session) await enterPanel(data.session);
+  }catch(err){
+    console.warn('Verificação inicial de sessão:',err);
+  }
+}
+
 function login(){
-  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha">
-<svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8Z"/></svg>
-<svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="m3.3 2 18.7 18.7-1.3 1.3-3.1-3.1A11.5 11.5 0 0 1 12 20C7 20 3 15.5 2 13a12.8 12.8 0 0 1 4.2-5.3L2 3.3 3.3 2Zm5.2 8.5a4 4 0 0 0 5 5l-5-5ZM12 6c5 0 9 4.5 10 7a13.5 13.5 0 0 1-2.6 3.8l-2.1-2.1A4 4 0 0 0 11.3 9L9 6.7A10.8 10.8 0 0 1 12 6Z"/></svg>
-</button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div style="text-align:center;margin-top:16px"><a class="first-access-link" href="setup.html?v=20260930-2008">Primeiro acesso — cadastrar meu acesso</a></div><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
+  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8Z"/></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="m3.3 2 18.7 18.7-1.3 1.3-3.1-3.1A11.5 11.5 0 0 1 12 20C7 20 3 15.5 2 13a12.8 12.8 0 0 1 4.2-5.3L2 3.3 3.3 2Zm5.2 8.5a4 4 0 0 0 5 5l-5-5ZM12 6c5 0 9 4.5 10 7a13.5 13.5 0 0 1-2.6 3.8l-2.1-2.1A4 4 0 0 0 11.3 9L9 6.7A10.8 10.8 0 0 1 12 6Z"/></svg></button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div style="text-align:center;margin-top:16px"><a class="first-access-link" href="setup.html?v=20260930-2025">Primeiro acesso — cadastrar meu acesso</a></div><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
 
   const eye=document.getElementById('toggleLoginPassword');
   eye.onclick=()=>{
@@ -45,19 +63,44 @@ function login(){
     e.preventDefault();
     const form=e.currentTarget,btn=form.querySelector('button.btn-primary'),x=document.getElementById('loginErr');
     x.classList.add('hidden');
-    if(!supabaseClient){x.textContent='Serviço de dados indisponível. Atualize a página.';x.classList.remove('hidden');return}
-    btn.disabled=true;btn.textContent='Entrando...';
+    if(!supabaseClient){x.textContent='Serviço de dados indisponível.';x.classList.remove('hidden');return}
+
+    btn.disabled=true;
+    btn.textContent='Entrando...';
+
     try{
-      const {error}=await withTimeout(supabaseClient.auth.signInWithPassword({email:form.email.value.trim(),password:form.password.value}),8000);
-      if(error)throw error;
-      await boot();
+      const {data,error}=await withTimeout(
+        supabaseClient.auth.signInWithPassword({
+          email:form.email.value.trim(),
+          password:form.password.value
+        }),
+        10000
+      );
+      if(error) throw error;
+      if(!data?.session) throw new Error('Sessão não criada.');
+      btn.textContent='Abrindo painel...';
+      await enterPanel(data.session);
     }catch(err){
-      x.textContent=err?.message==='timeout'?'A conexão demorou demais. Tente novamente.':'Não foi possível entrar. Confira e-mail e senha.';
+      console.error('Falha no login:',err);
+      x.textContent=err?.message==='timeout'
+        ?'A conexão demorou demais. Tente novamente.'
+        :'Não foi possível entrar. Confira e-mail e senha.';
       x.classList.remove('hidden');
-    }finally{btn.disabled=false;btn.textContent='Entrar no painel'}
+    }finally{
+      if(document.body.contains(btn)){btn.disabled=false;btn.textContent='Entrar no painel'}
+    }
   };
 }
-async function load(){const [a,b,c]=await Promise.all([supabaseClient.from('app_settings').select('*').eq('id',1).single(),supabaseClient.from('receipt_requests').select('*').order('created_at',{ascending:false}),supabaseClient.from('receipts').select('*').order('created_at',{ascending:false})]);S.settings=a.data||{};S.requests=b.data||[];S.receipts=c.data||[]}
+async function load(){
+  const [a,b,c]=await Promise.all([
+    withTimeout(supabaseClient.from('app_settings').select('*').eq('id',1).single(),7000),
+    withTimeout(supabaseClient.from('receipt_requests').select('*').order('created_at',{ascending:false}),7000),
+    withTimeout(supabaseClient.from('receipts').select('*').order('created_at',{ascending:false}),7000)
+  ]);
+  S.settings=a.data||{};
+  S.requests=b.data||[];
+  S.receipts=c.data||[];
+}
 function shell(){const admin=S.profile.role==='admin';root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos</button><button data-v="requests">Solicitações</button>${admin?'<button data-v="new">+ Novo recibo</button><button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div id="content"></div></main></div>`;root.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render()});document.getElementById('logout').onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};render()}
 function reqFor(r){return S.requests.find(q=>q.id===r.request_id)||{}}
 function render(){root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));({dashboard,receipts,requests,newReq,settings}[S.view]||dashboard)()}
