@@ -48,13 +48,7 @@ async function startFormSession(){
 }
 
 function lockedReceipt(){
-  try{
-    const x=JSON.parse(localStorage.getItem(LOCK_KEY)||'null');
-    if(!x)return null;
-    const age=Date.now()-new Date(x.submitted_at||0).getTime();
-    if(!Number.isFinite(age)||age>86400000){localStorage.removeItem(LOCK_KEY);return null}
-    return x;
-  }catch{return null}
+  try{return JSON.parse(sessionStorage.getItem(LOCK_KEY)||'null')}catch{return null}
 }
 function rememberSupplier(f){
   try{
@@ -84,9 +78,9 @@ function prefillKnownSupplier(f){
     toast('Dados do fornecedor reconhecidos neste aparelho.');
   }catch{}
 }
-function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
+function lockReceipt(data){try{sessionStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
-  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este envio foi concluído neste aparelho e não pode mais ser alterado por esta página.</p></div></section>';
+  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. Para um novo serviço, basta abrir novamente o mesmo link em uma nova aba ou pelo link recebido.</p></div></section>';
 }
 function serviceOptions(){
   return '<option value="">Selecione</option>'+Object.keys(SERVICES).map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
