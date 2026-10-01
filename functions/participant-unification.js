@@ -45,27 +45,28 @@ async function requireUser(req){
   return decoded;
 }
 function profileRef(c){return db.collection('participant_profiles').doc(sha(cpf(c)))}
-function participantKeyRef(tripId,c){return db.collection('trip_participant_keys_v2').doc(sha(`${tripId}|${cpf(c)}`))}
-function rowCpfs(row){
-  const out=[cpf(row?.customer_cpf||row?.responsible_cpf)];
-  for(const p of (Array.isArray(row?.participants)?row.participants:[]))out.push(cpf(p?.cpf));
+function identity(name,emailValue){const n=clean(name).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();const e=email(emailValue);return e&&n?`${e}|${n}`:''}
+function participantKeyRef(tripId,key){return db.collection('trip_participant_keys_v2').doc(sha(`${tripId}|${key}`))}
+function rowIdentities(row){
+  const out=[identity(row?.customer_name||row?.responsible_name,row?.customer_email||row?.email)];
+  for(const p of (Array.isArray(row?.participants)?row.participants:[]))out.push(identity(p?.full_name||p?.name,p?.email));
   return [...new Set(out.filter(Boolean))];
 }
 function mergeParticipants(existing,incoming){
   const map=new Map();
   for(const p of (Array.isArray(existing)?existing:[])){
-    const key=cpf(p?.cpf)||sha(clean(p?.full_name||p?.name).toLowerCase());
+    const key=identity(p?.full_name||p?.name,p?.email)||cpf(p?.cpf)||sha(clean(p?.full_name||p?.name).toLowerCase());
     if(key)map.set(key,{...p,full_name:clean(p?.full_name||p?.name),cpf:cpf(p?.cpf),email:email(p?.email)});
   }
   for(const p of incoming){
-    const key=cpf(p.cpf);
+    const key=identity(p.full_name,p.email)||cpf(p.cpf);
     const old=map.get(key)||{};
     map.set(key,{...old,full_name:clean(p.full_name)||old.full_name||'',cpf:key,email:email(p.email)||old.email||''});
   }
   return [...map.values()];
 }
-async function existingMatch(tripId,cpfs){
-  const keys=await Promise.all(cpfs.map(c=>participantKeyRef(tripId,c).get()));
+async function existingMatch(tripId,identities){
+  const keys=await Promise.all(identities.map(k=>participantKeyRef(tripId,k).get()));
   const keyHits=keys.filter(s=>s.exists).map(s=>s.data()).filter(Boolean);
   const ids=[...new Set(keyHits.map(x=>x.sale_id||x.reservation_id).filter(Boolean))];
   if(ids.length>1)throw Object.assign(new Error('AMBIGUOUS_MATCH'),{status:409});
@@ -73,14 +74,14 @@ async function existingMatch(tripId,cpfs){
 
   const salesSnap=await db.collection('sales').where('trip_id','==',tripId).limit(500).get();
   const saleCandidates=salesSnap.docs.map(d=>({id:d.id,...d.data()})).filter(s=>active(s.sale_status));
-  const scored=saleCandidates.map(s=>({s,score:rowCpfs(s).filter(c=>cpfs.includes(c)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  const scored=saleCandidates.map(s=>({s,score:rowIdentities(s).filter(k=>identities.includes(k)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
   if(scored.length>1&&scored[0].score===scored[1].score&&scored[0].s.id!==scored[1].s.id)throw Object.assign(new Error('AMBIGUOUS_MATCH'),{status:409});
   if(scored.length)return {id:scored[0].s.id,saleId:scored[0].s.id,reservationId:scored[0].s.id};
 
   const tripRef=db.collection('trips').doc(tripId);
   const resSnap=await tripRef.collection('reservations').limit(500).get();
   const resCandidates=resSnap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>active(r.status));
-  const rscored=resCandidates.map(r=>({r,score:rowCpfs(r).filter(c=>cpfs.includes(c)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
+  const rscored=resCandidates.map(r=>({r,score:rowIdentities(r).filter(k=>identities.includes(k)).length})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score);
   if(rscored.length>1&&rscored[0].score===rscored[1].score&&rscored[0].r.id!==rscored[1].r.id)throw Object.assign(new Error('AMBIGUOUS_MATCH'),{status:409});
   if(rscored.length){
     const r=rscored[0].r;
@@ -158,13 +159,13 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
     if(raw.length<1||raw.length>10)return send(res,{ok:false,error:'PARTICIPANTES_INVALIDOS'},400);
     const participants=raw.map(p=>({full_name:clean(p.full_name||p.name),cpf:cpf(p.cpf),email:email(p.email)}));
     if(participants.some(p=>p.full_name.length<3||!validCpf(p.cpf)||!validEmail(p.email)))return send(res,{ok:false,error:'Confira nome, CPF e e-mail de todos os participantes.'},400);
-    const cpfs=participants.map(p=>p.cpf);if(new Set(cpfs).size!==cpfs.length)return send(res,{ok:false,error:'Há CPF repetido entre os participantes.'},400);
-    const responsible=participants[0],match=await existingMatch(tripId,cpfs),tripRef=db.collection('trips').doc(tripId);
+    const identities=participants.map(p=>identity(p.full_name,p.email));if(new Set(identities).size!==identities.length)return send(res,{ok:false,error:'Há participante repetido com o mesmo nome e e-mail.'},400);
+    const responsible=participants[0],match=await existingMatch(tripId,identities),tripRef=db.collection('trips').doc(tripId);
     const matchedReservation=match?await reservationRefForMatch(tripId,match):null;
-    const saleId=match?.saleId||`u_${sha(`${tripId}|${responsible.cpf}`).slice(0,28)}`;
+    const saleId=match?.saleId||`u_${sha(`${tripId}|${identity(responsible.full_name,responsible.email)}`).slice(0,28)}`;
     const reservationId=matchedReservation?.id||match?.reservationId||saleId;
     const saleRef=db.collection('sales').doc(saleId),resRef=tripRef.collection('reservations').doc(reservationId);
-    const keyRefs=cpfs.map(c=>participantKeyRef(tripId,c));
+    const keyRefs=identities.map(k=>participantKeyRef(tripId,k));
     const profileRefs=participants.map(p=>profileRef(p.cpf));
     let result=null;
 
@@ -197,7 +198,7 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
       const resPatch={...common,sale_id:saleId,registration_source:source==='direct_trip_link'?'direct_trip_link':(rd.registration_source||'public_portal_v27'),source:rd.source||source,registration_sources:FieldValue.arrayUnion(source)};
       if(!resSnap.exists){resPatch.created_at=now;tx.set(resRef,resPatch)}else tx.set(resRef,resPatch,{merge:true});
       if(diff>0)tx.update(tripRef,{used_spots:used+diff,remaining_spots:totalSpots>0?Math.max(0,totalSpots-(used+diff)):Math.max(0,rawRemaining-diff),updated_at:now});
-      for(let i=0;i<keyRefs.length;i++)tx.set(keyRefs[i],{trip_id:tripId,cpf:cpfs[i],reservation_id:reservationId,sale_id:saleId,updated_at:now,created_at:keySnaps[i].exists?(keySnaps[i].data()?.created_at||now):now},{merge:true});
+      for(let i=0;i<keyRefs.length;i++)tx.set(keyRefs[i],{trip_id:tripId,participant_identity:identities[i],reservation_id:reservationId,sale_id:saleId,updated_at:now,created_at:keySnaps[i].exists?(keySnaps[i].data()?.created_at||now):now},{merge:true});
 
       const issued={};
       for(let i=0;i<participants.length;i++){
@@ -220,7 +221,7 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
   }catch(e){
     logger.error('unifiedRegistrationApi',e);
     const msg=String(e?.message||'UNIFIED_ERROR');
-    if(msg==='AMBIGUOUS_MATCH'||msg==='AMBIGUOUS_RESERVATION'||msg==='REGISTRATION_CONFLICT')return send(res,{ok:false,error:'Este CPF já está ligado a outro cadastro neste passeio. Fale com o Jonatas para conferência.'},409);
+    if(msg==='AMBIGUOUS_MATCH'||msg==='AMBIGUOUS_RESERVATION'||msg==='REGISTRATION_CONFLICT')return send(res,{ok:false,error:'Este nome e e-mail já estão ligados a outro cadastro neste passeio. Fale com o Jonatas para conferência.'},409);
     if(msg==='AUTH_REQUIRED')return send(res,{ok:false,error:'AUTH_REQUIRED'},401);
     if(msg==='PASSEIO_NAO_ENCONTRADO')return send(res,{ok:false,error:'Passeio não encontrado.'},404);
     if(msg==='PASSEIO_FECHADO')return send(res,{ok:false,error:'Este passeio não está aberto para cadastro.'},409);
