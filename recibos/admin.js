@@ -452,17 +452,92 @@ function editServiceType(id){
     await load();document.querySelector('.modal-backdrop')?.remove();toast('Tipo de serviço salvo.');settings();
   };
 }
+
 function settings(){
   if(S.profile.role!=='admin'){S.view='dashboard';render();return}
-  const s=S.settings||{};
-  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Dados do contratante</h2><p>Usados nos PDFs e validações.</p></div></div><form id="set" class="panel"><div class="grid"><div class="field full"><label class="required">Nome / Razão social</label><input name="business_name" required value="${escapeHtml(s.business_name||'Trilheiros de Rondonópolis')}"></div><div class="field"><label>CNPJ</label><input name="cnpj" value="${escapeHtml(s.cnpj||'')}"></div><div class="field"><label>Telefone</label><input name="phone" value="${escapeHtml(s.phone||'')}"></div><div class="field full"><label>Endereço</label><input name="address" value="${escapeHtml(s.address||'')}"></div><div class="field"><label>Cidade</label><input name="city" value="${escapeHtml(s.city||'Rondonópolis')}"></div><div class="field"><label>UF</label><input name="state" maxlength="2" value="${escapeHtml(s.state||'MT')}"></div><div class="field full"><label>E-mail</label><input name="email" type="email" value="${escapeHtml(s.email||'')}"></div></div><div class="actions"><button class="btn btn-primary">Salvar dados</button></div></form>`;
-  document.getElementById('content').insertAdjacentHTML('beforeend',serviceTypesPanel());
+  const x=S.settings||{};
+  const methods=Array.isArray(x.payment_methods)?x.payment_methods.join('\n'):'PIX\nTransferência bancária\nDinheiro\nCartão\nBoleto\nOutro';
+  document.getElementById('content').innerHTML=`
+  <div class="admin-head"><div><h2>Configurações</h2><p>Personalize o sistema sem alterar código.</p></div></div>
+  <form id="set" class="panel">
+    <div class="panel-head"><div><h3>Identidade e dados do contratante</h3><p class="muted">Usados no formulário, PDFs e validações.</p></div></div>
+    <div class="grid">
+      <div class="field full"><label class="required">Nome / Razão social</label><input name="business_name" required value="${escapeHtml(x.business_name||'Trilheiros de Rondonópolis')}"></div>
+      <div class="field full"><label>URL da logo</label><input name="logo_url" value="${escapeHtml(x.logo_url||'https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png')}" placeholder="https://..."></div>
+      <div class="field"><label>CNPJ</label><input name="cnpj" value="${escapeHtml(x.cnpj||'')}"></div>
+      <div class="field"><label>WhatsApp</label><input name="whatsapp_number" value="${escapeHtml(x.whatsapp_number||x.phone||'5566996926174')}"></div>
+      <div class="field"><label>Telefone</label><input name="phone" value="${escapeHtml(x.phone||'')}"></div>
+      <div class="field"><label>E-mail</label><input name="email" type="email" value="${escapeHtml(x.email||'')}"></div>
+      <div class="field full"><label>Endereço</label><input name="address" value="${escapeHtml(x.address||'')}"></div>
+      <div class="field"><label>Cidade</label><input name="city" value="${escapeHtml(x.city||'Rondonópolis')}"></div>
+      <div class="field"><label>UF</label><input name="state" maxlength="2" value="${escapeHtml(x.state||'MT')}"></div>
+      <div class="field full"><label>Formas de pagamento</label><textarea name="payment_methods" rows="6">${escapeHtml(methods)}</textarea><div class="help">Uma forma de pagamento por linha.</div></div>
+      <div class="field full"><label>Texto da declaração do fornecedor</label><textarea name="declaration_text" rows="4">${escapeHtml(x.declaration_text||'Declaro que as informações são verdadeiras e que recebi o valor informado pelo serviço registrado neste recibo.')}</textarea></div>
+      <div class="field full"><label>Rodapé dos PDFs</label><textarea name="receipt_footer" rows="3">${escapeHtml(x.receipt_footer||'Documento eletrônico emitido pelo sistema de Gestão de Recibos dos Trilheiros de Rondonópolis.')}</textarea></div>
+    </div>
+    <div class="actions"><button class="btn btn-primary">Salvar configurações</button></div>
+  </form>
+  <div id="usersPanel" class="panel" style="margin-top:18px"><div class="panel-head"><div><h3>Usuários e acessos</h3><p class="muted">Administrador e Contabilidade.</p></div><button class="btn btn-primary btn-sm" id="newAccountingInvite">Novo acesso da contadora</button></div><div class="empty">Carregando usuários...</div></div>
+  ${serviceTypesPanel()}`;
   document.getElementById('set').onsubmit=saveSettings;
+  document.getElementById('newAccountingInvite').onclick=generateAccountingInvite;
   wireServiceTypes();
+  loadUsersPanel();
 }
 async function saveSettings(e){
-  e.preventDefault();const f=e.currentTarget,p={business_name:f.business_name.value.trim(),cnpj:formatCpfCnpj(f.cnpj.value),phone:f.phone.value.trim(),address:f.address.value.trim(),city:f.city.value.trim(),state:f.state.value.toUpperCase(),email:f.email.value.trim(),updated_at:new Date().toISOString()};
-  const {error}=await supabaseClient.from('app_settings').update(p).eq('id',1);if(error)toast(error.message,'error');else{await load();toast('Dados salvos.')}
+  e.preventDefault();
+  const f=e.currentTarget,btn=f.querySelector('.btn-primary');
+  const paymentMethods=f.payment_methods.value.split(/\n|,/).map(x=>x.trim()).filter(Boolean);
+  if(!paymentMethods.length){toast('Informe pelo menos uma forma de pagamento.','error');return}
+  const p={
+    business_name:f.business_name.value.trim(),
+    logo_url:f.logo_url.value.trim(),
+    cnpj:formatCpfCnpj(f.cnpj.value),
+    whatsapp_number:onlyDigits(f.whatsapp_number.value),
+    phone:f.phone.value.trim(),
+    address:f.address.value.trim(),
+    city:f.city.value.trim(),
+    state:f.state.value.toUpperCase(),
+    email:f.email.value.trim(),
+    payment_methods:paymentMethods,
+    declaration_text:f.declaration_text.value.trim(),
+    receipt_footer:f.receipt_footer.value.trim(),
+    updated_at:new Date().toISOString()
+  };
+  btn.disabled=true;btn.textContent='Salvando...';
+  const {error}=await supabaseClient.from('app_settings').update(p).eq('id',1);
+  if(error)toast(error.message,'error');
+  else{await load();toast('Configurações salvas.');settings()}
+  if(document.body.contains(btn)){btn.disabled=false;btn.textContent='Salvar configurações'}
+}
+async function loadUsersPanel(){
+  const box=document.getElementById('usersPanel');if(!box)return;
+  const {data,error}=await supabaseClient.rpc('list_receipt_users');
+  if(error){box.insertAdjacentHTML('beforeend','<div class="notice error">'+escapeHtml(error.message)+'</div>');return}
+  S.users=data||[];
+  const table=S.users.length?'<div class="table-wrap"><table><thead><tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Ação</th></tr></thead><tbody>'+S.users.map(u=>'<tr><td><strong>'+escapeHtml(u.display_name||'Usuário')+'</strong></td><td>'+escapeHtml(u.email||'—')+'</td><td>'+escapeHtml(roleName(u.role))+'</td><td><span class="badge '+(u.active?'success':'cancelled')+'">'+(u.active?'Ativo':'Desativado')+'</span></td><td>'+(u.id===S.profile.id?'<span class="muted">Seu acesso</span>':'<button class="btn btn-secondary btn-sm" data-user-toggle="'+u.id+'" data-active="'+String(!u.active)+'">'+(u.active?'Desativar':'Reativar')+'</button>')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum usuário encontrado.</div>';
+  box.querySelector('.empty')?.remove();
+  box.querySelector('.table-wrap')?.remove();
+  box.insertAdjacentHTML('beforeend',table);
+  box.querySelectorAll('[data-user-toggle]').forEach(b=>b.onclick=()=>toggleReceiptUser(b.dataset.userToggle,b.dataset.active==='true'));
+}
+async function toggleReceiptUser(id,active){
+  const action=active?'reativar':'desativar';
+  if(!confirm('Deseja '+action+' este acesso?'))return;
+  const {error}=await supabaseClient.rpc('set_receipt_user_active',{p_user_id:id,p_active:active});
+  if(error){toast(error.message,'error');return}
+  toast('Acesso '+(active?'reativado':'desativado')+'.');
+  loadUsersPanel();
+}
+async function generateAccountingInvite(){
+  const {data,error}=await supabaseClient.rpc('create_accounting_invite');
+  if(error){toast(error.message,'error');return}
+  const x=data?.[0];if(!x?.code){toast('Não foi possível gerar o código.','error');return}
+  const setup=new URL('setup.html',location.href).href;
+  modal(`<div class="modal-head"><div><h3>Novo primeiro acesso da Contabilidade</h3><span class="muted">O código é de uso único e expira em 30 dias.</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div><div class="notice success">Envie o link e o código abaixo somente para a pessoa autorizada.</div><div class="field"><label>Link de primeiro acesso</label><textarea id="inviteLink" readonly rows="2">${escapeHtml(setup)}</textarea></div><div class="field"><label>Código de autorização</label><input id="inviteCode" readonly value="${escapeHtml(x.code)}"></div><div class="actions"><button class="btn btn-secondary" id="copyInviteLink">Copiar link</button><button class="btn btn-primary" id="copyInviteCode">Copiar código</button></div>`);
+  const linkField=document.getElementById('inviteLink'),codeField=document.getElementById('inviteCode');
+  document.getElementById('copyInviteLink').onclick=e=>copyText(setup,e.currentTarget,linkField);
+  document.getElementById('copyInviteCode').onclick=e=>copyText(x.code,e.currentTarget,codeField);
 }
 function modal(html){const el=document.createElement('div');el.className='modal-backdrop';el.innerHTML='<div class="modal">'+html+'</div>';document.body.appendChild(el);el.onclick=e=>{if(e.target===el||e.target.closest('[data-close]'))el.remove()}}
 function exportCSV(){
