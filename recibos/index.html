@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title>
 <meta name="theme-color" content="#102b1c"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2155"></head>
+<link rel="stylesheet" href="styles.css?v=20260930-2205"></head>
 <body><div class="shell"><header class="topbar"><div class="topbar-inner"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros de Rondonópolis</h1><small>Portal de Recibos de Fornecedores</small></div></div><div style="font-size:12px;color:#cfe3d6">Documento eletrônico</div></div></header><main class="container narrow" id="app"><section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo digital.</p></div></section></main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>window.TRILHEIROS_RECEIPTS_CONFIG = {
@@ -171,13 +171,7 @@ async function startFormSession(){
 }
 
 function lockedReceipt(){
-  try{
-    const x=JSON.parse(localStorage.getItem(LOCK_KEY)||'null');
-    if(!x)return null;
-    const age=Date.now()-new Date(x.submitted_at||0).getTime();
-    if(!Number.isFinite(age)||age>86400000){localStorage.removeItem(LOCK_KEY);return null}
-    return x;
-  }catch{return null}
+  try{return JSON.parse(sessionStorage.getItem(LOCK_KEY)||'null')}catch{return null}
 }
 function rememberSupplier(f){
   try{
@@ -207,9 +201,9 @@ function prefillKnownSupplier(f){
     toast('Dados do fornecedor reconhecidos neste aparelho.');
   }catch{}
 }
-function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
+function lockReceipt(data){try{sessionStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
-  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este envio foi concluído neste aparelho e não pode mais ser alterado por esta página.</p></div></section>';
+  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. Para um novo serviço, basta abrir novamente o mesmo link em uma nova aba ou pelo link recebido.</p></div></section>';
 }
 function serviceOptions(){
   return '<option value="">Selecione</option>'+Object.keys(SERVICES).map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
