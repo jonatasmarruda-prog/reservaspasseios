@@ -34,6 +34,25 @@ function formatCpfCnpj(v){
   }
   return d;
 }
+function isValidCpfCnpj(v){
+  const d=onlyDigits(v);
+  if(d.length===11){
+    if(/^(\d)\1{10}$/.test(d))return false;
+    let s=0;for(let i=0;i<9;i++)s+=Number(d[i])*(10-i);
+    let a=(s*10)%11;if(a===10)a=0;if(a!==Number(d[9]))return false;
+    s=0;for(let i=0;i<10;i++)s+=Number(d[i])*(11-i);
+    let b=(s*10)%11;if(b===10)b=0;return b===Number(d[10]);
+  }
+  if(d.length===14){
+    if(/^(\d)\1{13}$/.test(d))return false;
+    const w1=[5,4,3,2,9,8,7,6,5,4,3,2],w2=[6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let s=w1.reduce((a,w,i)=>a+Number(d[i])*w,0),a=s%11<2?0:11-(s%11);
+    if(a!==Number(d[12]))return false;
+    s=w2.reduce((x,w,i)=>x+Number(d[i])*w,0);const b=s%11<2?0:11-(s%11);
+    return b===Number(d[13]);
+  }
+  return false;
+}
 function formatPhone(v){
   let d=onlyDigits(v).slice(0,11);
   if(d.length>10) return d.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
@@ -69,7 +88,7 @@ function buildPublicLink(token){
 function toast(msg,type='success'){
   const el=document.createElement('div');el.className=`notice ${type}`;el.style.position='fixed';el.style.right='16px';el.style.bottom='16px';el.style.zIndex='100';el.style.maxWidth='420px';el.style.boxShadow='0 14px 40px rgba(0,0,0,.18)';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3400);
 }
-Object.assign(window,{brl,dateBR,dateTimeBR,onlyDigits,formatCpfCnpj,formatPhone,formatCep,currencyInputToNumber,randomToken,sha256,escapeHtml,requestStatus,statusLabel,buildPublicLink,toast});
+Object.assign(window,{brl,dateBR,dateTimeBR,onlyDigits,isValidCpfCnpj,formatCpfCnpj,formatPhone,formatCep,currencyInputToNumber,randomToken,sha256,escapeHtml,requestStatus,statusLabel,buildPublicLink,toast});
 
 const DEMO_KEY='trilheiros_receipts_demo_v2';
 function demoSeed(){
