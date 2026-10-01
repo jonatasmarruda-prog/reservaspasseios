@@ -3,7 +3,7 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title>
 <meta name="theme-color" content="#102b1c"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2205"></head>
+<link rel="stylesheet" href="styles.css?v=20260930-2215"></head>
 <body><div class="shell"><header class="topbar"><div class="topbar-inner"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros de Rondonópolis</h1><small>Portal de Recibos de Fornecedores</small></div></div><div style="font-size:12px;color:#cfe3d6">Documento eletrônico</div></div></header><main class="container narrow" id="app"><section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo digital.</p></div></section></main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>window.TRILHEIROS_RECEIPTS_CONFIG = {
@@ -234,7 +234,7 @@ function render(){
       '<section class="section">'+
         '<div class="section-title"><div class="step">2</div><div><h3>Localização</h3><p>O CEP é opcional. Se informar, o endereço é preenchido automaticamente. Você pode informar somente cidade e estado.</p></div></div>'+
         '<div class="grid-3">'+
-          '<div class="field"><label>CEP <span class="muted">(opcional)</span></label><input name="postal_code" inputmode="numeric" placeholder="00000-000"><div id="cepStatus" class="help">Preenchimento automático ao informar 8 números.</div></div>'+
+          '<div class="field cep-field"><label>CEP <span class="muted">(opcional)</span></label><input name="postal_code" inputmode="numeric" placeholder="00000-000" autocomplete="postal-code"><div id="cepStatus" class="help">Preenchimento automático ao informar 8 números.</div></div>'+
           '<div class="field" style="grid-column:span 2"><label>Endereço <span class="muted">(opcional)</span></label><input name="address" placeholder="Rua, avenida ou localidade"></div>'+
           '<div class="field"><label>Número <span class="muted">(opcional)</span></label><input name="address_number" placeholder="Nº ou S/N"></div>'+
           '<div class="field"><label>Bairro <span class="muted">(opcional)</span></label><input name="neighborhood"></div>'+
