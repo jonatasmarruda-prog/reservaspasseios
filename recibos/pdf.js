@@ -129,7 +129,7 @@ async function generateReceiptPDF(r,q,b,mode='download'){
   ensure(28);
   pair('Protocolo',r.receipt_code||'—','Código de validação',r.verification_code||'—');
   pair('Registrado em',dateTimeBR(r.created_at),'Situação contábil',({pending_review:'Não conferido',reviewed:'Conferido',pending_issue:'Com pendência',cancelled:'Cancelado'})[r.accounting_status]||'Não conferido');
-  pair('Identificador',String(r.id||'').slice(0,24),'Financeiro',r.finance_synced_at?('Vinculado a '+(r.finance_trip_name||'passeio')):'Não vinculado');
+  full('Identificador',String(r.id||'').slice(0,36));
   if(qrData){
     ensure(36);
     try{d.addImage(qrData,'PNG',M,y,28,28)}catch(e){}
