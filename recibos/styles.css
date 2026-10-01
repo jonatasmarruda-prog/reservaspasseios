@@ -13,3 +13,40 @@
 }
 .password-eye svg{width:24px!important;height:24px!important;fill:currentColor!important;display:block}
 .password-eye:active{background:#dce8df!important}
+
+/* Premium supplier receipt flow */
+.premium-hero{position:relative;overflow:hidden}
+.receipt-kicker{font-size:11px;font-weight:800;letter-spacing:.14em;color:#1f6f43;margin-bottom:8px}
+.steps-bar{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+.steps-bar-item{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:999px;background:#eef3ef;color:#68736b;font-size:12px;font-weight:700}
+.steps-bar-item span{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#dfe8e1;color:#35513f}
+.steps-bar-item.active{background:#dff2e6;color:#174d2f}
+.steps-bar-item.active span{background:#1f6f43;color:#fff}
+.btn-large{min-height:48px;padding:13px 20px;font-size:15px}
+.review-card{background:#f6f9f7;border:1px solid #dfe8e1;border-radius:16px;padding:16px;margin-bottom:18px}
+.review-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.review-grid>div{background:#fff;border:1px solid #e5ebe7;border-radius:12px;padding:12px}
+.review-grid span{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#7a857d;margin-bottom:5px}
+.review-grid strong{font-size:14px;color:#1b2820;line-height:1.35}
+.review-full{grid-column:1/-1}
+.signature-panel{border:1px solid #dbe5de;border-radius:16px;background:#f8faf8;padding:14px}
+.signature-panel-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
+.premium-signature{height:190px!important;background:#fff;border:1px dashed #9eb2a4;border-radius:12px}
+.split-actions{justify-content:space-between;gap:10px}
+.receipt-success-card{margin:18px auto;max-width:330px;background:#f1f7f3;border:1px solid #d9e8de;border-radius:16px;padding:16px;text-align:center}
+.receipt-success-card span,.receipt-success-card small{display:block;color:#718078;font-size:12px}
+.receipt-success-card strong{display:block;color:#173d28;font-size:22px;margin:5px 0}
+.premium-thanks .status-icon{background:#e1f3e7;color:#1f6f43}
+.receipt-view-section{padding-top:6px;margin-top:8px;border-top:1px solid #e7ece8}
+.receipt-view-section h4{margin:12px 0 10px}
+.detail-full{grid-column:1/-1}
+.premium-signature-preview{background:#fff;border:1px solid #e4e9e5;border-radius:12px;padding:8px;max-height:180px;object-fit:contain}
+@media(max-width:640px){
+  .review-grid{grid-template-columns:1fr}
+  .review-full{grid-column:auto}
+  .split-actions{flex-direction:column-reverse}
+  .split-actions .btn{width:100%}
+  .steps-bar{gap:6px}
+  .steps-bar-item{padding:7px 9px;font-size:11px}
+  .premium-signature{height:165px!important}
+}
