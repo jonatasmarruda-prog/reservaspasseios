@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'functions/push-notifications.js'
+      - 'functions/participant-unification.js'
       - 'functions/entry.js'
       - 'functions/package.json'
       - 'functions/package-lock.json'
@@ -35,7 +36,9 @@ jobs:
 
       - name: Validar Functions de notificações
         working-directory: functions
-        run: node --check push-notifications.js
+        run: |
+          node --check push-notifications.js
+          node --check participant-unification.js
 
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools
@@ -46,4 +49,4 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Publicar somente notificações e confirmação imediata
-        run: firebase deploy --project trilheiros-reservas --only functions:registerPushDevice,functions:notifyNewReservation,functions:notifyReservationUpdate,functions:notifyPaymentUpdate --non-interactive
+        run: firebase deploy --project trilheiros-reservas --only functions:registerPushDevice,functions:notifyNewReservation,functions:notifyReservationUpdate,functions:notifyPaymentUpdate,functions:participantProfileApi,functions:unifiedRegistrationApi --non-interactive
