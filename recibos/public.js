@@ -124,8 +124,8 @@ function render(){
       '</section>'+
       '<section class="section">'+
         '<div class="section-title"><div class="step">2</div><div><h3>Localização</h3><p>O CEP é opcional. Se informar, o endereço é preenchido automaticamente. Você pode informar somente cidade e estado.</p></div></div>'+
-        '<div class="grid-3">'+
-          '<div class="field cep-field"><label>CEP <span class="muted">(opcional)</span></label><input name="postal_code" inputmode="numeric" placeholder="00000-000" autocomplete="postal-code"><div id="cepStatus" class="help">Preenchimento automático ao informar 8 números.</div></div>'+
+        '<div class="field cep-field"><label>CEP <span class="muted">(opcional)</span></label><input name="postal_code" inputmode="numeric" placeholder="00000-000" autocomplete="postal-code"><div id="cepStatus" class="help">Preenchimento automático ao informar 8 números.</div></div>'+
+        '<div class="grid-3 location-grid">'+
           '<div class="field" style="grid-column:span 2"><label>Endereço <span class="muted">(opcional)</span></label><input name="address" placeholder="Rua, avenida ou localidade"></div>'+
           '<div class="field"><label>Número <span class="muted">(opcional)</span></label><input name="address_number" placeholder="Nº ou S/N"></div>'+
           '<div class="field"><label>Bairro <span class="muted">(opcional)</span></label><input name="neighborhood"></div>'+
