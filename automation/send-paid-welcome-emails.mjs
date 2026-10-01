@@ -219,6 +219,7 @@ for(const tripDoc of tripsSnap.docs){
   for(const resDoc of reservations.docs){
     const reservation={id:resDoc.id,...resDoc.data()};
     if(norm(reservation.registration_status)!=='completed'||isCancelled(reservation))continue;
+    if(!['pending','error'].includes(norm(reservation.registration_email_status||'')))continue;
     const recipients=participantRecipients(reservation);
     if(!recipients.length){
       await resDoc.ref.set({registration_email_status:'skipped_no_email',registration_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
