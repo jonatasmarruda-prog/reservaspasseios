@@ -1,18 +1,504 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title>
 <meta name="theme-color" content="#102b1c">
-<link rel="stylesheet" href="styles.css?v=20260930-2040">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="styles.css?v=20260930-2050">
 </head>
 <body>
 <div class="shell">
   <header class="topbar"><div class="topbar-inner"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros de Rondonópolis</h1><small>Portal de Recibos de Fornecedores</small></div></div><div style="font-size:12px;color:#cfe3d6">Documento eletrônico</div></div></header>
   <main class="container narrow" id="app">
-    <section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo de fornecedor.</p></div></section>
+    <section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo digital.</p></div></section>
   </main>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="config.js?v=20260930-2040"></script><script src="common.js?v=20260930-2040"></script><script src="public.js?v=20260930-2040"></script>
-</body></html>
+<script>window.TRILHEIROS_RECEIPTS_CONFIG = {
+  SUPABASE_URL: "https://dvblpobtfjtjypsjcjpy.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz",
+  BUSINESS_NAME: "Trilheiros de Rondonópolis",
+  DEFAULT_LINK_DAYS: 7,
+  WHATSAPP_NUMBER: "5566996926174",
+  DEMO_MODE: false
+};
+</script>
+<script>const CFG = window.TRILHEIROS_RECEIPTS_CONFIG || {};
+const isConfigured = Boolean(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
+const demoMode = CFG.DEMO_MODE || !isConfigured;
+let supabaseClient = null;
+if (!demoMode && window.supabase) {
+  supabaseClient = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, autoRefreshToken: true }
+  });
+}
+window.ReceiptsApp = { CFG, demoMode, supabaseClient };
+
+function brl(value){
+  const n = Number(value || 0);
+  return n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+function dateBR(value){
+  if(!value) return '—';
+  const s = String(value);
+  const d = s.includes('T') ? new Date(s) : new Date(`${s}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? s : d.toLocaleDateString('pt-BR');
+}
+function dateTimeBR(value){
+  if(!value) return '—';
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toLocaleString('pt-BR');
+}
+function onlyDigits(v){return String(v||'').replace(/\D/g,'')}
+function formatCpfCnpj(v){
+  let d=onlyDigits(v).slice(0,14);
+  if(d.length<=11){
+    d=d.replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d{1,2})$/,'$1-$2');
+  }else{
+    d=d.replace(/(\d{2})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1.$2').replace(/(\d{3})(\d)/,'$1/$2').replace(/(\d{4})(\d{1,2})$/,'$1-$2');
+  }
+  return d;
+}
+function formatPhone(v){
+  let d=onlyDigits(v).slice(0,11);
+  if(d.length>10) return d.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
+  if(d.length>6) return d.replace(/(\d{2})(\d{4})(\d{0,4})/,'($1) $2-$3');
+  if(d.length>2) return d.replace(/(\d{2})(\d+)/,'($1) $2');
+  return d;
+}
+function formatCep(v){return onlyDigits(v).slice(0,8).replace(/(\d{5})(\d{1,3})/,'$1-$2')}
+function currencyInputToNumber(v){
+  if(typeof v==='number') return v;
+  const s=String(v||'').replace(/\s/g,'').replace(/R\$/g,'').replace(/\./g,'').replace(',','.');
+  const n=Number(s); return Number.isFinite(n)?n:0;
+}
+function randomToken(bytes=32){
+  const arr=new Uint8Array(bytes); crypto.getRandomValues(arr); return [...arr].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+async function sha256(text){
+  const data=new TextEncoder().encode(text); const hash=await crypto.subtle.digest('SHA-256',data); return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]))}
+function requestStatus(r){
+  if(r.status==='submitted') return 'submitted';
+  if(r.status==='cancelled') return 'cancelled';
+  if(new Date(r.expires_at).getTime()<Date.now()) return 'expired';
+  return 'pending';
+}
+function statusLabel(s){return ({submitted:'Recebido',pending:'Aguardando',expired:'Expirado',cancelled:'Cancelado'})[s]||s}
+function buildPublicLink(token){
+  const u=new URL(window.location.href);
+  const base=u.pathname.includes('admin.html')?u.pathname.replace(/admin\.html.*$/,''):u.pathname.replace(/[^/]*$/,'');
+  return `${u.origin}${base}index.html?token=${encodeURIComponent(token)}`;
+}
+function toast(msg,type='success'){
+  const el=document.createElement('div');el.className=`notice ${type}`;el.style.position='fixed';el.style.right='16px';el.style.bottom='16px';el.style.zIndex='100';el.style.maxWidth='420px';el.style.boxShadow='0 14px 40px rgba(0,0,0,.18)';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3400);
+}
+Object.assign(window,{brl,dateBR,dateTimeBR,onlyDigits,formatCpfCnpj,formatPhone,formatCep,currencyInputToNumber,randomToken,sha256,escapeHtml,requestStatus,statusLabel,buildPublicLink,toast});
+
+const DEMO_KEY='trilheiros_receipts_demo_v2';
+function demoSeed(){
+  const now=new Date();
+  return {
+    settings:{business_name:'Trilheiros de Rondonópolis',cnpj:'',address:'',city:'Rondonópolis',state:'MT',phone:'(66) 99692-6174',email:''},
+    requests:[],receipts:[],
+    profile:{id:'demo-admin',display_name:'Administrador',role:'admin',email:'demo@trilheiros.local'},
+    meta:{seq:1,year:now.getFullYear()}
+  };
+}
+function demoLoad(){try{return JSON.parse(localStorage.getItem(DEMO_KEY))||demoSeed()}catch{return demoSeed()}}
+function demoSave(db){localStorage.setItem(DEMO_KEY,JSON.stringify(db))}
+window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,reset(){const d=demoSeed();demoSave(d);return d}};
+</script>
+<script>(()=>{
+const {supabaseClient}=window.ReceiptsApp;
+const app=document.getElementById('app');
+const LOCK_KEY='trilheiros_receipt_submitted_v3';
+let canvas,ctx,drawing=false,signed=false;
+
+const SERVICE_TYPES=[
+  'Transporte / Ônibus',
+  'Hotel / Pousada',
+  'Alimentação',
+  'Guia / Condutor',
+  'Atrativo / Ingresso',
+  'Fotografia',
+  'Seguro',
+  'Combustível',
+  'Locação',
+  'Manutenção / Serviço técnico',
+  'Outro'
+];
+
+const PAYMENT_METHODS=[
+  'PIX',
+  'Transferência bancária',
+  'Dinheiro',
+  'Cartão',
+  'Boleto',
+  'Outro'
+];
+
+function lockedReceipt(){
+  try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}
+}
+function lockReceipt(data){
+  try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}
+}
+function thankYou(data){
+  app.innerHTML=`
+    <section class="status-screen premium-thanks">
+      <div class="status-box">
+        <div class="status-icon">✓</div>
+        <h2>Obrigado! Recibo enviado com sucesso.</h2>
+        <p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p>
+        <div class="receipt-success-card">
+          <span>Protocolo</span>
+          <strong>${escapeHtml(data?.code||'Registrado')}</strong>
+          ${data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':''}
+        </div>
+        <p class="muted">Este formulário já foi concluído neste aparelho. Não é possível alterar ou reenviar este recibo por esta página.</p>
+      </div>
+    </section>`;
+}
+function render(){
+  const locked=lockedReceipt();
+  if(locked){thankYou(locked);return}
+
+  app.innerHTML=`
+  <section class="hero-card premium-hero">
+    <div class="receipt-kicker">RECIBO DIGITAL</div>
+    <h2>Recibo de pagamento a fornecedor</h2>
+    <p>Preencha as informações com atenção. Ao final, revise os dados, assine e envie o recibo.</p>
+    <div class="steps-bar">
+      <div class="steps-bar-item active" data-step-indicator="1"><span>1</span>Dados</div>
+      <div class="steps-bar-item" data-step-indicator="2"><span>2</span>Assinatura</div>
+      <div class="steps-bar-item" data-step-indicator="3"><span>3</span>Envio</div>
+    </div>
+  </section>
+
+  <form id="receiptForm" novalidate>
+    <div id="formStep">
+      <section class="section">
+        <div class="section-title"><div class="step">1</div><div><h3>Identificação do fornecedor</h3><p>Informe os dados de quem recebeu o pagamento.</p></div></div>
+        <div class="grid">
+          <div class="field full">
+            <label class="required">Nome / Empresa</label>
+            <input name="legal_name" required maxlength="160" placeholder="Nome completo ou razão social">
+          </div>
+          <div class="field">
+            <label class="required">CPF ou CNPJ</label>
+            <input name="cpf_cnpj" inputmode="numeric" required placeholder="CPF ou CNPJ">
+          </div>
+          <div class="field">
+            <label class="required">Telefone / WhatsApp</label>
+            <input name="phone" inputmode="tel" required placeholder="(66) 99999-9999">
+          </div>
+          <div class="field full">
+            <label>E-mail <span class="muted">(opcional)</span></label>
+            <input name="email" type="email" autocomplete="email" placeholder="seu@email.com">
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><div class="step">2</div><div><h3>Endereço</h3><p>Informe o endereço do fornecedor ou prestador.</p></div></div>
+        <div class="grid-3">
+          <div class="field">
+            <label>CEP</label>
+            <input name="postal_code" inputmode="numeric" placeholder="00000-000">
+          </div>
+          <div class="field" style="grid-column:span 2">
+            <label class="required">Endereço</label>
+            <input name="address" required placeholder="Rua, avenida, comunidade ou localidade">
+          </div>
+          <div class="field">
+            <label>Número</label>
+            <input name="address_number" placeholder="Nº ou S/N">
+          </div>
+          <div class="field">
+            <label>Bairro</label>
+            <input name="neighborhood">
+          </div>
+          <div class="field">
+            <label>Complemento</label>
+            <input name="complement">
+          </div>
+          <div class="field" style="grid-column:span 2">
+            <label class="required">Cidade</label>
+            <input name="city" required>
+          </div>
+          <div class="field">
+            <label class="required">UF</label>
+            <input name="state" maxlength="2" required placeholder="MT">
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title"><div class="step">3</div><div><h3>Serviço e pagamento</h3><p>Registre o serviço prestado e o pagamento recebido.</p></div></div>
+        <div class="grid">
+          <div class="field">
+            <label class="required">Tipo de serviço</label>
+            <select name="service_type" required>
+              <option value="">Selecione</option>
+              ${SERVICE_TYPES.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label class="required">Data do serviço</label>
+            <input name="service_date" type="date" required>
+          </div>
+          <div class="field full">
+            <label class="required">Descrição do serviço</label>
+            <textarea name="service_description" required maxlength="1200" placeholder="Descreva de forma objetiva o serviço realizado"></textarea>
+          </div>
+          <div class="field">
+            <label class="required">Valor recebido</label>
+            <input name="amount_received" inputmode="decimal" required placeholder="Ex.: 2.800,00">
+          </div>
+          <div class="field">
+            <label class="required">Data do recebimento</label>
+            <input name="payment_date" type="date" required value="${new Date().toISOString().slice(0,10)}">
+          </div>
+          <div class="field">
+            <label class="required">Forma de pagamento</label>
+            <select name="payment_method" required>
+              <option value="">Selecione</option>
+              ${PAYMENT_METHODS.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Observação <span class="muted">(opcional)</span></label>
+            <input name="notes" maxlength="500" placeholder="Informação adicional">
+          </div>
+        </div>
+        <div id="formErr" class="notice error hidden"></div>
+        <div class="actions">
+          <button type="button" class="btn btn-primary btn-large" id="toSignature">Continuar para assinatura</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="section hidden" id="signatureStep">
+      <div class="section-title"><div class="step">4</div><div><h3>Revise e assine</h3><p>Confira os dados abaixo antes de salvar definitivamente.</p></div></div>
+
+      <div id="reviewCard" class="review-card"></div>
+
+      <div class="field">
+        <label class="required">Nome de quem está assinando</label>
+        <input name="declarant_name" required maxlength="160" placeholder="Nome completo do responsável">
+      </div>
+
+      <div style="height:16px"></div>
+      <div class="signature-panel">
+        <div class="signature-panel-head">
+          <div><strong>Assinatura</strong><div class="muted">Assine com o dedo ou mouse dentro do quadro.</div></div>
+          <button type="button" class="btn btn-secondary btn-sm" id="clearSig">Limpar</button>
+        </div>
+        <canvas id="signature" class="signature-canvas premium-signature"></canvas>
+      </div>
+
+      <div style="height:16px"></div>
+      <div class="checkbox">
+        <input id="declaration" type="checkbox" required>
+        <label for="declaration">Declaro que as informações fornecidas são verdadeiras, que <strong>recebi o valor informado</strong> pelo serviço descrito e autorizo o registro eletrônico deste recibo.</label>
+      </div>
+
+      <div id="err" class="notice error hidden"></div>
+      <div class="actions split-actions">
+        <button type="button" class="btn btn-secondary" id="backToForm">Voltar e revisar</button>
+        <button id="sendBtn" class="btn btn-primary btn-large">Salvar e enviar recibo</button>
+      </div>
+    </section>
+  </form>`;
+
+  wire();
+}
+
+function wire(){
+  const f=document.getElementById('receiptForm');
+  f.elements.cpf_cnpj.oninput=e=>e.target.value=formatCpfCnpj(e.target.value);
+  f.elements.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
+  f.elements.postal_code.oninput=e=>e.target.value=formatCep(e.target.value);
+  f.elements.state.oninput=e=>e.target.value=e.target.value.replace(/[^a-z]/gi,'').slice(0,2).toUpperCase();
+
+  document.getElementById('toSignature').onclick=()=>{
+    const err=document.getElementById('formErr');
+    err.classList.add('hidden');
+    const required=[...document.querySelectorAll('#formStep [required]')];
+    const invalid=required.find(x=>!x.checkValidity());
+    if(invalid){
+      invalid.reportValidity();
+      err.textContent='Preencha todos os campos obrigatórios antes de continuar.';
+      err.classList.remove('hidden');
+      invalid.scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    const doc=onlyDigits(f.elements.cpf_cnpj.value);
+    if(doc.length!==11&&doc.length!==14){
+      err.textContent='Informe um CPF ou CNPJ completo.';
+      err.classList.remove('hidden');
+      f.elements.cpf_cnpj.focus();
+      return;
+    }
+    if(onlyDigits(f.elements.phone.value).length<10){
+      err.textContent='Informe um telefone/WhatsApp válido.';
+      err.classList.remove('hidden');
+      f.elements.phone.focus();
+      return;
+    }
+    if(currencyInputToNumber(f.elements.amount_received.value)<=0){
+      err.textContent='Informe um valor recebido válido.';
+      err.classList.remove('hidden');
+      f.elements.amount_received.focus();
+      return;
+    }
+
+    document.getElementById('reviewCard').innerHTML=reviewHtml(f);
+    document.getElementById('formStep').classList.add('hidden');
+    document.getElementById('signatureStep').classList.remove('hidden');
+    document.querySelector('[data-step-indicator="1"]').classList.remove('active');
+    document.querySelector('[data-step-indicator="2"]').classList.add('active');
+    document.getElementById('signatureStep').scrollIntoView({behavior:'smooth',block:'start'});
+    setTimeout(initCanvas,80);
+  };
+
+  document.getElementById('backToForm').onclick=()=>{
+    document.getElementById('signatureStep').classList.add('hidden');
+    document.getElementById('formStep').classList.remove('hidden');
+    document.querySelector('[data-step-indicator="2"]').classList.remove('active');
+    document.querySelector('[data-step-indicator="1"]').classList.add('active');
+    signed=false;
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+
+  f.onsubmit=submit;
+}
+
+function reviewHtml(f){
+  const doc=formatCpfCnpj(f.elements.cpf_cnpj.value);
+  const address=[f.elements.address.value,f.elements.address_number.value,f.elements.neighborhood.value,f.elements.complement.value,f.elements.city.value,f.elements.state.value].filter(Boolean).join(', ');
+  return `
+    <div class="review-grid">
+      <div><span>Fornecedor</span><strong>${escapeHtml(f.elements.legal_name.value)}</strong></div>
+      <div><span>CPF/CNPJ</span><strong>${escapeHtml(doc)}</strong></div>
+      <div><span>Telefone</span><strong>${escapeHtml(f.elements.phone.value)}</strong></div>
+      <div><span>Tipo de serviço</span><strong>${escapeHtml(f.elements.service_type.value)}</strong></div>
+      <div><span>Data do serviço</span><strong>${dateBR(f.elements.service_date.value)}</strong></div>
+      <div><span>Valor recebido</span><strong>${brl(currencyInputToNumber(f.elements.amount_received.value))}</strong></div>
+      <div><span>Recebimento</span><strong>${dateBR(f.elements.payment_date.value)} • ${escapeHtml(f.elements.payment_method.value)}</strong></div>
+      <div class="review-full"><span>Endereço</span><strong>${escapeHtml(address)}</strong></div>
+      <div class="review-full"><span>Serviço realizado</span><strong>${escapeHtml(f.elements.service_description.value)}</strong></div>
+    </div>`;
+}
+
+function initCanvas(){
+  canvas=document.getElementById('signature');
+  if(!canvas)return;
+  ctx=canvas.getContext('2d');
+  const resize=()=>{
+    const r=canvas.getBoundingClientRect(),dpr=Math.max(window.devicePixelRatio||1,1);
+    canvas.width=Math.max(1,Math.round(r.width*dpr));
+    canvas.height=Math.max(1,Math.round(r.height*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.lineWidth=2.4;
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+    ctx.strokeStyle='#102b1c';
+  };
+  resize();
+
+  const pos=e=>{
+    const r=canvas.getBoundingClientRect(),p=e.touches?.[0]||e;
+    return{x:p.clientX-r.left,y:p.clientY-r.top};
+  };
+  const start=e=>{e.preventDefault();drawing=true;signed=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)};
+  const move=e=>{if(!drawing)return;e.preventDefault();const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke()};
+  const end=e=>{if(drawing){e.preventDefault();drawing=false;ctx.closePath()}};
+
+  canvas.addEventListener('pointerdown',start,{passive:false});
+  canvas.addEventListener('pointermove',move,{passive:false});
+  canvas.addEventListener('pointerup',end,{passive:false});
+  canvas.addEventListener('pointerleave',end,{passive:false});
+  document.getElementById('clearSig').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false};
+}
+
+async function submit(e){
+  e.preventDefault();
+  const f=e.currentTarget,err=document.getElementById('err');
+  err.classList.add('hidden');
+
+  if(!f.elements.declarant_name.checkValidity()){f.elements.declarant_name.reportValidity();return}
+  if(!document.getElementById('declaration').checked){
+    err.textContent='Confirme a declaração antes de enviar.';
+    err.classList.remove('hidden');
+    return;
+  }
+  if(!signed){
+    err.textContent='Faça sua assinatura dentro do quadro antes de enviar.';
+    err.classList.remove('hidden');
+    return;
+  }
+
+  const payload={
+    legal_name:f.elements.legal_name.value.trim(),
+    cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
+    phone:onlyDigits(f.elements.phone.value),
+    email:f.elements.email.value.trim(),
+    postal_code:onlyDigits(f.elements.postal_code.value),
+    address:f.elements.address.value.trim(),
+    address_number:f.elements.address_number.value.trim(),
+    neighborhood:f.elements.neighborhood.value.trim(),
+    complement:f.elements.complement.value.trim(),
+    city:f.elements.city.value.trim(),
+    state:f.elements.state.value.trim().toUpperCase(),
+    service_type:f.elements.service_type.value,
+    service_description:f.elements.service_description.value.trim(),
+    service_date:f.elements.service_date.value,
+    amount_received:currencyInputToNumber(f.elements.amount_received.value),
+    payment_date:f.elements.payment_date.value,
+    payment_method:f.elements.payment_method.value,
+    notes:f.elements.notes.value.trim(),
+    declarant_name:f.elements.declarant_name.value.trim(),
+    declaration_accepted:true,
+    signature_data_url:canvas.toDataURL('image/png'),
+    user_agent:navigator.userAgent
+  };
+
+  const btn=document.getElementById('sendBtn');
+  btn.disabled=true;
+  btn.textContent='Salvando recibo...';
+
+  try{
+    if(!supabaseClient)throw new Error('Serviço de dados indisponível.');
+    const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_payload:payload});
+    if(error)throw error;
+
+    const result=data?.[0]||{};
+    const lock={
+      code:result.receipt_code||'Registrado',
+      verification:result.verification_code||'',
+      submitted_at:new Date().toISOString()
+    };
+    lockReceipt(lock);
+    document.querySelector('[data-step-indicator="2"]')?.classList.remove('active');
+    document.querySelector('[data-step-indicator="3"]')?.classList.add('active');
+    thankYou(lock);
+    window.scrollTo({top:0,behavior:'smooth'});
+  }catch(error){
+    err.textContent=error?.message||'Não foi possível salvar o recibo. Confira os dados e tente novamente.';
+    err.classList.remove('hidden');
+    btn.disabled=false;
+    btn.textContent='Salvar e enviar recibo';
+  }
+}
+
+render();
+})();</script>
+</body>
+</html>
