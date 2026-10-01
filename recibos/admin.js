@@ -9,6 +9,8 @@ function statusText(s){return ({pending_review:'Não conferido',reviewed:'Confer
 function statusClass(s){return ({pending_review:'pending',reviewed:'success',pending_issue:'warn',cancelled:'cancelled'})[s]||'pending'}
 function localISO(d){const x=new Date(d.getTime()-d.getTimezoneOffset()*60000);return x.toISOString().slice(0,10)}
 function serviceDate(r){return r.service_date||r.payment_date||''}
+function closureFor(y,m){return S.closures.find(c=>Number(c.year)===Number(y)&&Number(c.month)===Number(m))||null}
+function isMonthClosed(date){if(!date)return false;const y=Number(String(date).slice(0,4)),m=Number(String(date).slice(5,7));return closureFor(y,m)?.is_closed===true}
 function publicFormLink(){return new URL('./',location.href).href.split('?')[0].split('#')[0]}
 function validationLink(r){return new URL('validation.html?code='+encodeURIComponent(r.receipt_code||'')+'&v='+encodeURIComponent(r.verification_code||''),publicFormLink()).href}
 
@@ -163,7 +165,7 @@ async function openReceipt(id){
   const r=S.receipts.find(x=>x.id===id);if(!r)return;
   const address=[r.address,r.address_number,r.neighborhood,r.complement,r.city,r.state].filter(Boolean).join(', ');
   modal(`<div class="modal-head"><div><h3>Recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">Validação: ${escapeHtml(r.verification_code||'—')}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
-  <div class="receipt-status-bar"><span class="badge ${statusClass(r.accounting_status)}">${statusText(r.accounting_status)}</span><span class="muted">Registrado em ${dateTimeBR(r.created_at)}</span></div>
+  <div class="receipt-status-bar"><div><span class="badge ${statusClass(r.accounting_status)}">${statusText(r.accounting_status)}</span> ${isMonthClosed(serviceDate(r))?'<span class="badge locked">Competência fechada</span>':''} ${r.finance_synced_at?'<span class="badge success">No financeiro</span>':''}</div><span class="muted">Registrado em ${dateTimeBR(r.created_at)}</span></div>
   <div class="receipt-view-section"><h4>Fornecedor</h4><div class="detail-grid"><div class="detail"><span>Nome / Empresa</span><strong>${escapeHtml(r.legal_name)}</strong></div><div class="detail"><span>CPF/CNPJ</span><strong>${formatCpfCnpj(r.cpf_cnpj)}</strong></div><div class="detail"><span>Telefone</span><strong>${formatPhone(r.phone)}</strong></div><div class="detail"><span>E-mail</span><strong>${escapeHtml(r.email||'Não informado')}</strong></div><div class="detail detail-full"><span>Endereço</span><strong>${escapeHtml(address||'—')}</strong></div></div></div>
   <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid"><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(r.service_type||'—')}</strong></div><div class="detail"><span>Data do serviço</span><strong>${dateBR(serviceDate(r))}</strong></div><div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||'—')}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div>${r.billing_mode==='per_person'?'<div class="detail"><span>Cálculo</span><strong>'+r.quantity_people+' pessoa(s) × '+brl(r.unit_amount)+'</strong></div>':''}<div class="detail"><span>Recebimento</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Forma</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div><div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}</div></div>
   ${r.attachment_data_url?'<div class="receipt-view-section"><h4>Anexo</h4><a class="btn btn-secondary" href="'+r.attachment_data_url+'" download="'+escapeHtml(r.attachment_name||'anexo')+'">Baixar '+escapeHtml(r.attachment_name||'anexo')+'</a></div>':''}
@@ -171,7 +173,7 @@ async function openReceipt(id){
   <div class="receipt-view-section"><h4>Conferência contábil</h4><div class="field"><label>Observação da conferência</label><textarea id="reviewNotes" placeholder="Opcional">${escapeHtml(r.review_notes||'')}</textarea></div><div class="actions review-actions"><button class="btn btn-secondary" data-review="pending_review">Não conferido</button><button class="btn btn-primary" data-review="reviewed">Conferido</button><button class="btn btn-secondary" data-review="pending_issue">Com pendência</button>${S.profile.role==='admin'?'<button class="btn btn-danger" data-review="cancelled">Cancelar</button>':''}</div></div>
   <div id="auditBox" class="receipt-view-section"><h4>Histórico</h4><div class="muted">Carregando...</div></div>
   <div class="actions receipt-main-actions">
-    ${S.profile.role==='admin'?'<button class="btn btn-secondary" id="editReceiptBtn">Editar recibo</button><button class="btn btn-danger" id="deleteReceiptBtn">Excluir recibo</button>':''}
+    ${S.profile.role==='admin'?'<button class="btn btn-secondary" id="editReceiptBtn">Editar recibo</button><button class="btn btn-danger" id="deleteReceiptBtn">Excluir recibo</button>'+(r.finance_synced_at?'<button class="btn btn-secondary" disabled>Financeiro: '+escapeHtml(r.finance_trip_name||'Enviado')+'</button>':'<button class="btn btn-secondary" id="sendFinanceBtn">Enviar para o Financeiro</button>'):''}
     <button class="btn btn-secondary" id="validateNow">Validar documento</button>
     <button class="btn btn-secondary" id="previewPdfNow">Visualizar PDF</button>
     <button class="btn btn-primary" id="pdfNow">Baixar PDF</button>
@@ -181,10 +183,29 @@ async function openReceipt(id){
   document.getElementById('validateNow').onclick=()=>window.open(validationLink(r),'_blank','noopener');
   document.getElementById('editReceiptBtn')?.addEventListener('click',()=>editReceipt(r.id));
   document.getElementById('deleteReceiptBtn')?.addEventListener('click',()=>deleteReceipt(r.id));
+  document.getElementById('sendFinanceBtn')?.addEventListener('click',()=>sendToFinance(r.id));
   document.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>reviewReceipt(r.id,b.dataset.review,document.getElementById('reviewNotes').value));
   loadAudit(r.id);
 }
 
+
+async function sendToFinance(id){
+  const r=S.receipts.find(x=>x.id===id);if(!r)return;
+  const btn=document.getElementById('sendFinanceBtn');if(btn){btn.disabled=true;btn.textContent='Preparando...'}
+  try{
+    const {data,error}=await supabaseClient.rpc('create_finance_transfer',{p_receipt_id:id});
+    if(error)throw error;
+    const x=data?.[0];if(!x?.token)throw new Error('Não foi possível gerar a transferência.');
+    const url=new URL('https://trilheiros-reservas.web.app/admin');
+    url.searchParams.set('receipt_transfer',x.token);
+    url.searchParams.set('rid',id);
+    url.searchParams.set('code',r.receipt_code||'');
+    url.searchParams.set('v',r.verification_code||'');
+    window.open(url.href,'_blank','noopener');
+    toast('Abra o Trilheiros Gestão, escolha o passeio e confirme a despesa.');
+  }catch(e){toast(e.message||'Não foi possível preparar a transferência.','error')}
+  finally{if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent='Enviar para o Financeiro'}}
+}
 function editReceipt(id){
   const r=S.receipts.find(x=>x.id===id);if(!r)return;
   const serviceTypes=['Transporte / Ônibus','Hotel / Pousada','Alimentação','Guia / Condutor','Atrativo / Ingresso','Fotografia','Seguro','Combustível','Locação','Manutenção / Serviço técnico','Outro'];
@@ -289,10 +310,26 @@ async function deleteReceipt(id){
   render();
 }
 
+function auditLabel(action){return ({submitted:'Recibo enviado',edited:'Recibo editado',status_changed:'Status alterado',restored:'Recibo restaurado',finance_synced:'Enviado ao financeiro'})[action]||action}
+function auditChanges(a){
+  const d=a.details||{};
+  if(a.action==='edited'&&d.before&&d.after){
+    const fields={legal_name:'Fornecedor',cpf_cnpj:'CPF/CNPJ',phone:'Telefone',city:'Cidade',state:'UF',service_type:'Serviço',service_reference:'Referência',service_date:'Data do serviço',billing_mode:'Cobrança',quantity_people:'Quantidade',unit_amount:'Valor por pessoa',amount_received:'Valor total',payment_date:'Data do recebimento',payment_method:'Pagamento',notes:'Observação'};
+    const changes=[];
+    Object.entries(fields).forEach(([k,label])=>{
+      const before=d.before?.[k]??'',after=d.after?.[k]??'';
+      if(String(before)!==String(after))changes.push('<div class="audit-change"><span>'+escapeHtml(label)+'</span><del>'+escapeHtml(k.includes('amount')||k==='unit_amount'?brl(before):String(before||'—'))+'</del><b>→</b><ins>'+escapeHtml(k.includes('amount')||k==='unit_amount'?brl(after):String(after||'—'))+'</ins></div>');
+    });
+    return changes.join('')||'<div class="muted">Dados administrativos atualizados.</div>';
+  }
+  if(a.action==='status_changed')return '<div class="audit-change"><span>Status</span><del>'+escapeHtml(statusText(d.before_status))+'</del><b>→</b><ins>'+escapeHtml(statusText(d.after_status))+'</ins></div>'+(d.notes?'<div class="muted">'+escapeHtml(d.notes)+'</div>':'');
+  if(a.action==='finance_synced')return '<div class="muted">Vinculado ao passeio '+escapeHtml(d.trip_name||d.trip_id||'')+'.</div>';
+  return '';
+}
 async function loadAudit(id){
   const box=document.getElementById('auditBox');if(!box)return;
   const {data}=await supabaseClient.from('receipt_audit_log').select('*').eq('receipt_id',id).order('created_at',{ascending:false});
-  box.innerHTML='<h4>Histórico</h4>'+((data||[]).length?(data||[]).map(a=>'<div class="audit-row"><strong>'+escapeHtml(a.action==='submitted'?'Recibo enviado':'Status atualizado')+'</strong><span>'+dateTimeBR(a.created_at)+'</span></div>').join(''):'<div class="muted">Sem histórico.</div>');
+  box.innerHTML='<h4>Histórico de auditoria</h4>'+((data||[]).length?(data||[]).map(a=>'<div class="audit-entry"><div class="audit-row"><strong>'+escapeHtml(auditLabel(a.action))+'</strong><span>'+dateTimeBR(a.created_at)+'</span></div>'+auditChanges(a)+'</div>').join(''):'<div class="muted">Sem histórico.</div>');
 }
 async function reviewReceipt(id,status,notes){
   const {error}=await supabaseClient.rpc('review_receipt',{p_receipt_id:id,p_status:status,p_notes:notes||null});
@@ -324,24 +361,32 @@ function documents(){
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Central de documentos</h2><p>Recibos, notas fiscais, NFS-e e comprovantes em um só lugar.</p></div></div><div class="kpis"><div class="kpi"><span>Com anexo</span><strong>${withDoc.length}</strong></div><div class="kpi"><span>Sem anexo</span><strong>${missing.length}</strong></div><div class="kpi"><span>Total de recibos</span><strong>${S.receipts.filter(r=>r.accounting_status!=='cancelled').length}</strong></div></div><div class="panel"><div class="panel-head"><h3>Documentos anexados</h3></div>${withDoc.length?'<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fornecedor</th><th>Documento</th><th>Serviço</th><th>Data</th><th>Ações</th></tr></thead><tbody>'+withDoc.map(r=>'<tr><td><strong>'+escapeHtml(r.receipt_code||'—')+'</strong></td><td>'+escapeHtml(r.legal_name)+'</td><td>'+escapeHtml(r.attachment_name||'Anexo')+'</td><td>'+escapeHtml(r.service_type||'—')+'</td><td>'+dateBR(serviceDate(r))+'</td><td><div class="table-actions"><button class="btn btn-secondary btn-sm" data-open="'+r.id+'">Ver recibo</button><a class="btn btn-primary btn-sm" href="'+r.attachment_data_url+'" download="'+escapeHtml(r.attachment_name||'documento')+'">Baixar anexo</a></div></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum documento anexado ainda.</div>'}</div><div class="panel"><div class="panel-head"><h3>Recibos sem documento fiscal/comprovante</h3><span class="badge warn">${missing.length}</span></div>${tableReceipts(missing.slice(0,100))}</div>`;
   wireReceipt();
 }
+
 function monthly(){
-  const now=new Date(),years=[...new Set([now.getFullYear(),...S.receipts.map(r=>Number((serviceDate(r)||'0000').slice(0,4))).filter(Boolean)])].sort((a,b)=>b-a);
-  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Fechamento mensal</h2><p>Consolide os recibos por competência.</p></div></div><div class="toolbar"><div class="field"><label>Mês</label><select id="cm">${Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'" '+(i===now.getMonth()?'selected':'')+'>'+new Date(2020,i).toLocaleDateString('pt-BR',{month:'long'})+'</option>').join('')}</select></div><div class="field"><label>Ano</label><select id="cy">${years.map(y=>'<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>').join('')}</select></div></div><div id="monthSummary"></div><div class="panel"><h3>Fechamentos registrados</h3>${S.closures.length?'<div class="table-wrap"><table><thead><tr><th>Competência</th><th>Recibos</th><th>Total</th><th>Fechado em</th></tr></thead><tbody>'+S.closures.map(c=>'<tr><td>'+String(c.month).padStart(2,'0')+'/'+c.year+'</td><td>'+c.receipt_count+'</td><td>'+brl(c.total_amount)+'</td><td>'+dateTimeBR(c.closed_at)+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum mês fechado.</div>'}</div>`;
+  const now=new Date(),years=[...new Set([now.getFullYear(),...S.receipts.map(r=>Number((serviceDate(r)||'0000').slice(0,4))).filter(Boolean),...S.closures.map(c=>Number(c.year)).filter(Boolean)])].sort((a,b)=>b-a);
+  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Fechamento mensal</h2><p>Ao fechar uma competência, recibos daquele mês ficam bloqueados para envio, edição, exclusão e mudança de status até a reabertura pelo Administrador.</p></div></div><div class="toolbar"><div class="field"><label>Mês</label><select id="cm">${Array.from({length:12},(_,i)=>'<option value="'+(i+1)+'" '+(i===now.getMonth()?'selected':'')+'>'+new Date(2020,i).toLocaleDateString('pt-BR',{month:'long'})+'</option>').join('')}</select></div><div class="field"><label>Ano</label><select id="cy">${years.map(y=>'<option '+(y===now.getFullYear()?'selected':'')+'>'+y+'</option>').join('')}</select></div></div><div id="monthSummary"></div><div class="panel"><h3>Histórico de competências</h3>${S.closures.length?'<div class="table-wrap"><table><thead><tr><th>Competência</th><th>Status</th><th>Recibos</th><th>Total</th><th>Última ação</th></tr></thead><tbody>'+S.closures.map(c=>'<tr><td>'+String(c.month).padStart(2,'0')+'/'+c.year+'</td><td><span class="badge '+(c.is_closed?'locked':'success')+'">'+(c.is_closed?'Fechado':'Reaberto')+'</span></td><td>'+c.receipt_count+'</td><td>'+brl(c.total_amount)+'</td><td>'+dateTimeBR(c.is_closed?c.closed_at:c.reopened_at)+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhuma competência fechada.</div>'}</div>`;
   document.getElementById('cm').onchange=renderMonthSummary;document.getElementById('cy').onchange=renderMonthSummary;renderMonthSummary();
 }
 function monthRows(y,m){return S.receipts.filter(r=>{const d=serviceDate(r);return Number(d.slice(0,4))===y&&Number(d.slice(5,7))===m&&r.accounting_status!=='cancelled'})}
 function renderMonthSummary(){
-  const y=Number(document.getElementById('cy').value),m=Number(document.getElementById('cm').value),rows=monthRows(y,m),sum=rows.reduce((a,b)=>a+Number(b.amount_received||0),0),reviewed=rows.filter(r=>r.accounting_status==='reviewed').length,pending=rows.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length;
-  document.getElementById('monthSummary').innerHTML=`<div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button><button class="btn btn-secondary" id="monthBackup">Backup ZIP</button>${S.profile.role==='admin'?'<button class="btn btn-primary" id="closeMonth">Fechar mês</button>':''}</div><div style="height:12px"></div>${tableReceipts(rows)}</div>`;
+  const y=Number(document.getElementById('cy').value),m=Number(document.getElementById('cm').value),rows=monthRows(y,m),sum=rows.reduce((a,b)=>a+Number(b.amount_received||0),0),reviewed=rows.filter(r=>r.accounting_status==='reviewed').length,pending=rows.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length,closure=closureFor(y,m),closed=closure?.is_closed===true;
+  document.getElementById('monthSummary').innerHTML=`<div class="month-lock-banner ${closed?'closed':'open'}"><strong>${closed?'🔒 Competência fechada':'🔓 Competência aberta'}</strong><span>${closed?'Alterações estão bloqueadas até o Administrador reabrir este mês.':'Revise os recibos antes de fechar. O fechamento só é permitido sem pendências.'}</span></div><div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button><button class="btn btn-secondary" id="monthBackup">Backup ZIP</button>${S.profile.role==='admin'?(closed?'<button class="btn btn-primary" id="reopenMonth">Reabrir mês</button>':'<button class="btn btn-primary" id="closeMonth" '+(pending?'disabled':'')+'>Fechar mês</button>'):''}</div>${pending&&!closed?'<div class="notice info">Antes de fechar, confira ou resolva os '+pending+' recibo(s) pendente(s).</div>':''}<div style="height:12px"></div>${tableReceipts(rows)}</div>`;
   document.getElementById('monthPdf').onclick=()=>generateMonthlyPDF(rows,y,m);
   document.getElementById('monthBackup').onclick=()=>backupMonth(rows,y,m);
   document.getElementById('closeMonth')?.addEventListener('click',()=>closeMonth(y,m));
+  document.getElementById('reopenMonth')?.addEventListener('click',()=>reopenMonth(y,m));
   wireReceipt();
 }
 async function closeMonth(y,m){
   const {error}=await supabaseClient.rpc('close_receipt_month',{p_year:y,p_month:m,p_notes:null});
   if(error){toast(error.message,'error');return}
-  await load();toast('Mês fechado e consolidado.');monthly();
+  await load();toast('Competência fechada e bloqueada.');monthly();
+}
+async function reopenMonth(y,m){
+  if(!confirm('Reabrir esta competência? Os recibos voltarão a permitir alterações administrativas.'))return;
+  const {error}=await supabaseClient.rpc('reopen_receipt_month',{p_year:y,p_month:m});
+  if(error){toast(error.message,'error');return}
+  await load();toast('Competência reaberta.');monthly();
 }
 function generateMonthlyPDF(rows,y,m){
   const {jsPDF}=window.jspdf,d=new jsPDF({unit:'mm',format:'a4'}),M=14,W=182;
