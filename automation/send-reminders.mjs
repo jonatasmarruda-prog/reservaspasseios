@@ -57,6 +57,7 @@ function daysBetween(a,b){return dayNumber(b)-dayNumber(a)}
 function brDate(v){const s=isoDate(v);if(!s)return'Data a confirmar';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`}
 function dateRange(trip){const start=isoDate(trip?.trip_date),end=isoDate(trip?.trip_end_date);return end&&end!==start?`${brDate(start)} a ${brDate(end)}`:brDate(start)}
 function participantNames(sale){const rows=Array.isArray(sale?.participants)?sale.participants:[];const names=rows.map(x=>clean(x?.full_name||x?.name)).filter(Boolean);return names.length?names:(clean(sale?.customer_name)?[clean(sale.customer_name)]:[])}
+function participantRecipients(sale){const out=[],seen=new Set();const add=(name,address)=>{const e=clean(address).toLowerCase();if(!validEmail(e)||seen.has(e))return;seen.add(e);out.push({name:clean(name)||firstName(e.split('@')[0]),email:e})};for(const p of (Array.isArray(sale?.participants)?sale.participants:[]))add(p?.full_name||p?.name,p?.email);add(sale?.customer_name||sale?.responsible_name,sale?.customer_email||sale?.email);return out}
 function whatsappUrl(sale,trip){const msg=`Olá Jonatas! Estou falando sobre o passeio ${clean(trip?.name||sale?.trip_name)||'dos Trilheiros'}. Protocolo: ${clean(sale?.protocol)||'não informado'}.`;return`https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`}
 function dispatchId(kind,saleId,tripId,anchor){return createHash('sha256').update(`${kind}|${saleId}|${tripId}|${anchor}`).digest('hex')}
 function backoffMs(attempt){return Math.min(12*HOUR,Math.max(15*60*1000,(2**Math.max(0,attempt-1))*15*60*1000))}
@@ -139,6 +140,23 @@ for(const saleDoc of salesSnap.docs){
   if(trip.post_trip_enabled!==false&&daysAfter===1){
     const c=await claimDispatch({kind:'post_trip_1d',saleRef:saleDoc.ref,tripRef,anchor:end,email});
     if(c.claimed)try{const payload=await sendResend({to:email,...postTemplate(sale,trip),key:`post1-${c.id}`});await markSent(c.ref,payload,email);await saleDoc.ref.set({post_trip_email_status:'sent',post_trip_email_sent_at:FieldValue.serverTimestamp(),post_trip_email_resend_id:payload.id||'',post_trip_email_to:email,post_trip_email_error:FieldValue.delete()},{merge:true});postSent++}catch(err){failed++;const msg=await markFailure(c.ref,err,c.attempt);await saleDoc.ref.set({post_trip_email_status:'error',post_trip_email_error:msg,post_trip_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{})}
+  }
+
+  const extraRecipients=participantRecipients(sale).filter(x=>x.email!==email);
+  for(const recipient of extraRecipients){
+    const personalized={...sale,customer_name:recipient.name,customer_email:recipient.email};
+    if(trip.email_reminder_enabled!==false&&daysUntil===3){
+      const c=await claimDispatch({kind:'pre_trip_3d_participant',saleRef:saleDoc.ref,tripRef,anchor:`${start}|${recipient.email}`,email:recipient.email});
+      if(c.claimed)try{const payload=await sendResend({to:recipient.email,...preTemplate(personalized,trip,3),key:`pre3p-${c.id}`});await markSent(c.ref,payload,recipient.email);pre3Sent++}catch(err){failed++;await markFailure(c.ref,err,c.attempt)}
+    }
+    if(trip.email_reminder_enabled!==false&&daysUntil===1){
+      const c=await claimDispatch({kind:'pre_trip_1d_participant',saleRef:saleDoc.ref,tripRef,anchor:`${start}|${recipient.email}`,email:recipient.email});
+      if(c.claimed)try{const payload=await sendResend({to:recipient.email,...preTemplate(personalized,trip,1),key:`pre1p-${c.id}`});await markSent(c.ref,payload,recipient.email);pre1Sent++}catch(err){failed++;await markFailure(c.ref,err,c.attempt)}
+    }
+    if(trip.post_trip_enabled!==false&&daysAfter===1){
+      const c=await claimDispatch({kind:'post_trip_1d_participant',saleRef:saleDoc.ref,tripRef,anchor:`${end}|${recipient.email}`,email:recipient.email});
+      if(c.claimed)try{const payload=await sendResend({to:recipient.email,...postTemplate(personalized,trip),key:`post1p-${c.id}`});await markSent(c.ref,payload,recipient.email);postSent++}catch(err){failed++;await markFailure(c.ref,err,c.attempt)}
+    }
   }
 }
 
