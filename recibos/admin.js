@@ -109,6 +109,94 @@ function shell(){
 }
 function reqFor(r){return S.requests.find(q=>q.id===r.request_id)||{}}
 function render(){root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));({dashboard,receipts,settings}[S.view]||dashboard)()}
+
+function publicFormLink(){
+  return new URL('./',location.href).href.split('?')[0].split('#')[0];
+}
+
+async function copyPublicLink(text,button,field){
+  let copied=false;
+  try{
+    if(navigator.clipboard&&window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      copied=true;
+    }
+  }catch(e){}
+
+  if(!copied){
+    try{
+      field.removeAttribute('readonly');
+      field.focus();
+      field.select();
+      field.setSelectionRange(0,field.value.length);
+      copied=document.execCommand('copy');
+      field.setAttribute('readonly','readonly');
+      window.getSelection()?.removeAllRanges();
+    }catch(e){}
+  }
+
+  if(copied){
+    const original=button.textContent;
+    button.textContent='✓ Link copiado';
+    button.classList.add('copy-success');
+    toast('Link copiado para a área de transferência.');
+    setTimeout(()=>{
+      if(document.body.contains(button)){
+        button.textContent=original;
+        button.classList.remove('copy-success');
+      }
+    },2200);
+    return true;
+  }
+
+  field.removeAttribute('readonly');
+  field.focus();
+  field.select();
+  field.setSelectionRange(0,field.value.length);
+  toast('Selecione o link e toque em Copiar.','error');
+  return false;
+}
+
+function showPublicLink(){
+  const link=publicFormLink();
+  modal(`
+    <div class="modal-head">
+      <div>
+        <h3>Link único do fornecedor</h3>
+        <span class="muted">Este é o mesmo link para todos os fornecedores.</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-close>Fechar</button>
+    </div>
+
+    <div class="notice success">
+      Envie este link para o fornecedor preencher, revisar, assinar e enviar o recibo.
+    </div>
+
+    <div class="field">
+      <label>Link do formulário</label>
+      <textarea id="publicLink" readonly rows="3">${escapeHtml(link)}</textarea>
+    </div>
+
+    <div class="actions link-actions">
+      <button class="btn btn-secondary" id="copyPublic" type="button">Copiar link</button>
+      <button class="btn btn-primary" id="whatsappPublic" type="button">Enviar pelo WhatsApp</button>
+      <button class="btn btn-secondary" id="openPublic" type="button">Abrir formulário</button>
+    </div>
+  `);
+
+  const field=document.getElementById('publicLink');
+  const copyBtn=document.getElementById('copyPublic');
+
+  copyBtn.onclick=()=>copyPublicLink(link,copyBtn,field);
+
+  document.getElementById('whatsappPublic').onclick=()=>{
+    const msg='Olá! Segue o link para preencher e assinar o recibo digital dos Trilheiros de Rondonópolis:%0A%0A'+encodeURIComponent(link);
+    window.open('https://wa.me/?text='+msg,'_blank','noopener');
+  };
+
+  document.getElementById('openPublic').onclick=()=>window.open(link,'_blank','noopener');
+}
+
 function dashboard(){
   const now=new Date();
   const month=S.receipts.filter(r=>{const raw=r.service_date||r.payment_date;const d=new Date(raw+'T12:00:00');return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()});
