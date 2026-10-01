@@ -61,3 +61,11 @@
 .receipt-main-actions .btn{min-width:140px}
 .edit-warning{background:#fff8e8;border:1px solid #efdfa9;color:#69500d;padding:12px;border-radius:12px}
 @media(max-width:640px){.receipt-main-actions{flex-direction:column}.receipt-main-actions .btn{width:100%}}
+
+.pricing-choice{display:flex;gap:10px;flex-wrap:wrap}
+.calculated-total{background:#eef7f1;border:1px solid #cfe3d6;border-radius:16px;padding:16px}
+.calculated-total span,.calculated-total small{display:block;color:#607267}
+.calculated-total strong{display:block;font-size:24px;color:#174d2f;margin:4px 0}
+#cepStatus{min-height:18px}
+#referenceWrap{transition:.2s ease}
+@media(max-width:640px){.pricing-choice{display:grid;grid-template-columns:1fr 1fr}.pricing-choice .radio-pill{width:100%}}
