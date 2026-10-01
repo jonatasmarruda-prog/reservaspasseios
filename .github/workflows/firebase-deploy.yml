@@ -29,6 +29,7 @@ jobs:
         run: |
           node --check public/reservation-portal-v27.js
           node --check public/participant-unification-v44.js
+          node --check public/admin-costs-v36.js
           node - <<'NODE'
           const fs=require('fs');
           const html=fs.readFileSync('public/cadastro.html','utf8');
