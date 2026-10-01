@@ -92,8 +92,8 @@ window.addEventListener('DOMContentLoaded',async()=>{
           const rd=resSnap.data()||{},map=new Map();
           [...(Array.isArray(rd.participants)?rd.participants:[]),...participants].forEach(p=>{const key=digits(p?.cpf);if(key)map.set(key,{...(map.get(key)||{}),full_name:p.full_name||p.name||'',cpf:key,email:String(p.email||'').trim().toLowerCase()})});
           const merged=[...map.values()],first=participants[0],salePatch={customer_name:first.full_name,customer_cpf:first.cpf,customer_email:first.email,participants:merged,registration_status:'completed',registered_at:stamp,updated_at:stamp};
-          const resPatch={responsible_name:first.full_name,responsible_cpf:first.cpf,email:first.email,participants:merged,registration_answers:{origem:{label:'Origem',value:'Link do passeio'},pagamento_informado:{label:'Pagamento informado no cadastro',value:paymentLabel(reportedMethod)}},reported_payment_method:reportedMethod,status:'active',registration_status:'completed',policy_text:trip.cancellation_policy||rd.policy_text||'',policy_version:'direct-trip-link-2026-10',policy_accepted:true,policy_accepted_at:stamp,updated_at:stamp};
-          salePatch.reported_payment_method=reportedMethod;salePatch.registration_payment_reported_at=stamp;await Promise.all([saleRef.update(salePatch),resRef.update(resPatch)]);
+          const resPatch={responsible_name:first.full_name,responsible_cpf:first.cpf,email:first.email,participants:merged,registration_answers:{origem:{label:'Origem',value:'Link do passeio'},pagamento_informado:{label:'Pagamento informado no cadastro',value:paymentLabel(reportedMethod)}},status:'active',registration_status:'completed',policy_text:trip.cancellation_policy||rd.policy_text||'',policy_version:'direct-trip-link-2026-10',policy_accepted:true,policy_accepted_at:stamp,updated_at:stamp};
+          await Promise.all([saleRef.update(salePatch),resRef.update(resPatch)]);
           window.TrilheirosParticipant?.rememberLocal?.(participants);
           return{ok:true,merged:true,protocol:sale.protocol||rd.protocol||'—',trip_id:tripId,sale_id:uid,reservation_id:uid,seats:Number(sale.seats||rd.seats||merged.length)};
         }
