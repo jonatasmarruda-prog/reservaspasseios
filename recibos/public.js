@@ -3,6 +3,7 @@
 const {supabaseClient}=window.ReceiptsApp;
 const app=document.getElementById('app');
 const LOCK_KEY='trilheiros_receipt_submitted_v4';
+const SUPPLIER_PROFILE_KEY='trilheiros_supplier_profile_v1';
 let canvas=null,ctx=null,drawing=false,signed=false,cepTimer=null;
 
 let SERVICES={
@@ -46,7 +47,43 @@ async function startFormSession(){
   }catch(e){console.warn('Sessão do formulário:',e)}
 }
 
-function lockedReceipt(){try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}}
+function lockedReceipt(){
+  try{
+    const x=JSON.parse(localStorage.getItem(LOCK_KEY)||'null');
+    if(!x)return null;
+    const age=Date.now()-new Date(x.submitted_at||0).getTime();
+    if(!Number.isFinite(age)||age>86400000){localStorage.removeItem(LOCK_KEY);return null}
+    return x;
+  }catch{return null}
+}
+function rememberSupplier(f){
+  try{
+    localStorage.setItem(SUPPLIER_PROFILE_KEY,JSON.stringify({
+      cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
+      legal_name:f.elements.legal_name.value.trim(),
+      phone:onlyDigits(f.elements.phone.value),
+      email:f.elements.email.value.trim(),
+      postal_code:onlyDigits(f.elements.postal_code.value),
+      address:f.elements.address.value.trim(),
+      address_number:f.elements.address_number.value.trim(),
+      neighborhood:f.elements.neighborhood.value.trim(),
+      complement:f.elements.complement.value.trim(),
+      city:f.elements.city.value.trim(),
+      state:f.elements.state.value.trim().toUpperCase()
+    }));
+  }catch{}
+}
+function prefillKnownSupplier(f){
+  try{
+    const saved=JSON.parse(localStorage.getItem(SUPPLIER_PROFILE_KEY)||'null');
+    if(!saved||saved.cpf_cnpj!==onlyDigits(f.elements.cpf_cnpj.value))return;
+    const fill=(name,value,formatter)=>{const el=f.elements[name];if(el&&!el.value&&value)el.value=formatter?formatter(value):value};
+    fill('legal_name',saved.legal_name);fill('phone',saved.phone,formatPhone);fill('email',saved.email);
+    fill('postal_code',saved.postal_code,formatCep);fill('address',saved.address);fill('address_number',saved.address_number);
+    fill('neighborhood',saved.neighborhood);fill('complement',saved.complement);fill('city',saved.city);fill('state',saved.state);
+    toast('Dados do fornecedor reconhecidos neste aparelho.');
+  }catch{}
+}
 function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
   app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este envio foi concluído neste aparelho e não pode mais ser alterado por esta página.</p></div></section>';
@@ -199,6 +236,7 @@ async function lookupCep(f){
 function wire(){
   const f=document.getElementById('receiptForm');
   f.elements.cpf_cnpj.oninput=e=>e.target.value=formatCpfCnpj(e.target.value);
+  f.elements.cpf_cnpj.onblur=()=>prefillKnownSupplier(f);
   f.elements.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
   f.elements.postal_code.oninput=e=>{e.target.value=formatCep(e.target.value);clearTimeout(cepTimer);if(onlyDigits(e.target.value).length===8)cepTimer=setTimeout(()=>lookupCep(f),350)};
   f.elements.postal_code.onblur=()=>lookupCep(f);
@@ -324,7 +362,7 @@ async function submit(e){
     const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_session:FORM_SESSION,p_payload:payload});
     if(error)throw error;
     const result=data?.[0]||{},lock={code:result.receipt_code||'Registrado',verification:result.verification_code||'',submitted_at:new Date().toISOString()};
-    lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
+    rememberSupplier(f);lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
   }catch(ex){
     let msg=ex?.message||'Não foi possível salvar o recibo.';
     if(/cpf_cnpj_valid|CPF\/CNPJ/i.test(msg))msg='CPF ou CNPJ inválido. Confira os números.';
