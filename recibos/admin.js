@@ -105,12 +105,14 @@ function dashboard(){
   const types=Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,6);
   const tops=Object.values(topSuppliers).sort((a,b)=>b.total-a.total).slice(0,5);
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Visão geral</h2><p>Resumo financeiro e contábil dos recibos.</p></div><button class="btn btn-primary" id="publicLinkBtn">Link do fornecedor</button></div>
+  ${pending||issue?'<div class="dashboard-alert"><strong>⚠ Atenção da contabilidade</strong><span>'+pending+' recibo(s) não conferido(s) e '+issue+' com pendência.</span><button class="btn btn-secondary btn-sm" id="reviewPending">Revisar agora</button></div>':''}
   <div class="kpis"><div class="kpi"><span>Recibos no mês</span><strong>${month.length}</strong></div><div class="kpi"><span>Valor no mês</span><strong>${brl(total)}</strong></div><div class="kpi"><span>Não conferidos</span><strong>${pending}</strong></div><div class="kpi"><span>Com pendência</span><strong>${issue}</strong></div></div>
   <div class="dashboard-grid"><div class="panel"><h3>Por tipo de serviço — mês</h3>${types.length?types.map(([k,v])=>'<div class="metric-row"><span>'+escapeHtml(k)+'</span><strong>'+brl(v)+'</strong></div>').join(''):'<div class="empty">Sem dados no mês.</div>'}</div>
   <div class="panel"><h3>Principais fornecedores</h3>${tops.length?tops.map(x=>'<div class="metric-row"><span>'+escapeHtml(x.name)+' <small>('+x.count+')</small></span><strong>'+brl(x.total)+'</strong></div>').join(''):'<div class="empty">Sem dados no mês.</div>'}</div></div>
-  <div class="panel"><div class="panel-head"><h3>Resumo anual — ${now.getFullYear()}</h3></div>${annualSummary(now.getFullYear())}</div>
+  <div class="panel"><div class="panel-head"><h3>Resumo anual — ${now.getFullYear()}</h3></div>${annualSummary(now.getFullYear())}<div class="annual-trend">${annualTrendHtml(now.getFullYear())}</div></div>
   <div class="panel"><div class="panel-head"><h3>Últimos recibos</h3><button class="btn btn-secondary btn-sm" id="goReceipts">Ver todos</button></div>${tableReceipts(S.receipts.slice(0,8))}</div>`;
   document.getElementById('publicLinkBtn').onclick=showPublicLink;
+  document.getElementById('reviewPending')?.addEventListener('click',()=>{S.view='receipts';render();setTimeout(()=>{const fs=document.getElementById('fs');if(fs){fs.value='pending_review';filterReceipts()}},0)});
   document.getElementById('goReceipts').onclick=()=>{S.view='receipts';render()};
   wireReceipt();
 }
@@ -122,6 +124,13 @@ function annualSummary(year){
   const total=rows.reduce((a,b)=>a+Number(b.amount_received||0),0);
   return '<div class="metric-row"><span>Total anual</span><strong>'+brl(total)+'</strong></div>'+
     Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>'<div class="metric-row"><span>'+escapeHtml(k)+'</span><strong>'+brl(v)+'</strong></div>').join('');
+}
+
+function annualTrendHtml(year){
+  const months=Array.from({length:12},(_,i)=>({m:i+1,total:0,count:0}));
+  S.receipts.filter(r=>r.accounting_status!=='cancelled'&&Number(serviceDate(r).slice(0,4))===year).forEach(r=>{const m=Number(serviceDate(r).slice(5,7));if(months[m-1]){months[m-1].total+=Number(r.amount_received||0);months[m-1].count++}});
+  const max=Math.max(1,...months.map(x=>x.total));
+  return '<div class="trend-bars">'+months.map(x=>'<div class="trend-item" title="'+String(x.m).padStart(2,'0')+'/'+year+' • '+brl(x.total)+'"><div class="trend-bar-wrap"><div class="trend-bar" style="height:'+Math.max(3,Math.round((x.total/max)*100))+'%"></div></div><span>'+String(x.m).padStart(2,'0')+'</span></div>').join('')+'</div>';
 }
 function tableReceipts(rows){
   if(!rows.length)return'<div class="empty">Nenhum recibo encontrado.</div>';
@@ -370,9 +379,10 @@ function monthly(){
 function monthRows(y,m){return S.receipts.filter(r=>{const d=serviceDate(r);return Number(d.slice(0,4))===y&&Number(d.slice(5,7))===m&&r.accounting_status!=='cancelled'})}
 function renderMonthSummary(){
   const y=Number(document.getElementById('cy').value),m=Number(document.getElementById('cm').value),rows=monthRows(y,m),sum=rows.reduce((a,b)=>a+Number(b.amount_received||0),0),reviewed=rows.filter(r=>r.accounting_status==='reviewed').length,pending=rows.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length,closure=closureFor(y,m),closed=closure?.is_closed===true;
-  document.getElementById('monthSummary').innerHTML=`<div class="month-lock-banner ${closed?'closed':'open'}"><strong>${closed?'🔒 Competência fechada':'🔓 Competência aberta'}</strong><span>${closed?'Alterações estão bloqueadas até o Administrador reabrir este mês.':'Revise os recibos antes de fechar. O fechamento só é permitido sem pendências.'}</span></div><div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button><button class="btn btn-secondary" id="monthBackup">Backup ZIP</button>${S.profile.role==='admin'?(closed?'<button class="btn btn-primary" id="reopenMonth">Reabrir mês</button>':'<button class="btn btn-primary" id="closeMonth" '+(pending?'disabled':'')+'>Fechar mês</button>'):''}</div>${pending&&!closed?'<div class="notice info">Antes de fechar, confira ou resolva os '+pending+' recibo(s) pendente(s).</div>':''}<div style="height:12px"></div>${tableReceipts(rows)}</div>`;
+  document.getElementById('monthSummary').innerHTML=`<div class="month-lock-banner ${closed?'closed':'open'}"><strong>${closed?'🔒 Competência fechada':'🔓 Competência aberta'}</strong><span>${closed?'Alterações estão bloqueadas até o Administrador reabrir este mês.':'Revise os recibos antes de fechar. O fechamento só é permitido sem pendências.'}</span></div><div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button><button class="btn btn-secondary" id="monthBackup">Backup do mês</button><button class="btn btn-secondary" id="yearBackup">Backup do ano</button>${S.profile.role==='admin'?(closed?'<button class="btn btn-primary" id="reopenMonth">Reabrir mês</button>':'<button class="btn btn-primary" id="closeMonth" '+(pending?'disabled':'')+'>Fechar mês</button>'):''}</div>${pending&&!closed?'<div class="notice info">Antes de fechar, confira ou resolva os '+pending+' recibo(s) pendente(s).</div>':''}<div style="height:12px"></div>${tableReceipts(rows)}</div>`;
   document.getElementById('monthPdf').onclick=()=>generateMonthlyPDF(rows,y,m);
-  document.getElementById('monthBackup').onclick=()=>backupMonth(rows,y,m);
+  document.getElementById('monthBackup').onclick=()=>backupPeriod(rows,y+'_'+String(m).padStart(2,'0'));
+  document.getElementById('yearBackup').onclick=()=>backupPeriod(S.receipts.filter(r=>Number(serviceDate(r).slice(0,4))===y&&r.accounting_status!=='cancelled'),String(y));
   document.getElementById('closeMonth')?.addEventListener('click',()=>closeMonth(y,m));
   document.getElementById('reopenMonth')?.addEventListener('click',()=>reopenMonth(y,m));
   wireReceipt();
@@ -400,28 +410,35 @@ function generateMonthlyPDF(rows,y,m){
   d.save('relatorio_recibos_'+y+'_'+String(m).padStart(2,'0')+'.pdf');
 }
 
-async function backupMonth(rows,y,m){
+
+function dataUrlToBlob(dataUrl){
+  const parts=String(dataUrl||'').split(','),meta=parts[0]||'',raw=atob(parts[1]||''),mime=(meta.match(/data:([^;]+)/)||[])[1]||'application/octet-stream',arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++)arr[i]=raw.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+async function backupPeriod(rows,label){
   if(!window.JSZip){toast('Biblioteca de backup não carregou. Atualize a página.','error');return}
   const btn=document.getElementById('monthBackup');if(btn){btn.disabled=true;btn.textContent='Gerando backup...'}
   try{
     const zip=new JSZip();
-    const head=['Recibo','Status','Data do serviço','Fornecedor','CPF/CNPJ','Tipo de serviço','Valor','Forma de pagamento','Validação'];
-    const body=rows.map(r=>[r.receipt_code,statusText(r.accounting_status),dateBR(serviceDate(r)),r.legal_name,formatCpfCnpj(r.cpf_cnpj),r.service_type,Number(r.amount_received).toFixed(2).replace('.',','),r.payment_method,r.verification_code]);
+    const head=['Recibo','Status','Data do serviço','Fornecedor','CPF/CNPJ','Tipo de serviço','Referência','Valor','Pagamento','Validação','Anexo'];
+    const body=rows.map(r=>[r.receipt_code,statusText(r.accounting_status),dateBR(serviceDate(r)),r.legal_name,formatCpfCnpj(r.cpf_cnpj),r.service_type,r.service_reference||'',Number(r.amount_received).toFixed(2).replace('.',','),r.payment_method,r.verification_code,r.attachment_name||'']);
     const csv='\ufeff'+[head,...body].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n');
-    zip.file('recibos_'+y+'_'+String(m).padStart(2,'0')+'.csv',csv);
-    const folder=zip.folder('pdfs');
+    zip.file('recibos_'+label+'.csv',csv);
+    const pdfs=zip.folder('pdfs'),attachments=zip.folder('anexos');
     for(const r of rows){
       const doc=await generateReceiptPDF(r,null,S.settings,'blob');
-      folder.file('recibo_'+String(r.receipt_code||r.id)+'.pdf',doc.output('blob'));
+      pdfs.file('recibo_'+String(r.receipt_code||r.id)+'.pdf',doc.output('blob'));
+      if(r.attachment_data_url&&r.attachment_name){
+        try{attachments.file(String(r.receipt_code||r.id)+'_'+r.attachment_name.replace(/[\\/:*?"<>|]/g,'_'),dataUrlToBlob(r.attachment_data_url))}catch(e){console.warn('Anexo no backup',e)}
+      }
     }
-    const blob=await zip.generateAsync({type:'blob'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup_recibos_'+y+'_'+String(m).padStart(2,'0')+'.zip';a.click();
-    setTimeout(()=>URL.revokeObjectURL(a.href),30000);
-    toast('Backup mensal gerado.');
+    const blob=await zip.generateAsync({type:'blob'}),a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download='backup_recibos_'+label+'.zip';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),30000);toast('Backup completo gerado.');
   }catch(e){console.error(e);toast('Não foi possível gerar o backup.','error')}
-  finally{if(btn){btn.disabled=false;btn.textContent='Backup ZIP'}}
+  finally{if(btn){btn.disabled=false;btn.textContent='Backup do mês'}}
 }
-
 function trash(){
   if(S.profile.role!=='admin'){S.view='dashboard';render();return}
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Lixeira</h2><p>Recibos excluídos ficam preservados aqui e podem ser restaurados.</p></div></div><div class="panel">${S.deleted.length?'<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fornecedor</th><th>Serviço</th><th>Data</th><th>Valor</th><th>Excluído em</th><th>Ação</th></tr></thead><tbody>'+S.deleted.map(x=>'<tr><td><strong>'+escapeHtml(x.receipt_code||'—')+'</strong></td><td>'+escapeHtml(x.legal_name||'—')+'<br><span class="muted">'+formatCpfCnpj(x.cpf_cnpj||'')+'</span></td><td>'+escapeHtml(x.service_type||'—')+'</td><td>'+dateBR(x.service_date)+'</td><td>'+brl(x.amount_received)+'</td><td>'+dateTimeBR(x.deleted_at)+'</td><td><button class="btn btn-primary btn-sm" data-restore="'+x.id+'">Restaurar</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">A lixeira está vazia.</div>'}</div>`;
