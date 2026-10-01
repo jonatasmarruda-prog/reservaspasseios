@@ -50,3 +50,9 @@
   .steps-bar-item{padding:7px 9px;font-size:11px}
   .premium-signature{height:165px!important}
 }
+
+.copy-success{background:#e1f3e7!important;color:#17663a!important;border-color:#b8dec6!important}
+.link-actions{display:flex;flex-wrap:wrap;gap:10px}
+.link-actions .btn{flex:1 1 160px}
+#publicLink{min-height:86px;word-break:break-all}
+@media(max-width:640px){.link-actions{flex-direction:column}.link-actions .btn{width:100%;flex:auto}}
