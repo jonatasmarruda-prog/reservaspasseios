@@ -1,253 +1,181 @@
+
 (()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const app=document.getElementById('app');
-const LOCK_KEY='trilheiros_receipt_submitted_v3';
-let canvas,ctx,drawing=false,signed=false;
+const LOCK_KEY='trilheiros_receipt_submitted_v4';
+let canvas=null,ctx=null,drawing=false,signed=false,cepTimer=null;
 
-const SERVICE_TYPES=[
-  'Transporte / Ônibus',
-  'Hotel / Pousada',
-  'Alimentação',
-  'Guia / Condutor',
-  'Atrativo / Ingresso',
-  'Fotografia',
-  'Seguro',
-  'Combustível',
-  'Locação',
-  'Manutenção / Serviço técnico',
-  'Outro'
-];
+const SERVICES={
+  'Transporte / Ônibus':{ref:'Destino / trecho do transporte',placeholder:'Ex.: Rondonópolis → Chapada dos Guimarães',billing:'total',required:false},
+  'Hotel / Pousada':{ref:'Nome do hotel / pousada',placeholder:'Ex.: Hotel Serra Azul',billing:'total',required:true},
+  'Alimentação':{ref:'Tipo de refeição / local',placeholder:'Ex.: Café da manhã, almoço, jantar...',billing:'per_person',required:false},
+  'Guia / Condutor':{ref:'Roteiro / local do guiamento',placeholder:'Ex.: Circuito das Cachoeiras',billing:'per_person',required:false},
+  'Atrativo / Ingresso':{ref:'Nome do atrativo',placeholder:'Ex.: Aquário Encantado',billing:'per_person',required:true},
+  'Fotografia':{ref:'Passeio / evento fotografado',placeholder:'Ex.: Trilha Morro da Mesa',billing:'total',required:false},
+  'Seguro':{ref:'Passeio / período do seguro',placeholder:'Ex.: Passeio Nobres 24–25/10',billing:'per_person',required:false},
+  'Combustível':{ref:'Veículo / passeio',placeholder:'Ex.: Transporte do passeio',billing:'total',required:false},
+  'Locação':{ref:'Item locado',placeholder:'Ex.: Van, equipamento, espaço...',billing:'total',required:false},
+  'Manutenção / Serviço técnico':{ref:'Equipamento / serviço realizado',placeholder:'Ex.: Manutenção do veículo',billing:'total',required:false},
+  'Outro':{ref:'Qual serviço foi realizado?',placeholder:'Descreva rapidamente o serviço',billing:'total',required:true}
+};
+const PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
 
-const PAYMENT_METHODS=[
-  'PIX',
-  'Transferência bancária',
-  'Dinheiro',
-  'Cartão',
-  'Boleto',
-  'Outro'
-];
-
-function lockedReceipt(){
-  try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}
-}
-function lockReceipt(data){
-  try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}
-}
+function lockedReceipt(){try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}}
+function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
-  app.innerHTML=`
-    <section class="status-screen premium-thanks">
-      <div class="status-box">
-        <div class="status-icon">✓</div>
-        <h2>Obrigado! Recibo enviado com sucesso.</h2>
-        <p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p>
-        <div class="receipt-success-card">
-          <span>Protocolo</span>
-          <strong>${escapeHtml(data?.code||'Registrado')}</strong>
-          ${data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':''}
-        </div>
-        <p class="muted">Este formulário já foi concluído neste aparelho. Não é possível alterar ou reenviar este recibo por esta página.</p>
-      </div>
-    </section>`;
+  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este envio foi concluído neste aparelho e não pode mais ser alterado por esta página.</p></div></section>';
+}
+function serviceOptions(){
+  return '<option value="">Selecione</option>'+Object.keys(SERVICES).map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
+}
+function paymentOptions(){
+  return '<option value="">Selecione</option>'+PAYMENT_METHODS.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
 }
 function render(){
-  const locked=lockedReceipt();
-  if(locked){thankYou(locked);return}
-
-  app.innerHTML=`
-  <section class="hero-card premium-hero">
-    <div class="receipt-kicker">RECIBO DIGITAL</div>
-    <h2>Recibo de pagamento a fornecedor</h2>
-    <p>Preencha as informações com atenção. Ao final, revise os dados, assine e envie o recibo.</p>
-    <div class="steps-bar">
-      <div class="steps-bar-item active" data-step-indicator="1"><span>1</span>Dados</div>
-      <div class="steps-bar-item" data-step-indicator="2"><span>2</span>Assinatura</div>
-      <div class="steps-bar-item" data-step-indicator="3"><span>3</span>Envio</div>
-    </div>
-  </section>
-
-  <form id="receiptForm" novalidate>
-    <div id="formStep">
-      <section class="section">
-        <div class="section-title"><div class="step">1</div><div><h3>Identificação do fornecedor</h3><p>Informe os dados de quem recebeu o pagamento.</p></div></div>
-        <div class="grid">
-          <div class="field full">
-            <label class="required">Nome / Empresa</label>
-            <input name="legal_name" required maxlength="160" placeholder="Nome completo ou razão social">
-          </div>
-          <div class="field">
-            <label class="required">CPF ou CNPJ</label>
-            <input name="cpf_cnpj" inputmode="numeric" required placeholder="CPF ou CNPJ">
-          </div>
-          <div class="field">
-            <label class="required">Telefone / WhatsApp</label>
-            <input name="phone" inputmode="tel" required placeholder="(66) 99999-9999">
-          </div>
-          <div class="field full">
-            <label>E-mail <span class="muted">(opcional)</span></label>
-            <input name="email" type="email" autocomplete="email" placeholder="seu@email.com">
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-title"><div class="step">2</div><div><h3>Endereço</h3><p>Informe o endereço do fornecedor ou prestador.</p></div></div>
-        <div class="grid-3">
-          <div class="field">
-            <label>CEP</label>
-            <input name="postal_code" inputmode="numeric" placeholder="00000-000">
-          </div>
-          <div class="field" style="grid-column:span 2">
-            <label class="required">Endereço</label>
-            <input name="address" required placeholder="Rua, avenida, comunidade ou localidade">
-          </div>
-          <div class="field">
-            <label>Número</label>
-            <input name="address_number" placeholder="Nº ou S/N">
-          </div>
-          <div class="field">
-            <label>Bairro</label>
-            <input name="neighborhood">
-          </div>
-          <div class="field">
-            <label>Complemento</label>
-            <input name="complement">
-          </div>
-          <div class="field" style="grid-column:span 2">
-            <label class="required">Cidade</label>
-            <input name="city" required>
-          </div>
-          <div class="field">
-            <label class="required">UF</label>
-            <input name="state" maxlength="2" required placeholder="MT">
-          </div>
-        </div>
-      </section>
-
-      <section class="section">
-        <div class="section-title"><div class="step">3</div><div><h3>Serviço e pagamento</h3><p>Registre o serviço prestado e o pagamento recebido.</p></div></div>
-        <div class="grid">
-          <div class="field">
-            <label class="required">Tipo de serviço</label>
-            <select name="service_type" required>
-              <option value="">Selecione</option>
-              ${SERVICE_TYPES.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label class="required">Data do serviço</label>
-            <input name="service_date" type="date" required>
-          </div>
-          <div class="field full">
-            <label class="required">Descrição do serviço</label>
-            <textarea name="service_description" required maxlength="1200" placeholder="Descreva de forma objetiva o serviço realizado"></textarea>
-          </div>
-          <div class="field">
-            <label class="required">Valor recebido</label>
-            <input name="amount_received" inputmode="decimal" required placeholder="Ex.: 2.800,00">
-          </div>
-          <div class="field">
-            <label class="required">Data do recebimento</label>
-            <input name="payment_date" type="date" required value="${new Date().toISOString().slice(0,10)}">
-          </div>
-          <div class="field">
-            <label class="required">Forma de pagamento</label>
-            <select name="payment_method" required>
-              <option value="">Selecione</option>
-              ${PAYMENT_METHODS.map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('')}
-            </select>
-          </div>
-          <div class="field">
-            <label>Observação <span class="muted">(opcional)</span></label>
-            <input name="notes" maxlength="500" placeholder="Informação adicional">
-          </div>
-          <div class="field full">
-            <label>Nota fiscal / NFS-e / comprovante <span class="muted">(opcional)</span></label>
-            <input name="attachment" type="file" accept=".pdf,image/jpeg,image/png,image/webp">
-            <div class="help">PDF, JPG, PNG ou WEBP de até 1,5 MB.</div>
-          </div>
-        </div>
-        <div id="formErr" class="notice error hidden"></div>
-        <div class="actions">
-          <button type="button" class="btn btn-primary btn-large" id="toSignature">Continuar para assinatura</button>
-        </div>
-      </section>
-    </div>
-
-    <section class="section hidden" id="signatureStep">
-      <div class="section-title"><div class="step">4</div><div><h3>Revise e assine</h3><p>Confira os dados abaixo antes de salvar definitivamente.</p></div></div>
-
-      <div id="reviewCard" class="review-card"></div>
-
-      <div class="field">
-        <label class="required">Nome de quem está assinando</label>
-        <input name="declarant_name" required maxlength="160" placeholder="Nome completo do responsável">
-      </div>
-
-      <div style="height:16px"></div>
-      <div class="signature-panel">
-        <div class="signature-panel-head">
-          <div><strong>Assinatura</strong><div class="muted">Assine com o dedo ou mouse dentro do quadro.</div></div>
-          <button type="button" class="btn btn-secondary btn-sm" id="clearSig">Limpar</button>
-        </div>
-        <canvas id="signature" class="signature-canvas premium-signature"></canvas>
-      </div>
-
-      <div style="height:16px"></div>
-      <div class="checkbox">
-        <input id="declaration" type="checkbox" required>
-        <label for="declaration">Declaro que as informações fornecidas são verdadeiras, que <strong>recebi o valor informado</strong> pelo serviço descrito e autorizo o registro eletrônico deste recibo.</label>
-      </div>
-
-      <div id="err" class="notice error hidden"></div>
-      <div class="actions split-actions">
-        <button type="button" class="btn btn-secondary" id="backToForm">Voltar e revisar</button>
-        <button id="sendBtn" class="btn btn-primary btn-large">Salvar e enviar recibo</button>
-      </div>
-    </section>
-  </form>`;
-
+  const locked=lockedReceipt();if(locked){thankYou(locked);return}
+  app.innerHTML=
+  '<section class="hero-card premium-hero">'+
+    '<div class="receipt-kicker">RECIBO DIGITAL</div>'+
+    '<h2>Recibo de pagamento a fornecedor</h2>'+
+    '<p>Preencha os dados, revise, assine e envie. O formulário calcula automaticamente o valor quando o serviço for cobrado por pessoa.</p>'+
+    '<div class="steps-bar"><div class="steps-bar-item active" data-step-indicator="1"><span>1</span>Dados</div><div class="steps-bar-item" data-step-indicator="2"><span>2</span>Assinatura</div><div class="steps-bar-item" data-step-indicator="3"><span>3</span>Envio</div></div>'+
+  '</section>'+
+  '<form id="receiptForm" novalidate>'+
+    '<div id="formStep">'+
+      '<section class="section">'+
+        '<div class="section-title"><div class="step">1</div><div><h3>Fornecedor</h3><p>Dados de quem recebeu o pagamento.</p></div></div>'+
+        '<div class="grid">'+
+          '<div class="field full"><label class="required">Nome / Empresa</label><input name="legal_name" required maxlength="160" placeholder="Nome completo ou razão social"></div>'+
+          '<div class="field"><label class="required">CPF ou CNPJ</label><input name="cpf_cnpj" inputmode="numeric" required placeholder="CPF ou CNPJ"></div>'+
+          '<div class="field"><label class="required">Telefone / WhatsApp</label><input name="phone" inputmode="tel" required placeholder="(66) 99999-9999"></div>'+
+          '<div class="field full"><label>E-mail <span class="muted">(opcional)</span></label><input name="email" type="email" autocomplete="email" placeholder="seu@email.com"></div>'+
+        '</div>'+
+      '</section>'+
+      '<section class="section">'+
+        '<div class="section-title"><div class="step">2</div><div><h3>Localização</h3><p>O CEP é opcional. Se informar, o endereço é preenchido automaticamente. Você pode informar somente cidade e estado.</p></div></div>'+
+        '<div class="grid-3">'+
+          '<div class="field"><label>CEP <span class="muted">(opcional)</span></label><input name="postal_code" inputmode="numeric" placeholder="00000-000"><div id="cepStatus" class="help">Preenchimento automático ao informar 8 números.</div></div>'+
+          '<div class="field" style="grid-column:span 2"><label>Endereço <span class="muted">(opcional)</span></label><input name="address" placeholder="Rua, avenida ou localidade"></div>'+
+          '<div class="field"><label>Número <span class="muted">(opcional)</span></label><input name="address_number" placeholder="Nº ou S/N"></div>'+
+          '<div class="field"><label>Bairro <span class="muted">(opcional)</span></label><input name="neighborhood"></div>'+
+          '<div class="field"><label>Complemento <span class="muted">(opcional)</span></label><input name="complement"></div>'+
+          '<div class="field" style="grid-column:span 2"><label class="required">Cidade</label><input name="city" required placeholder="Cidade"></div>'+
+          '<div class="field"><label class="required">UF</label><input name="state" maxlength="2" required placeholder="MT"></div>'+
+        '</div>'+
+      '</section>'+
+      '<section class="section">'+
+        '<div class="section-title"><div class="step">3</div><div><h3>Serviço e valor</h3><p>Escolha o serviço. O formulário mostra somente o que precisa ser preenchido.</p></div></div>'+
+        '<div class="grid">'+
+          '<div class="field"><label class="required">Tipo de serviço</label><select name="service_type" required>'+serviceOptions()+'</select></div>'+
+          '<div class="field"><label class="required">Data do serviço</label><input name="service_date" type="date" required></div>'+
+          '<div class="field full hidden" id="referenceWrap"><label id="referenceLabel">Referência do serviço</label><input name="service_reference" id="serviceReference"><div id="referenceHelp" class="help"></div></div>'+
+          '<div class="field full"><label class="required">Como foi combinado o valor?</label><div class="radio-row pricing-choice">'+
+             '<label class="radio-pill"><input type="radio" name="billing_mode" value="total" checked><span>Valor total</span></label>'+
+             '<label class="radio-pill"><input type="radio" name="billing_mode" value="per_person"><span>Valor por pessoa</span></label>'+
+          '</div></div>'+
+          '<div class="field full" id="totalPriceWrap"><label class="required">Valor total recebido</label><input name="amount_received" inputmode="decimal" placeholder="Ex.: 2.800,00"></div>'+
+          '<div class="field hidden" id="quantityWrap"><label class="required">Quantidade de pessoas</label><input name="quantity_people" type="number" min="1" step="1" inputmode="numeric" placeholder="Ex.: 35"></div>'+
+          '<div class="field hidden" id="unitPriceWrap"><label class="required">Valor por pessoa</label><input name="unit_amount" inputmode="decimal" placeholder="Ex.: 25,00"></div>'+
+          '<div class="field full hidden" id="calculatedTotalWrap"><div class="calculated-total"><span>Total calculado</span><strong id="calculatedTotal">R$ 0,00</strong><small>Quantidade × valor por pessoa</small></div></div>'+
+          '<div class="field"><label class="required">Data do recebimento</label><input name="payment_date" type="date" required value="'+new Date().toISOString().slice(0,10)+'"></div>'+
+          '<div class="field"><label class="required">Forma de pagamento</label><select name="payment_method" required>'+paymentOptions()+'</select></div>'+
+          '<div class="field full"><label>Observação <span class="muted">(opcional)</span></label><input name="notes" maxlength="500" placeholder="Informação adicional, se necessário"></div>'+
+          '<div class="field full"><label>Nota fiscal / NFS-e / comprovante <span class="muted">(opcional)</span></label><input name="attachment" type="file" accept=".pdf,image/jpeg,image/png,image/webp"><div class="help">PDF, JPG, PNG ou WEBP de até 1,5 MB.</div></div>'+
+        '</div>'+
+        '<div id="formErr" class="notice error hidden"></div>'+
+        '<div class="actions"><button type="button" class="btn btn-primary btn-large" id="toSignature">Continuar para assinatura</button></div>'+
+      '</section>'+
+    '</div>'+
+    '<section class="section hidden" id="signatureStep">'+
+      '<div class="section-title"><div class="step">4</div><div><h3>Revise e assine</h3><p>Confira os dados antes de salvar definitivamente.</p></div></div>'+
+      '<div id="reviewCard" class="review-card"></div>'+
+      '<div class="field"><label class="required">Nome de quem está assinando</label><input name="declarant_name" required maxlength="160" placeholder="Nome completo do responsável"></div>'+
+      '<div style="height:16px"></div>'+
+      '<div class="signature-panel"><div class="signature-panel-head"><div><strong>Assinatura</strong><div class="muted">Assine com o dedo ou mouse dentro do quadro.</div></div><button type="button" class="btn btn-secondary btn-sm" id="clearSig">Limpar</button></div><canvas id="signature" class="signature-canvas premium-signature"></canvas></div>'+
+      '<div style="height:16px"></div>'+
+      '<div class="checkbox"><input id="declaration" type="checkbox" required><label for="declaration">Declaro que as informações são verdadeiras e que <strong>recebi o valor informado</strong> pelo serviço registrado neste recibo.</label></div>'+
+      '<div id="err" class="notice error hidden"></div>'+
+      '<div class="actions split-actions"><button type="button" class="btn btn-secondary" id="backToForm">Voltar e revisar</button><button id="sendBtn" class="btn btn-primary btn-large">Salvar e enviar recibo</button></div>'+
+    '</section>'+
+  '</form>';
   wire();
 }
-
+function currentServiceConfig(f){return SERVICES[f.elements.service_type.value]||null}
+function setBillingMode(f,mode){
+  const total=mode==='total';
+  f.elements.billing_mode.value=mode;
+  document.getElementById('totalPriceWrap').classList.toggle('hidden',!total);
+  document.getElementById('quantityWrap').classList.toggle('hidden',total);
+  document.getElementById('unitPriceWrap').classList.toggle('hidden',total);
+  document.getElementById('calculatedTotalWrap').classList.toggle('hidden',total);
+  f.elements.amount_received.required=total;
+  f.elements.quantity_people.required=!total;
+  f.elements.unit_amount.required=!total;
+  calcTotal(f);
+}
+function updateService(f,forceDefault=true){
+  const cfg=currentServiceConfig(f),wrap=document.getElementById('referenceWrap'),input=f.elements.service_reference;
+  if(!cfg){wrap.classList.add('hidden');input.required=false;return}
+  wrap.classList.remove('hidden');
+  document.getElementById('referenceLabel').textContent=cfg.ref+(cfg.required?' *':'');
+  document.getElementById('referenceHelp').textContent=cfg.required?'Campo obrigatório para este tipo de serviço.':'Opcional, mas ajuda a identificar o serviço.';
+  input.placeholder=cfg.placeholder||'';
+  input.required=!!cfg.required;
+  if(forceDefault){
+    const radio=f.querySelector('[name=billing_mode][value="'+cfg.billing+'"]');
+    if(radio)radio.checked=true;
+    setBillingMode(f,cfg.billing);
+  }
+}
+function calcTotal(f){
+  if(f.elements.billing_mode.value!=='per_person')return;
+  const q=Number(f.elements.quantity_people.value||0),u=currencyInputToNumber(f.elements.unit_amount.value);
+  document.getElementById('calculatedTotal').textContent=brl(q*u);
+}
+async function lookupCep(f){
+  const cep=onlyDigits(f.elements.postal_code.value);
+  const status=document.getElementById('cepStatus');
+  if(!cep){status.textContent='CEP opcional. Você pode informar somente cidade e UF.';return}
+  if(cep.length!==8){status.textContent='Digite os 8 números do CEP ou deixe em branco.';return}
+  status.textContent='Buscando endereço...';
+  try{
+    const res=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
+    if(!res.ok)throw new Error('CEP indisponível');
+    const data=await res.json();
+    if(data.erro)throw new Error('CEP não encontrado');
+    if(data.logradouro)f.elements.address.value=data.logradouro;
+    if(data.bairro)f.elements.neighborhood.value=data.bairro;
+    if(data.localidade)f.elements.city.value=data.localidade;
+    if(data.uf)f.elements.state.value=data.uf;
+    if(data.complemento&&!f.elements.complement.value)f.elements.complement.value=data.complemento;
+    status.textContent='✓ Endereço preenchido pelo CEP. Confira os dados.';
+  }catch(e){
+    status.textContent='CEP não localizado. Informe cidade e UF manualmente.';
+  }
+}
 function wire(){
   const f=document.getElementById('receiptForm');
   f.elements.cpf_cnpj.oninput=e=>e.target.value=formatCpfCnpj(e.target.value);
   f.elements.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
-  f.elements.postal_code.oninput=e=>e.target.value=formatCep(e.target.value);
+  f.elements.postal_code.oninput=e=>{e.target.value=formatCep(e.target.value);clearTimeout(cepTimer);if(onlyDigits(e.target.value).length===8)cepTimer=setTimeout(()=>lookupCep(f),350)};
+  f.elements.postal_code.onblur=()=>lookupCep(f);
   f.elements.state.oninput=e=>e.target.value=e.target.value.replace(/[^a-z]/gi,'').slice(0,2).toUpperCase();
+  f.elements.service_type.onchange=()=>updateService(f,true);
+  f.querySelectorAll('[name=billing_mode]').forEach(r=>r.onchange=()=>setBillingMode(f,r.value));
+  f.elements.quantity_people.oninput=()=>calcTotal(f);
+  f.elements.unit_amount.oninput=()=>calcTotal(f);
 
   document.getElementById('toSignature').onclick=()=>{
-    const err=document.getElementById('formErr');
-    err.classList.add('hidden');
+    const err=document.getElementById('formErr');err.classList.add('hidden');
     const required=[...document.querySelectorAll('#formStep [required]')];
     const invalid=required.find(x=>!x.checkValidity());
-    if(invalid){
-      invalid.reportValidity();
-      err.textContent='Preencha todos os campos obrigatórios antes de continuar.';
-      err.classList.remove('hidden');
-      invalid.scrollIntoView({behavior:'smooth',block:'center'});
-      return;
-    }
+    if(invalid){invalid.reportValidity();err.textContent='Preencha os campos obrigatórios.';err.classList.remove('hidden');invalid.scrollIntoView({behavior:'smooth',block:'center'});return}
     const doc=onlyDigits(f.elements.cpf_cnpj.value);
-    if(doc.length!==11&&doc.length!==14){
-      err.textContent='Informe um CPF ou CNPJ completo.';
-      err.classList.remove('hidden');
-      f.elements.cpf_cnpj.focus();
-      return;
-    }
-    if(onlyDigits(f.elements.phone.value).length<10){
-      err.textContent='Informe um telefone/WhatsApp válido.';
-      err.classList.remove('hidden');
-      f.elements.phone.focus();
-      return;
-    }
-    if(currencyInputToNumber(f.elements.amount_received.value)<=0){
-      err.textContent='Informe um valor recebido válido.';
-      err.classList.remove('hidden');
-      f.elements.amount_received.focus();
-      return;
-    }
-
+    if(doc.length!==11&&doc.length!==14){err.textContent='Informe um CPF ou CNPJ completo.';err.classList.remove('hidden');f.elements.cpf_cnpj.focus();return}
+    if(onlyDigits(f.elements.phone.value).length<10){err.textContent='Informe um telefone/WhatsApp válido.';err.classList.remove('hidden');f.elements.phone.focus();return}
+    if(f.elements.billing_mode.value==='total'&&currencyInputToNumber(f.elements.amount_received.value)<=0){err.textContent='Informe o valor total recebido.';err.classList.remove('hidden');return}
+    if(f.elements.billing_mode.value==='per_person'&&(Number(f.elements.quantity_people.value)<=0||currencyInputToNumber(f.elements.unit_amount.value)<=0)){err.textContent='Informe a quantidade e o valor por pessoa.';err.classList.remove('hidden');return}
+    f.elements.declarant_name.value=f.elements.declarant_name.value||f.elements.legal_name.value;
     document.getElementById('reviewCard').innerHTML=reviewHtml(f);
     document.getElementById('formStep').classList.add('hidden');
     document.getElementById('signatureStep').classList.remove('hidden');
@@ -256,68 +184,49 @@ function wire(){
     document.getElementById('signatureStep').scrollIntoView({behavior:'smooth',block:'start'});
     setTimeout(initCanvas,80);
   };
-
   document.getElementById('backToForm').onclick=()=>{
     document.getElementById('signatureStep').classList.add('hidden');
     document.getElementById('formStep').classList.remove('hidden');
     document.querySelector('[data-step-indicator="2"]').classList.remove('active');
     document.querySelector('[data-step-indicator="1"]').classList.add('active');
-    signed=false;
-    window.scrollTo({top:0,behavior:'smooth'});
+    signed=false;window.scrollTo({top:0,behavior:'smooth'});
   };
-
   f.onsubmit=submit;
 }
-
-function reviewHtml(f){
-  const doc=formatCpfCnpj(f.elements.cpf_cnpj.value);
-  const address=[f.elements.address.value,f.elements.address_number.value,f.elements.neighborhood.value,f.elements.complement.value,f.elements.city.value,f.elements.state.value].filter(Boolean).join(', ');
-  return `
-    <div class="review-grid">
-      <div><span>Fornecedor</span><strong>${escapeHtml(f.elements.legal_name.value)}</strong></div>
-      <div><span>CPF/CNPJ</span><strong>${escapeHtml(doc)}</strong></div>
-      <div><span>Telefone</span><strong>${escapeHtml(f.elements.phone.value)}</strong></div>
-      <div><span>Tipo de serviço</span><strong>${escapeHtml(f.elements.service_type.value)}</strong></div>
-      <div><span>Data do serviço</span><strong>${dateBR(f.elements.service_date.value)}</strong></div>
-      <div><span>Valor recebido</span><strong>${brl(currencyInputToNumber(f.elements.amount_received.value))}</strong></div>
-      <div><span>Recebimento</span><strong>${dateBR(f.elements.payment_date.value)} • ${escapeHtml(f.elements.payment_method.value)}</strong></div>
-      <div class="review-full"><span>Endereço</span><strong>${escapeHtml(address)}</strong></div>
-      <div class="review-full"><span>Serviço realizado</span><strong>${escapeHtml(f.elements.service_description.value)}</strong></div>
-      <div class="review-full"><span>Anexo</span><strong>${escapeHtml(f.elements.attachment?.files?.[0]?.name||'Nenhum anexo')}</strong></div>
-    </div>`;
+function totalValue(f){
+  return f.elements.billing_mode.value==='per_person'
+    ? Number(f.elements.quantity_people.value||0)*currencyInputToNumber(f.elements.unit_amount.value)
+    : currencyInputToNumber(f.elements.amount_received.value);
 }
-
+function reviewHtml(f){
+  const address=[f.elements.address.value,f.elements.address_number.value,f.elements.neighborhood.value,f.elements.complement.value,f.elements.city.value,f.elements.state.value].filter(Boolean).join(', ');
+  const per=f.elements.billing_mode.value==='per_person';
+  const price=per?(f.elements.quantity_people.value+' pessoa(s) × '+brl(currencyInputToNumber(f.elements.unit_amount.value))):'Valor total';
+  return '<div class="review-grid">'+
+    '<div><span>Fornecedor</span><strong>'+escapeHtml(f.elements.legal_name.value)+'</strong></div>'+
+    '<div><span>CPF/CNPJ</span><strong>'+escapeHtml(formatCpfCnpj(f.elements.cpf_cnpj.value))+'</strong></div>'+
+    '<div><span>Tipo de serviço</span><strong>'+escapeHtml(f.elements.service_type.value)+'</strong></div>'+
+    '<div><span>Referência</span><strong>'+escapeHtml(f.elements.service_reference.value||'Não informada')+'</strong></div>'+
+    '<div><span>Data do serviço</span><strong>'+dateBR(f.elements.service_date.value)+'</strong></div>'+
+    '<div><span>Cálculo</span><strong>'+escapeHtml(price)+'</strong></div>'+
+    '<div><span>Valor recebido</span><strong>'+brl(totalValue(f))+'</strong></div>'+
+    '<div><span>Recebimento</span><strong>'+dateBR(f.elements.payment_date.value)+' • '+escapeHtml(f.elements.payment_method.value)+'</strong></div>'+
+    '<div class="review-full"><span>Localização</span><strong>'+escapeHtml(address)+'</strong></div>'+
+    '<div class="review-full"><span>Anexo</span><strong>'+escapeHtml(f.elements.attachment?.files?.[0]?.name||'Nenhum anexo')+'</strong></div>'+
+  '</div>';
+}
 function initCanvas(){
-  canvas=document.getElementById('signature');
-  if(!canvas)return;
-  ctx=canvas.getContext('2d');
-  const resize=()=>{
-    const r=canvas.getBoundingClientRect(),dpr=Math.max(window.devicePixelRatio||1,1);
-    canvas.width=Math.max(1,Math.round(r.width*dpr));
-    canvas.height=Math.max(1,Math.round(r.height*dpr));
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.lineWidth=2.4;
-    ctx.lineCap='round';
-    ctx.lineJoin='round';
-    ctx.strokeStyle='#102b1c';
-  };
-  resize();
-
-  const pos=e=>{
-    const r=canvas.getBoundingClientRect(),p=e.touches?.[0]||e;
-    return{x:p.clientX-r.left,y:p.clientY-r.top};
-  };
+  canvas=document.getElementById('signature');if(!canvas)return;ctx=canvas.getContext('2d');
+  const r=canvas.getBoundingClientRect(),dpr=Math.max(window.devicePixelRatio||1,1);
+  canvas.width=Math.max(1,Math.round(r.width*dpr));canvas.height=Math.max(1,Math.round(r.height*dpr));
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.lineWidth=2.4;ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#102b1c';
+  const pos=e=>{const rr=canvas.getBoundingClientRect(),p=e.touches?.[0]||e;return{x:p.clientX-rr.left,y:p.clientY-rr.top}};
   const start=e=>{e.preventDefault();drawing=true;signed=true;const p=pos(e);ctx.beginPath();ctx.moveTo(p.x,p.y)};
   const move=e=>{if(!drawing)return;e.preventDefault();const p=pos(e);ctx.lineTo(p.x,p.y);ctx.stroke()};
   const end=e=>{if(drawing){e.preventDefault();drawing=false;ctx.closePath()}};
-
-  canvas.addEventListener('pointerdown',start,{passive:false});
-  canvas.addEventListener('pointermove',move,{passive:false});
-  canvas.addEventListener('pointerup',end,{passive:false});
-  canvas.addEventListener('pointerleave',end,{passive:false});
+  canvas.addEventListener('pointerdown',start,{passive:false});canvas.addEventListener('pointermove',move,{passive:false});canvas.addEventListener('pointerup',end,{passive:false});canvas.addEventListener('pointerleave',end,{passive:false});
   document.getElementById('clearSig').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false};
 }
-
 async function readAttachment(file){
   if(!file)return {name:null,type:null,data:null};
   const allowed=['application/pdf','image/jpeg','image/png','image/webp'];
@@ -326,28 +235,14 @@ async function readAttachment(file){
   const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Não foi possível ler o anexo.'));reader.readAsDataURL(file)});
   return {name:file.name.slice(0,180),type:file.type,data:String(data)};
 }
-
 async function submit(e){
   e.preventDefault();
-  const f=e.currentTarget,err=document.getElementById('err');
-  err.classList.add('hidden');
-
+  const f=e.currentTarget,err=document.getElementById('err');err.classList.add('hidden');
   if(!f.elements.declarant_name.checkValidity()){f.elements.declarant_name.reportValidity();return}
-  if(!document.getElementById('declaration').checked){
-    err.textContent='Confirme a declaração antes de enviar.';
-    err.classList.remove('hidden');
-    return;
-  }
-  if(!signed){
-    err.textContent='Faça sua assinatura dentro do quadro antes de enviar.';
-    err.classList.remove('hidden');
-    return;
-  }
-
+  if(!document.getElementById('declaration').checked){err.textContent='Confirme a declaração antes de enviar.';err.classList.remove('hidden');return}
+  if(!signed){err.textContent='Faça sua assinatura antes de enviar.';err.classList.remove('hidden');return}
   let attachment;
-  try{attachment=await readAttachment(f.elements.attachment?.files?.[0]||null)}
-  catch(fileError){err.textContent=fileError.message;err.classList.remove('hidden');return}
-
+  try{attachment=await readAttachment(f.elements.attachment?.files?.[0]||null)}catch(ex){err.textContent=ex.message;err.classList.remove('hidden');return}
   const payload={
     legal_name:f.elements.legal_name.value.trim(),
     cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
@@ -361,9 +256,12 @@ async function submit(e){
     city:f.elements.city.value.trim(),
     state:f.elements.state.value.trim().toUpperCase(),
     service_type:f.elements.service_type.value,
-    service_description:f.elements.service_description.value.trim(),
+    service_reference:f.elements.service_reference.value.trim(),
     service_date:f.elements.service_date.value,
-    amount_received:currencyInputToNumber(f.elements.amount_received.value),
+    billing_mode:f.elements.billing_mode.value,
+    quantity_people:f.elements.billing_mode.value==='per_person'?Number(f.elements.quantity_people.value):null,
+    unit_amount:f.elements.billing_mode.value==='per_person'?currencyInputToNumber(f.elements.unit_amount.value):null,
+    amount_received:totalValue(f),
     payment_date:f.elements.payment_date.value,
     payment_method:f.elements.payment_method.value,
     notes:f.elements.notes.value.trim(),
@@ -375,34 +273,16 @@ async function submit(e){
     attachment_data_url:attachment.data,
     user_agent:navigator.userAgent
   };
-
-  const btn=document.getElementById('sendBtn');
-  btn.disabled=true;
-  btn.textContent='Salvando recibo...';
-
+  const btn=document.getElementById('sendBtn');btn.disabled=true;btn.textContent='Salvando recibo...';
   try{
-    if(!supabaseClient)throw new Error('Serviço de dados indisponível.');
     const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_payload:payload});
     if(error)throw error;
-
-    const result=data?.[0]||{};
-    const lock={
-      code:result.receipt_code||'Registrado',
-      verification:result.verification_code||'',
-      submitted_at:new Date().toISOString()
-    };
-    lockReceipt(lock);
-    document.querySelector('[data-step-indicator="2"]')?.classList.remove('active');
-    document.querySelector('[data-step-indicator="3"]')?.classList.add('active');
-    thankYou(lock);
-    window.scrollTo({top:0,behavior:'smooth'});
-  }catch(error){
-    err.textContent=error?.message||'Não foi possível salvar o recibo. Confira os dados e tente novamente.';
-    err.classList.remove('hidden');
-    btn.disabled=false;
-    btn.textContent='Salvar e enviar recibo';
+    const result=data?.[0]||{},lock={code:result.receipt_code||'Registrado',verification:result.verification_code||'',submitted_at:new Date().toISOString()};
+    lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
+  }catch(ex){
+    err.textContent=ex?.message||'Não foi possível salvar o recibo.';
+    err.classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar e enviar recibo';
   }
 }
-
 render();
 })();
