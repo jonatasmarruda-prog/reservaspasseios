@@ -38,7 +38,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
   if(!window.TrilheirosParticipant)throw Error('Cadastro único temporariamente indisponível. Atualize a página.');
   const db=firebase.firestore(),auth=firebase.auth();auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});if(!auth.currentUser)await auth.signInAnonymously();
   const tripRef=db.collection('trips').doc(tripId),tripSnap=await tripRef.get();if(!tripSnap.exists)throw Error('Passeio não encontrado. Solicite um novo link ao Jonatas.');
-  const trip={id:tripSnap.id,...tripSnap.data()},remaining=Math.max(0,Number(trip.remaining_spots||0));if(trip.status!=='open')throw Error('O cadastro deste passeio está encerrado.');if(remaining<1)throw Error('As vagas disponíveis para este link foram encerradas.');
+  const trip={id:tripSnap.id,...tripSnap.data()},remaining=Math.max(0,Number(trip.remaining_spots||0));if(trip.status!=='open')throw Error('O cadastro deste passeio está encerrado.');
   app.innerHTML=`<section class="hero"><span class="eyebrow">CADASTRO DO PASSEIO</span><h1>${esc(trip.name||'Passeio')}</h1><p>Preencha seus dados. Se você já participou de outro passeio, o sistema pode reaproveitar seu cadastro pelo CPF.</p></section><section class="card"><div class="trip"><small>PASSEIO</small><b>${esc(trip.name||'Passeio')}</b><div class="tripmeta"><div><small>DATA</small><strong>📅 ${dateBR(trip.trip_date)}</strong></div><div><small>LOCAL</small><strong>📍 ${esc(trip.destination||trip.location||'A confirmar')}</strong></div><div class="spots"><small>VAGAS</small><strong>${remaining}</strong></div></div></div><form id="reg"><div class="grid"><label class="field"><span>CPF</span><input name="cpf" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required></label><label class="field"><span>NOME COMPLETO</span><input name="name" autocomplete="name" required></label><label class="field"><span>E-MAIL</span><input name="email" type="email" autocomplete="email" required></label><label class="field"><span>QUANTIDADE NESTE CADASTRO</span><select name="seats" required></select></label></div><div class="profileHint" id="mainProfileHint"></div><div id="extra"></div><div class="section"><h2>Política de cancelamento</h2><p>Leia antes de concluir o cadastro.</p></div><div class="policy">${esc(trip.cancellation_policy||'Política não informada. Entre em contato com a organização.')}</div><label class="check"><input name="accepted" type="checkbox" required><span>Li e estou de acordo com a política de cancelamento e com as orientações do passeio.</span></label><div id="msg"></div><button class="btn" id="submit">Confirmar cadastro e enviar para o passeio</button></form></section>`;
   const form=document.getElementById('reg'),extra=document.getElementById('extra'),msg=document.getElementById('msg'),btn=document.getElementById('submit'),hint=document.getElementById('mainProfileHint');const max=Math.min(10,Math.max(1,remaining));form.seats.innerHTML=Array.from({length:max},(_,i)=>`<option value="${i+1}">${i+1} ${i?'pessoas':'pessoa'}</option>`).join('');
   async function lookup(cpfEl,nameEl,emailEl,hintEl,withEmail=false){
@@ -68,6 +68,39 @@ window.addEventListener('DOMContentLoaded',async()=>{
     [...extra.querySelectorAll('[data-extra-email]')].forEach(el=>el.addEventListener('blur',()=>{const i=Number(el.dataset.extraEmail),cpfEl=extra.querySelector(`[data-extra-cpf="${i}"]`),nameEl=extra.querySelector(`[data-extra-name="${i}"]`),h=extra.querySelector(`[data-extra-hint="${i}"]`);lookup(cpfEl,nameEl,el,h,true)}));
   }
   bindMain();form.seats.addEventListener('change',renderExtra);renderExtra();
+  async function fallbackRegister(participants){
+    const user=auth.currentUser||await auth.signInAnonymously().then(x=>x.user),uid=user.uid,saleRef=db.collection('sales').doc(uid),saleSnap=await saleRef.get(),stamp=firebase.firestore.FieldValue.serverTimestamp();
+    if(saleSnap.exists){
+      const sale=saleSnap.data()||{};
+      if(sale.trip_id===tripId&&sale.sale_status!=='cancelled'){
+        const resRef=tripRef.collection('reservations').doc(uid),resSnap=await resRef.get();
+        if(resSnap.exists){
+          const rd=resSnap.data()||{},map=new Map();
+          [...(Array.isArray(rd.participants)?rd.participants:[]),...participants].forEach(p=>{const key=digits(p?.cpf);if(key)map.set(key,{...(map.get(key)||{}),full_name:p.full_name||p.name||'',cpf:key,email:String(p.email||'').trim().toLowerCase()})});
+          const merged=[...map.values()],first=participants[0],salePatch={customer_name:first.full_name,customer_cpf:first.cpf,customer_email:first.email,participants:merged,registration_status:'completed',registered_at:stamp,updated_at:stamp};
+          const resPatch={responsible_name:first.full_name,responsible_cpf:first.cpf,email:first.email,participants:merged,registration_answers:{origem:{label:'Origem',value:'Link do passeio'}},status:'active',registration_status:'completed',policy_text:trip.cancellation_policy||rd.policy_text||'',policy_version:'direct-trip-link-2026-10',policy_accepted:true,policy_accepted_at:stamp,updated_at:stamp};
+          await Promise.all([saleRef.update(salePatch),resRef.update(resPatch)]);
+          window.TrilheirosParticipant?.rememberLocal?.(participants);
+          return{ok:true,merged:true,protocol:sale.protocol||rd.protocol||'—',trip_id:tripId,sale_id:uid,reservation_id:uid,seats:Number(sale.seats||rd.seats||merged.length)};
+        }
+      }
+    }
+    const resRef=tripRef.collection('reservations').doc(uid),existing=await resRef.get();
+    if(existing.exists){
+      const rd=existing.data()||{};window.TrilheirosParticipant?.rememberLocal?.(participants);
+      return{ok:true,merged:true,protocol:rd.protocol||'—',trip_id:tripId,reservation_id:uid,seats:Number(rd.seats||participants.length)};
+    }
+    const seats=participants.length,code=`TL-${new Date().getFullYear()}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
+    await db.runTransaction(async tx=>{
+      const ts=await tx.get(tripRef),rs=await tx.get(resRef);if(!ts.exists)throw Error('Passeio não encontrado.');if(rs.exists)return;
+      const t=ts.data()||{},rem=Math.max(0,Number(t.remaining_spots||0)),used=Math.max(0,Number(t.used_spots||0));if(t.status!=='open')throw Error('O cadastro deste passeio está encerrado.');if(rem<seats)throw Error(rem<=0?'O passeio está lotado. Se você já pagou pelo Canva, abra este link no mesmo aparelho usado na reserva ou fale com o Jonatas.':`Restam somente ${rem} vaga(s).`);
+      const first=participants[0],total=Math.max(0,Number(t.default_price||0)*seats);
+      tx.set(resRef,{trip_id:tripId,trip_name:t.name||trip.name||'',trip_date:t.trip_date||trip.trip_date||'',protocol:code,name:first.full_name,responsible_name:first.full_name,responsible_cpf:first.cpf,email:first.email,seats,participants,registration_status:'completed',registration_source:'direct_trip_link',registration_completed_at:stamp,registration_email_status:'pending',registration_email_requested_at:stamp,status:'active',sale_total:total,paid_amount:0,balance_due:total,refunded_amount:0,payment_status:'pending',payment_method:'a_confirmar',payment_origin:'a_confirmar',policy_text:t.cancellation_policy||'',policy_version:'direct-trip-link-2026-10',policy_accepted:true,policy_accepted_at:stamp,source:'direct_trip_link',created_at:stamp,updated_at:stamp});
+      tx.update(tripRef,{used_spots:used+seats,remaining_spots:rem-seats,updated_at:stamp});
+    });
+    window.TrilheirosParticipant?.rememberLocal?.(participants);
+    return{ok:true,created:true,merged:false,protocol:code,trip_id:tripId,reservation_id:uid,seats};
+  }
   form.addEventListener('submit',async event=>{
     event.preventDefault();msg.innerHTML='';btn.disabled=true;btn.textContent='Enviando cadastro...';
     try{
@@ -80,7 +113,7 @@ window.addEventListener('DOMContentLoaded',async()=>{
         participants.push({full_name:pName,cpf:pCpf,email:pEmail});
       }
       if(new Set(participants.map(p=>p.cpf)).size!==participants.length)throw Error('Há CPF repetido entre os participantes.');
-      const result=await window.TrilheirosParticipant.register(auth,{trip_id:tripId,trip_name:trip.name||'',source:'direct_trip_link',participants});
+      let result;try{result=await window.TrilheirosParticipant.register(auth,{trip_id:tripId,trip_name:trip.name||'',source:'direct_trip_link',participants})}catch(apiErr){console.warn('Cadastro global indisponível; usando modo compatível.',apiErr);result=await fallbackRegister(participants)}
       app.innerHTML=`<section class="success"><div class="icon">✅</div><h1>Cadastro confirmado!</h1><p><b>${esc(name)}</b>, seus dados foram vinculados ao passeio <b>${esc(trip.name||'')}</b>.</p><div class="ticket"><b>Protocolo: ${esc(result.protocol||'—')}</b><br>${dateBR(trip.trip_date)} • ${result.seats||participants.length} participante(s)</div><p>${result.merged?'Seu cadastro anterior foi reconhecido e atualizado sem duplicar a reserva.':'Cadastro salvo. Você receberá a confirmação no e-mail informado.'}</p></section>`;
     }catch(err){msg.innerHTML=`<div class="msg error">${esc(err.message||'Não foi possível concluir o cadastro.')}</div>`;btn.disabled=false;btn.textContent='Confirmar cadastro e enviar para o passeio'}
   });
