@@ -1,14 +1,12 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title>
 <meta name="theme-color" content="#102b1c">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2130">
+<meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
+<link rel="stylesheet" href="styles.css?v=20260930-2145">
 </head>
 <body>
 <div class="shell">
@@ -61,6 +59,25 @@ function formatCpfCnpj(v){
   }
   return d;
 }
+function isValidCpfCnpj(v){
+  const d=onlyDigits(v);
+  if(d.length===11){
+    if(/^(\d)\1{10}$/.test(d))return false;
+    let s=0;for(let i=0;i<9;i++)s+=Number(d[i])*(10-i);
+    let a=(s*10)%11;if(a===10)a=0;if(a!==Number(d[9]))return false;
+    s=0;for(let i=0;i<10;i++)s+=Number(d[i])*(11-i);
+    let b=(s*10)%11;if(b===10)b=0;return b===Number(d[10]);
+  }
+  if(d.length===14){
+    if(/^(\d)\1{13}$/.test(d))return false;
+    const w1=[5,4,3,2,9,8,7,6,5,4,3,2],w2=[6,5,4,3,2,9,8,7,6,5,4,3,2];
+    let s=w1.reduce((a,w,i)=>a+Number(d[i])*w,0),a=s%11<2?0:11-(s%11);
+    if(a!==Number(d[12]))return false;
+    s=w2.reduce((x,w,i)=>x+Number(d[i])*w,0);const b=s%11<2?0:11-(s%11);
+    return b===Number(d[13]);
+  }
+  return false;
+}
 function formatPhone(v){
   let d=onlyDigits(v).slice(0,11);
   if(d.length>10) return d.replace(/(\d{2})(\d{5})(\d{4})/,'($1) $2-$3');
@@ -96,7 +113,7 @@ function buildPublicLink(token){
 function toast(msg,type='success'){
   const el=document.createElement('div');el.className=`notice ${type}`;el.style.position='fixed';el.style.right='16px';el.style.bottom='16px';el.style.zIndex='100';el.style.maxWidth='420px';el.style.boxShadow='0 14px 40px rgba(0,0,0,.18)';el.textContent=msg;document.body.appendChild(el);setTimeout(()=>el.remove(),3400);
 }
-Object.assign(window,{brl,dateBR,dateTimeBR,onlyDigits,formatCpfCnpj,formatPhone,formatCep,currencyInputToNumber,randomToken,sha256,escapeHtml,requestStatus,statusLabel,buildPublicLink,toast});
+Object.assign(window,{brl,dateBR,dateTimeBR,onlyDigits,isValidCpfCnpj,formatCpfCnpj,formatPhone,formatCep,currencyInputToNumber,randomToken,sha256,escapeHtml,requestStatus,statusLabel,buildPublicLink,toast});
 
 const DEMO_KEY='trilheiros_receipts_demo_v2';
 function demoSeed(){
@@ -117,9 +134,10 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
 const {supabaseClient}=window.ReceiptsApp;
 const app=document.getElementById('app');
 const LOCK_KEY='trilheiros_receipt_submitted_v4';
+const SUPPLIER_PROFILE_KEY='trilheiros_supplier_profile_v1';
 let canvas=null,ctx=null,drawing=false,signed=false,cepTimer=null;
 
-const SERVICES={
+let SERVICES={
   'Transporte / Ônibus':{ref:'Destino / trecho do transporte',placeholder:'Ex.: Rondonópolis → Chapada dos Guimarães',billing:'total',required:false},
   'Hotel / Pousada':{ref:'Nome do hotel / pousada',placeholder:'Ex.: Hotel Serra Azul',billing:'total',required:true},
   'Alimentação':{ref:'Tipo de refeição / local',placeholder:'Ex.: Café da manhã, almoço, jantar...',billing:'per_person',required:false},
@@ -133,8 +151,70 @@ const SERVICES={
   'Outro':{ref:'Qual serviço foi realizado?',placeholder:'Descreva rapidamente o serviço',billing:'total',required:true}
 };
 const PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let FORM_SESSION=null;
 
-function lockedReceipt(){try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}}
+async function loadServiceTypes(){
+  try{
+    const {data,error}=await supabaseClient.from('service_types')
+      .select('name,reference_label,reference_placeholder,reference_required,default_billing,sort_order')
+      .eq('active',true).order('sort_order',{ascending:true});
+    if(!error&&data?.length){
+      const next={};
+      data.forEach(x=>next[x.name]={
+        ref:x.reference_label||'Referência do serviço',
+        placeholder:x.reference_placeholder||'',
+        required:!!x.reference_required,
+        billing:x.default_billing||'total'
+      });
+      SERVICES=next;
+    }
+  }catch(e){console.warn('Tipos de serviço:',e)}
+}
+async function startFormSession(){
+  try{
+    const {data,error}=await supabaseClient.rpc('start_receipt_form');
+    if(error)throw error;
+    FORM_SESSION=data?.[0]?.token||null;
+  }catch(e){console.warn('Sessão do formulário:',e)}
+}
+
+function lockedReceipt(){
+  try{
+    const x=JSON.parse(localStorage.getItem(LOCK_KEY)||'null');
+    if(!x)return null;
+    const age=Date.now()-new Date(x.submitted_at||0).getTime();
+    if(!Number.isFinite(age)||age>86400000){localStorage.removeItem(LOCK_KEY);return null}
+    return x;
+  }catch{return null}
+}
+function rememberSupplier(f){
+  try{
+    localStorage.setItem(SUPPLIER_PROFILE_KEY,JSON.stringify({
+      cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
+      legal_name:f.elements.legal_name.value.trim(),
+      phone:onlyDigits(f.elements.phone.value),
+      email:f.elements.email.value.trim(),
+      postal_code:onlyDigits(f.elements.postal_code.value),
+      address:f.elements.address.value.trim(),
+      address_number:f.elements.address_number.value.trim(),
+      neighborhood:f.elements.neighborhood.value.trim(),
+      complement:f.elements.complement.value.trim(),
+      city:f.elements.city.value.trim(),
+      state:f.elements.state.value.trim().toUpperCase()
+    }));
+  }catch{}
+}
+function prefillKnownSupplier(f){
+  try{
+    const saved=JSON.parse(localStorage.getItem(SUPPLIER_PROFILE_KEY)||'null');
+    if(!saved||saved.cpf_cnpj!==onlyDigits(f.elements.cpf_cnpj.value))return;
+    const fill=(name,value,formatter)=>{const el=f.elements[name];if(el&&!el.value&&value)el.value=formatter?formatter(value):value};
+    fill('legal_name',saved.legal_name);fill('phone',saved.phone,formatPhone);fill('email',saved.email);
+    fill('postal_code',saved.postal_code,formatCep);fill('address',saved.address);fill('address_number',saved.address_number);
+    fill('neighborhood',saved.neighborhood);fill('complement',saved.complement);fill('city',saved.city);fill('state',saved.state);
+    toast('Dados do fornecedor reconhecidos neste aparelho.');
+  }catch{}
+}
 function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
   app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este envio foi concluído neste aparelho e não pode mais ser alterado por esta página.</p></div></section>';
@@ -287,6 +367,7 @@ async function lookupCep(f){
 function wire(){
   const f=document.getElementById('receiptForm');
   f.elements.cpf_cnpj.oninput=e=>e.target.value=formatCpfCnpj(e.target.value);
+  f.elements.cpf_cnpj.onblur=()=>prefillKnownSupplier(f);
   f.elements.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
   f.elements.postal_code.oninput=e=>{e.target.value=formatCep(e.target.value);clearTimeout(cepTimer);if(onlyDigits(e.target.value).length===8)cepTimer=setTimeout(()=>lookupCep(f),350)};
   f.elements.postal_code.onblur=()=>lookupCep(f);
@@ -302,7 +383,7 @@ function wire(){
     const invalid=required.find(x=>!x.checkValidity());
     if(invalid){invalid.reportValidity();err.textContent='Preencha os campos obrigatórios.';err.classList.remove('hidden');invalid.scrollIntoView({behavior:'smooth',block:'center'});return}
     const doc=onlyDigits(f.elements.cpf_cnpj.value);
-    if(doc.length!==11&&doc.length!==14){err.textContent='Informe um CPF ou CNPJ completo.';err.classList.remove('hidden');f.elements.cpf_cnpj.focus();return}
+    if(!isValidCpfCnpj(doc)){err.textContent='CPF ou CNPJ inválido. Confira os números informados.';err.classList.remove('hidden');f.elements.cpf_cnpj.focus();return}
     if(onlyDigits(f.elements.phone.value).length<10){err.textContent='Informe um telefone/WhatsApp válido.';err.classList.remove('hidden');f.elements.phone.focus();return}
     if(f.elements.billing_mode.value==='total'&&currencyInputToNumber(f.elements.amount_received.value)<=0){err.textContent='Informe o valor total recebido.';err.classList.remove('hidden');return}
     if(f.elements.billing_mode.value==='per_person'&&(Number(f.elements.quantity_people.value)<=0||currencyInputToNumber(f.elements.unit_amount.value)<=0)){err.textContent='Informe a quantidade e o valor por pessoa.';err.classList.remove('hidden');return}
@@ -374,6 +455,7 @@ async function submit(e){
   if(!signed){err.textContent='Faça sua assinatura antes de enviar.';err.classList.remove('hidden');return}
   let attachment;
   try{attachment=await readAttachment(f.elements.attachment?.files?.[0]||null)}catch(ex){err.textContent=ex.message;err.classList.remove('hidden');return}
+  if(!isValidCpfCnpj(f.elements.cpf_cnpj.value)){err.textContent='CPF ou CNPJ inválido. Confira os números.';err.classList.remove('hidden');return}
   const payload={
     legal_name:f.elements.legal_name.value.trim(),
     cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
@@ -406,16 +488,21 @@ async function submit(e){
   };
   const btn=document.getElementById('sendBtn');btn.disabled=true;btn.textContent='Salvando recibo...';
   try{
-    const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_payload:payload});
+    if(!FORM_SESSION)await startFormSession();
+    if(!FORM_SESSION)throw new Error('Não foi possível iniciar uma sessão segura do formulário. Atualize a página.');
+    const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_session:FORM_SESSION,p_payload:payload});
     if(error)throw error;
     const result=data?.[0]||{},lock={code:result.receipt_code||'Registrado',verification:result.verification_code||'',submitted_at:new Date().toISOString()};
-    lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
+    rememberSupplier(f);lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
   }catch(ex){
-    err.textContent=ex?.message||'Não foi possível salvar o recibo.';
+    let msg=ex?.message||'Não foi possível salvar o recibo.';
+    if(/cpf_cnpj_valid|CPF\/CNPJ/i.test(msg))msg='CPF ou CNPJ inválido. Confira os números.';
+    if(/duplicate|mesmo CPF\/CNPJ|já existe/i.test(msg))msg='Já existe um recibo com o mesmo CPF/CNPJ, serviço, data e valor.';
+    err.textContent=msg;
     err.classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar e enviar recibo';
   }
 }
-render();
+(async()=>{await Promise.allSettled([loadServiceTypes(),startFormSession()]);render()})();
 })();
 </script>
 </body>
