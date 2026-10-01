@@ -92,7 +92,9 @@ function prefillKnownSupplier(f){
 }
 function lockReceipt(data){try{sessionStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
-  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. Para um novo serviço, basta abrir novamente o mesmo link em uma nova aba ou pelo link recebido.</p></div></section>';
+  const verify=data?.code&&data?.verification?'validation.html?code='+encodeURIComponent(data.code)+'&v='+encodeURIComponent(data.verification):'validation.html';
+  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. O mesmo link continua válido para futuros serviços.</p><div class="actions thanks-actions"><a class="btn btn-secondary" href="'+verify+'">Validar / baixar cópia</a><button class="btn btn-primary" id="newReceiptBtn" type="button">Preencher novo recibo</button></div></div></section>';
+  document.getElementById('newReceiptBtn')?.addEventListener('click',()=>{try{sessionStorage.removeItem(LOCK_KEY)}catch{} location.reload()});
 }
 function serviceOptions(){
   return '<option value="">Selecione</option>'+Object.keys(SERVICES).map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
