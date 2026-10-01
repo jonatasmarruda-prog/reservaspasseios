@@ -1,7 +1,7 @@
 (()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const root=document.getElementById('root');
-let S={profile:null,settings:{},receipts:[],closures:[],serviceTypes:[],deleted:[],view:'dashboard'};
+let S={profile:null,settings:{},receipts:[],closures:[],serviceTypes:[],deleted:[],users:[],globalQuery:'',view:'dashboard'};
 
 function roleName(r){return r==='admin'?'Administrador':'Contabilidade'}
 function withTimeout(promise,ms=8000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
@@ -64,14 +64,18 @@ async function load(){
   S.deleted=result[4]?.data||[];
 }
 function shell(){
-  root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos <span class="nav-count">${S.receipts.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length}</span></button><button data-v="monthly">Fechamento mensal</button>${S.profile.role==='admin'?'<button data-v="trash">Lixeira <span class="nav-count">'+S.deleted.length+'</span></button><button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div id="content"></div></main></div>`;
+  root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="${escapeHtml(S.settings.logo_url||'https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png')}" alt="Logo Trilheiros"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos <span class="nav-count">${S.receipts.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length}</span></button><button data-v="suppliers">Fornecedores</button><button data-v="documents">Documentos</button><button data-v="monthly">Fechamento mensal</button>${S.profile.role==='admin'?'<button data-v="trash">Lixeira <span class="nav-count">'+S.deleted.length+'</span></button><button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div class="admin-searchbar"><input id="globalSearch" placeholder="Buscar recibo, fornecedor, CPF/CNPJ, serviço ou valor..." value="${escapeHtml(S.globalQuery||'')}"><button class="btn btn-secondary btn-sm" id="globalSearchBtn">Buscar</button></div><div id="content"></div></main></div>`;
   root.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render()});
   document.getElementById('logout').onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
+  const gs=document.getElementById('globalSearch');
+  const goSearch=()=>{S.globalQuery=gs.value.trim();S.view='receipts';render();setTimeout(()=>{const q=document.getElementById('fq');if(q){q.value=S.globalQuery;filterReceipts()}},0)};
+  document.getElementById('globalSearchBtn').onclick=goSearch;
+  gs.onkeydown=e=>{if(e.key==='Enter')goSearch()};
   render();
 }
 function render(){
   root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));
-  ({dashboard,receipts,monthly,trash,settings}[S.view]||dashboard)();
+  ({dashboard,receipts,suppliers,documents,monthly,trash,settings}[S.view]||dashboard)();
 }
 async function copyText(text,btn,field){
   let ok=false;
@@ -142,7 +146,7 @@ function receipts(){
   const types=[...new Set(S.receipts.map(r=>r.service_type).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Recibos</h2><p>Consulte, confira, filtre e gere documentos.</p></div><div class="actions inline-actions"><button class="btn btn-secondary" id="publicLinkBtn">Link do fornecedor</button><button class="btn btn-secondary" id="csv">Exportar CSV</button></div></div>
   <div class="quick-filters"><button class="btn btn-secondary btn-sm" data-range="today">Hoje</button><button class="btn btn-secondary btn-sm" data-range="week">Esta semana</button><button class="btn btn-secondary btn-sm" data-range="month">Este mês</button><button class="btn btn-secondary btn-sm" data-range="last">Mês anterior</button><button class="btn btn-secondary btn-sm" data-range="all">Todos</button></div>
-  <div class="toolbar"><div class="field"><label>Tipo de serviço</label><select id="ft"><option value="">Todos</option>${types.map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('')}</select></div><div class="field"><label>Status</label><select id="fs"><option value="">Todos</option><option value="pending_review">Não conferido</option><option value="reviewed">Conferido</option><option value="pending_issue">Com pendência</option><option value="cancelled">Cancelado</option></select></div><div class="field"><label>Data inicial</label><input id="fd1" type="date"></div><div class="field"><label>Data final</label><input id="fd2" type="date"></div><div class="field search"><label>Buscar</label><input id="fq" placeholder="Fornecedor, CPF/CNPJ, serviço..."></div></div><div id="list"></div>`;
+  <div class="toolbar"><div class="field"><label>Tipo de serviço</label><select id="ft"><option value="">Todos</option>${types.map(t=>'<option value="'+escapeHtml(t)+'">'+escapeHtml(t)+'</option>').join('')}</select></div><div class="field"><label>Status</label><select id="fs"><option value="">Todos</option><option value="pending_review">Não conferido</option><option value="reviewed">Conferido</option><option value="pending_issue">Com pendência</option><option value="cancelled">Cancelado</option></select></div><div class="field"><label>Data inicial</label><input id="fd1" type="date"></div><div class="field"><label>Data final</label><input id="fd2" type="date"></div><div class="field search"><label>Buscar</label><input id="fq" placeholder="Fornecedor, CPF/CNPJ, serviço, recibo ou valor..." value="${escapeHtml(S.globalQuery||'')}"></div></div><div id="list"></div>`;
   ['ft','fs','fd1','fd2'].forEach(id=>document.getElementById(id).onchange=filterReceipts);
   document.getElementById('fq').oninput=filterReceipts;
   document.getElementById('csv').onclick=exportCSV;
@@ -152,7 +156,7 @@ function receipts(){
 }
 function filtered(){
   const type=document.getElementById('ft')?.value||'',status=document.getElementById('fs')?.value||'',start=document.getElementById('fd1')?.value||'',end=document.getElementById('fd2')?.value||'',q=(document.getElementById('fq')?.value||'').toLowerCase().trim();
-  return S.receipts.filter(r=>{const d=serviceDate(r),hay=(r.legal_name+' '+r.cpf_cnpj+' '+(r.service_type||'')+' '+(r.receipt_code||'')).toLowerCase();return(!type||r.service_type===type)&&(!status||(r.accounting_status||'pending_review')===status)&&(!start||d>=start)&&(!end||d<=end)&&(!q||hay.includes(q))});
+  return S.receipts.filter(r=>{const d=serviceDate(r),hay=(r.legal_name+' '+r.cpf_cnpj+' '+(r.service_type||'')+' '+(r.service_reference||'')+' '+(r.receipt_code||'')+' '+String(r.amount_received||'')+' '+(r.payment_method||'')).toLowerCase();return(!type||r.service_type===type)&&(!status||(r.accounting_status||'pending_review')===status)&&(!start||d>=start)&&(!end||d<=end)&&(!q||hay.includes(q))});
 }
 function filterReceipts(){const rows=filtered(),sum=rows.filter(r=>r.accounting_status!=='cancelled').reduce((a,b)=>a+Number(b.amount_received||0),0);document.getElementById('list').innerHTML='<div class="panel"><strong>'+rows.length+' recibo(s) • '+brl(sum)+'</strong><div style="height:12px"></div>'+tableReceipts(rows)+'</div>';wireReceipt()}
 async function openReceipt(id){
@@ -298,6 +302,27 @@ async function reviewReceipt(id,status,notes){
 function supplierHistory(doc){
   const rows=S.receipts.filter(r=>r.cpf_cnpj===doc),active=rows.filter(r=>r.accounting_status!=='cancelled'),total=active.reduce((a,b)=>a+Number(b.amount_received||0),0),name=rows[0]?.legal_name||'Fornecedor';
   modal(`<div class="modal-head"><div><h3>Histórico do fornecedor</h3><span class="muted">${escapeHtml(name)} • ${formatCpfCnpj(doc)}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div><div class="kpis compact-kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total válido</span><strong>${brl(total)}</strong></div></div>${tableReceipts(rows)}`);wireReceipt();
+}
+
+function supplierGroups(){
+  const map=new Map();
+  S.receipts.filter(r=>r.accounting_status!=='cancelled').forEach(r=>{
+    const key=r.cpf_cnpj||r.legal_name;
+    if(!map.has(key))map.set(key,{doc:r.cpf_cnpj,name:r.legal_name,phone:r.phone,email:r.email,city:r.city,state:r.state,count:0,total:0,last:'',types:new Set()});
+    const x=map.get(key);x.count++;x.total+=Number(r.amount_received||0);x.types.add(r.service_type||'Outro');if(serviceDate(r)>x.last)x.last=serviceDate(r);
+  });
+  return [...map.values()].sort((a,b)=>b.total-a.total);
+}
+function suppliers(){
+  const rows=supplierGroups();
+  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Central de fornecedores</h2><p>Histórico consolidado por CPF/CNPJ.</p></div></div><div class="kpis compact-kpis"><div class="kpi"><span>Fornecedores</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total movimentado</span><strong>${brl(rows.reduce((a,b)=>a+b.total,0))}</strong></div></div><div class="panel">${rows.length?'<div class="table-wrap"><table><thead><tr><th>Fornecedor</th><th>Contato</th><th>Serviços</th><th>Recibos</th><th>Último serviço</th><th>Total</th><th>Ação</th></tr></thead><tbody>'+rows.map(x=>'<tr><td><strong>'+escapeHtml(x.name)+'</strong><br><span class="muted">'+formatCpfCnpj(x.doc||'')+'</span></td><td>'+escapeHtml(formatPhone(x.phone||''))+'<br><span class="muted">'+escapeHtml(x.email||[x.city,x.state].filter(Boolean).join('/'))+'</span></td><td>'+escapeHtml([...x.types].slice(0,3).join(', '))+'</td><td>'+x.count+'</td><td>'+dateBR(x.last)+'</td><td class="money">'+brl(x.total)+'</td><td><button class="btn btn-secondary btn-sm" data-supplier-doc="'+escapeHtml(x.doc||'')+'">Ver histórico</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum fornecedor cadastrado.</div>'}</div>`;
+  document.querySelectorAll('[data-supplier-doc]').forEach(b=>b.onclick=()=>supplierHistory(b.dataset.supplierDoc));
+}
+function documents(){
+  const withDoc=S.receipts.filter(r=>r.attachment_data_url&&r.accounting_status!=='cancelled');
+  const missing=S.receipts.filter(r=>!r.attachment_data_url&&r.accounting_status!=='cancelled');
+  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Central de documentos</h2><p>Recibos, notas fiscais, NFS-e e comprovantes em um só lugar.</p></div></div><div class="kpis"><div class="kpi"><span>Com anexo</span><strong>${withDoc.length}</strong></div><div class="kpi"><span>Sem anexo</span><strong>${missing.length}</strong></div><div class="kpi"><span>Total de recibos</span><strong>${S.receipts.filter(r=>r.accounting_status!=='cancelled').length}</strong></div></div><div class="panel"><div class="panel-head"><h3>Documentos anexados</h3></div>${withDoc.length?'<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fornecedor</th><th>Documento</th><th>Serviço</th><th>Data</th><th>Ações</th></tr></thead><tbody>'+withDoc.map(r=>'<tr><td><strong>'+escapeHtml(r.receipt_code||'—')+'</strong></td><td>'+escapeHtml(r.legal_name)+'</td><td>'+escapeHtml(r.attachment_name||'Anexo')+'</td><td>'+escapeHtml(r.service_type||'—')+'</td><td>'+dateBR(serviceDate(r))+'</td><td><div class="table-actions"><button class="btn btn-secondary btn-sm" data-open="'+r.id+'">Ver recibo</button><a class="btn btn-primary btn-sm" href="'+r.attachment_data_url+'" download="'+escapeHtml(r.attachment_name||'documento')+'">Baixar anexo</a></div></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Nenhum documento anexado ainda.</div>'}</div><div class="panel"><div class="panel-head"><h3>Recibos sem documento fiscal/comprovante</h3><span class="badge warn">${missing.length}</span></div>${tableReceipts(missing.slice(0,100))}</div>`;
+  wireReceipt();
 }
 function monthly(){
   const now=new Date(),years=[...new Set([now.getFullYear(),...S.receipts.map(r=>Number((serviceDate(r)||'0000').slice(0,4))).filter(Boolean)])].sort((a,b)=>b-a);
