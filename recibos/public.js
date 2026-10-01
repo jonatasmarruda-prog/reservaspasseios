@@ -138,20 +138,37 @@ async function lookupCep(f){
   if(!cep){status.textContent='CEP opcional. Você pode informar somente cidade e UF.';return}
   if(cep.length!==8){status.textContent='Digite os 8 números do CEP ou deixe em branco.';return}
   status.textContent='Buscando endereço...';
+
+  let data=null;
   try{
     const res=await fetch('https://viacep.com.br/ws/'+cep+'/json/');
-    if(!res.ok)throw new Error('CEP indisponível');
-    const data=await res.json();
-    if(data.erro)throw new Error('CEP não encontrado');
-    if(data.logradouro)f.elements.address.value=data.logradouro;
-    if(data.bairro)f.elements.neighborhood.value=data.bairro;
-    if(data.localidade)f.elements.city.value=data.localidade;
-    if(data.uf)f.elements.state.value=data.uf;
-    if(data.complemento&&!f.elements.complement.value)f.elements.complement.value=data.complemento;
-    status.textContent='✓ Endereço preenchido pelo CEP. Confira os dados.';
-  }catch(e){
-    status.textContent='CEP não localizado. Informe cidade e UF manualmente.';
+    if(res.ok){
+      const v=await res.json();
+      if(!v.erro)data={address:v.logradouro||'',district:v.bairro||'',city:v.localidade||'',state:v.uf||'',complement:v.complemento||''};
+    }
+  }catch(e){}
+
+  if(!data){
+    try{
+      const res=await fetch('https://brasilapi.com.br/api/cep/v1/'+cep);
+      if(res.ok){
+        const v=await res.json();
+        data={address:v.street||'',district:v.neighborhood||'',city:v.city||'',state:v.state||'',complement:''};
+      }
+    }catch(e){}
   }
+
+  if(!data){
+    status.textContent='CEP não localizado. Informe cidade e UF manualmente.';
+    return;
+  }
+
+  if(data.address)f.elements.address.value=data.address;
+  if(data.district)f.elements.neighborhood.value=data.district;
+  if(data.city)f.elements.city.value=data.city;
+  if(data.state)f.elements.state.value=data.state;
+  if(data.complement&&!f.elements.complement.value)f.elements.complement.value=data.complement;
+  status.textContent='✓ Endereço preenchido pelo CEP. Confira os dados.';
 }
 function wire(){
   const f=document.getElementById('receiptForm');
