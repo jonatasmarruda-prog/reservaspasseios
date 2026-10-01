@@ -132,6 +132,8 @@ async function generateReceiptPDF(r,q,b,mode='download'){
     const url=URL.createObjectURL(blob);
     if(previewWindow)previewWindow.location.href=url;else window.open(url,'_blank','noopener');
     setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }else if(mode==='blob'){
+    return d;
   }else{
     d.save(filename);
   }
