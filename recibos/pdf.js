@@ -1,4 +1,4 @@
-function generateReceiptPDF(r,q,b){
+function generateReceiptPDF(r,q,b,mode='download'){
   const {jsPDF}=window.jspdf;
   const d=new jsPDF({unit:'mm',format:'a4'});
   const M=16, PAGE_W=210, CONTENT_W=PAGE_W-M*2, GREEN=[16,43,28], MID=[31,111,67], SOFT=[241,246,243];
@@ -112,6 +112,17 @@ function generateReceiptPDF(r,q,b){
   d.text((b.business_name||'Trilheiros de Rondonópolis')+' • Gestão de Recibos',M,292);
   d.text('Página '+d.getNumberOfPages(),PAGE_W-M,292,{align:'right'});
 
-  d.save('recibo_'+String(r.receipt_code||'documento').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf');
+  const filename='recibo_'+String(r.receipt_code||'documento').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';
+  if(mode==='preview'){
+    const blob=d.output('blob');
+    const url=URL.createObjectURL(blob);
+    window.open(url,'_blank','noopener');
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }else{
+    d.save(filename);
+  }
+  return d;
 }
+function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
 window.generateReceiptPDF=generateReceiptPDF;
+window.previewReceiptPDF=previewReceiptPDF;
