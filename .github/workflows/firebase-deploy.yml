@@ -25,6 +25,18 @@ jobs:
         with:
           node-version: 20
 
+      - name: Validar JavaScript público
+        run: |
+          node --check public/reservation-portal-v27.js
+          node --check public/participant-unification-v44.js
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('public/cadastro.html','utf8');
+          const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
+          for(const [i,s] of scripts.entries())new Function(s);
+          console.log('cadastro.html inline scripts ok:',scripts.length);
+          NODE
+
       - name: Instalar Firebase CLI
         run: npm install -g firebase-tools
 
