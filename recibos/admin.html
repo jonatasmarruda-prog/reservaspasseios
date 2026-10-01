@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2110">
+<link rel="stylesheet" href="styles.css?v=20260930-2130">
 </head>
 <body>
 <div id="root">
@@ -26,13 +26,14 @@
         <div class="field"><label>Senha</label><div class="password-field"><input type="password" autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha"><svg viewBox="0 0 24 24"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z"/></svg></button></div></div>
         <div class="actions"><button class="btn btn-primary" type="button" style="width:100%">Entrar no painel</button></div>
       </form>
-      <div style="text-align:center;margin-top:16px"><a href="setup.html?v=20260930-2110">Primeiro acesso — cadastrar meu acesso</a></div>
+      <div style="text-align:center;margin-top:16px"><a href="setup.html?v=20260930-2130">Primeiro acesso — cadastrar meu acesso</a></div>
     </div>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
 <script>window.TRILHEIROS_RECEIPTS_CONFIG = {
   SUPABASE_URL: "https://dvblpobtfjtjypsjcjpy.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz",
@@ -129,7 +130,8 @@ function demoLoad(){try{return JSON.parse(localStorage.getItem(DEMO_KEY))||demoS
 function demoSave(db){localStorage.setItem(DEMO_KEY,JSON.stringify(db))}
 window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,reset(){const d=demoSeed();demoSave(d);return d}};
 </script>
-<script>function generateReceiptPDF(r,q,b,mode='download'){
+<script>async function generateReceiptPDF(r,q,b,mode='download'){
+  const previewWindow=mode==='preview'?window.open('about:blank','_blank'):null;
   const {jsPDF}=window.jspdf;
   const d=new jsPDF({unit:'mm',format:'a4'});
   const M=16, PAGE_W=210, CONTENT_W=PAGE_W-M*2, GREEN=[16,43,28], MID=[31,111,67], SOFT=[241,246,243];
@@ -138,6 +140,10 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
   const serviceType=r.service_type||q?.category||'—';
   const serviceDate=r.service_date||q?.service_date||r.payment_date;
   const address=[r.address,r.address_number,r.neighborhood,r.complement,r.city,r.state].filter(Boolean).join(', ');
+  const pricingText=r.billing_mode==='per_person'?(String(r.quantity_people||0)+' pessoa(s) × '+brl(r.unit_amount||0)+' = '+brl(r.amount_received)):'Valor total: '+brl(r.amount_received);
+  const validationUrl=new URL('validation.html?code='+encodeURIComponent(r.receipt_code||'')+'&v='+encodeURIComponent(r.verification_code||''),new URL('./',location.href)).href;
+  let qrData=null;
+  try{if(window.QRCode?.toDataURL)qrData=await window.QRCode.toDataURL(validationUrl,{width:180,margin:1})}catch(e){}
 
   function ensure(h){
     if(y+h>278){
@@ -196,7 +202,8 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
   title('Serviço prestado');
   pair('Tipo de serviço',serviceType,'Data do serviço',dateBR(serviceDate));
   full('Descrição do serviço',r.service_description||serviceType);
-  pair('Forma de pagamento',r.payment_method||'—','Assinado por',r.declarant_name||r.legal_name);
+  pair('Forma de pagamento',r.payment_method||'—','Cálculo do valor',pricingText);
+  pair('Assinado por',r.declarant_name||r.legal_name,'Anexo',r.attachment_name||'Não informado');
   if(r.notes) full('Observação',r.notes);
   line();
 
@@ -232,6 +239,14 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
   ensure(28);
   pair('Protocolo',r.receipt_code||'—','Código de validação',r.verification_code||'—');
   pair('Registrado em',dateTimeBR(r.created_at),'Identificador',String(r.id||'').slice(0,24));
+  if(qrData){
+    ensure(36);
+    try{d.addImage(qrData,'PNG',M,y,28,28)}catch(e){}
+    d.setFont('helvetica','bold');d.setFontSize(8);d.setTextColor(70);d.text('VALIDAR ESTE DOCUMENTO',M+34,y+7);
+    d.setFont('helvetica','normal');d.setFontSize(7.4);d.setTextColor(105);
+    d.text(d.splitTextToSize('Escaneie o QR Code ou acesse a página de validação usando o número do recibo e o código acima.',CONTENT_W-38),M+34,y+13);
+    y+=33;
+  }
 
   d.setFillColor(248,249,248);d.roundedRect(M,y-1,CONTENT_W,18,2,2,'F');
   d.setFont('helvetica','normal');d.setFontSize(7.5);d.setTextColor(95);
@@ -247,14 +262,14 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
   if(mode==='preview'){
     const blob=d.output('blob');
     const url=URL.createObjectURL(blob);
-    window.open(url,'_blank','noopener');
+    if(previewWindow)previewWindow.location.href=url;else window.open(url,'_blank','noopener');
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }else{
     d.save(filename);
   }
   return d;
 }
-function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
+async function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
 window.generateReceiptPDF=generateReceiptPDF;
 window.previewReceiptPDF=previewReceiptPDF;</script>
 <script>(()=>{
@@ -405,7 +420,7 @@ async function openReceipt(id){
   modal(`<div class="modal-head"><div><h3>Recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">Validação: ${escapeHtml(r.verification_code||'—')}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
   <div class="receipt-status-bar"><span class="badge ${statusClass(r.accounting_status)}">${statusText(r.accounting_status)}</span><span class="muted">Registrado em ${dateTimeBR(r.created_at)}</span></div>
   <div class="receipt-view-section"><h4>Fornecedor</h4><div class="detail-grid"><div class="detail"><span>Nome / Empresa</span><strong>${escapeHtml(r.legal_name)}</strong></div><div class="detail"><span>CPF/CNPJ</span><strong>${formatCpfCnpj(r.cpf_cnpj)}</strong></div><div class="detail"><span>Telefone</span><strong>${formatPhone(r.phone)}</strong></div><div class="detail"><span>E-mail</span><strong>${escapeHtml(r.email||'Não informado')}</strong></div><div class="detail detail-full"><span>Endereço</span><strong>${escapeHtml(address||'—')}</strong></div></div></div>
-  <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid"><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(r.service_type||'—')}</strong></div><div class="detail"><span>Data do serviço</span><strong>${dateBR(serviceDate(r))}</strong></div><div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||'—')}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div><div class="detail"><span>Recebimento</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Forma</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div><div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}</div></div>
+  <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid"><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(r.service_type||'—')}</strong></div><div class="detail"><span>Data do serviço</span><strong>${dateBR(serviceDate(r))}</strong></div><div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||'—')}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div>${r.billing_mode==='per_person'?'<div class="detail"><span>Cálculo</span><strong>'+r.quantity_people+' pessoa(s) × '+brl(r.unit_amount)+'</strong></div>':''}<div class="detail"><span>Recebimento</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Forma</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div><div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}</div></div>
   ${r.attachment_data_url?'<div class="receipt-view-section"><h4>Anexo</h4><a class="btn btn-secondary" href="'+r.attachment_data_url+'" download="'+escapeHtml(r.attachment_name||'anexo')+'">Baixar '+escapeHtml(r.attachment_name||'anexo')+'</a></div>':''}
   <div class="receipt-view-section"><h4>Assinatura</h4><img class="signature-preview premium-signature-preview" src="${r.signature_data_url}"></div>
   <div class="receipt-view-section"><h4>Conferência contábil</h4><div class="field"><label>Observação da conferência</label><textarea id="reviewNotes" placeholder="Opcional">${escapeHtml(r.review_notes||'')}</textarea></div><div class="actions review-actions"><button class="btn btn-secondary" data-review="pending_review">Não conferido</button><button class="btn btn-primary" data-review="reviewed">Conferido</button><button class="btn btn-secondary" data-review="pending_issue">Com pendência</button>${S.profile.role==='admin'?'<button class="btn btn-danger" data-review="cancelled">Cancelar</button>':''}</div></div>
@@ -446,8 +461,11 @@ function editReceipt(id){
       <div class="field full"><label>Complemento</label><input name="complement" value="${escapeHtml(r.complement||'')}"></div>
       <div class="field"><label class="required">Tipo de serviço</label><select name="service_type" required>${serviceTypes.map(x=>'<option '+(x===r.service_type?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
       <div class="field"><label class="required">Data do serviço</label><input name="service_date" type="date" required value="${escapeHtml(serviceDate(r))}"></div>
-      <div class="field full"><label>Descrição / referência</label><input name="service_description" value="${escapeHtml(r.service_description||'')}"></div>
-      <div class="field"><label class="required">Valor recebido</label><input name="amount_received" required inputmode="decimal" value="${Number(r.amount_received||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}"></div>
+      <div class="field full"><label>Referência do serviço</label><input name="service_reference" value="${escapeHtml(r.service_reference||'')}"></div>
+      <div class="field"><label class="required">Forma de cobrança</label><select name="billing_mode"><option value="total" ${(r.billing_mode||'total')==='total'?'selected':''}>Valor total</option><option value="per_person" ${r.billing_mode==='per_person'?'selected':''}>Valor por pessoa</option></select></div>
+      <div class="field" id="editTotalWrap"><label class="required">Valor total</label><input name="amount_received" inputmode="decimal" value="${Number(r.amount_received||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}"></div>
+      <div class="field" id="editQtyWrap"><label>Quantidade de pessoas</label><input name="quantity_people" type="number" min="1" step="1" value="${r.quantity_people||''}"></div>
+      <div class="field" id="editUnitWrap"><label>Valor por pessoa</label><input name="unit_amount" inputmode="decimal" value="${r.unit_amount?Number(r.unit_amount).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):''}"></div>
       <div class="field"><label class="required">Data do recebimento</label><input name="payment_date" type="date" required value="${escapeHtml(r.payment_date||'')}"></div>
       <div class="field"><label class="required">Forma de pagamento</label><select name="payment_method" required>${paymentMethods.map(x=>'<option '+(x===r.payment_method?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
       <div class="field"><label>Assinado por</label><input name="declarant_name" value="${escapeHtml(r.declarant_name||r.legal_name||'')}"></div>
@@ -462,6 +480,14 @@ function editReceipt(id){
   f.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
   f.postal_code.oninput=e=>e.target.value=formatCep(e.target.value);
   f.state.oninput=e=>e.target.value=e.target.value.replace(/[^a-z]/gi,'').slice(0,2).toUpperCase();
+  const toggleEditPricing=()=>{
+    const per=f.billing_mode.value==='per_person';
+    document.getElementById('editTotalWrap').classList.toggle('hidden',per);
+    document.getElementById('editQtyWrap').classList.toggle('hidden',!per);
+    document.getElementById('editUnitWrap').classList.toggle('hidden',!per);
+  };
+  f.billing_mode.onchange=toggleEditPricing;
+  toggleEditPricing();
 
   f.onsubmit=async e=>{
     e.preventDefault();
@@ -480,9 +506,12 @@ function editReceipt(id){
       city:f.city.value.trim(),
       state:f.state.value.trim().toUpperCase(),
       service_type:f.service_type.value,
-      service_description:f.service_description.value.trim(),
+      service_reference:f.service_reference.value.trim(),
       service_date:f.service_date.value,
-      amount_received:currencyInputToNumber(f.amount_received.value),
+      billing_mode:f.billing_mode.value,
+      quantity_people:f.billing_mode.value==='per_person'?Number(f.quantity_people.value||0):null,
+      unit_amount:f.billing_mode.value==='per_person'?currencyInputToNumber(f.unit_amount.value):null,
+      amount_received:f.billing_mode.value==='total'?currencyInputToNumber(f.amount_received.value):0,
       payment_date:f.payment_date.value,
       payment_method:f.payment_method.value,
       declarant_name:f.declarant_name.value.trim(),
