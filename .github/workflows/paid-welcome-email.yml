@@ -33,6 +33,11 @@ jobs:
           node-version: 24
       - name: Instalar dependências
         run: npm install --prefix automation --no-audit --no-fund
+      - name: Unificar Canva e link pelo mesmo participante
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/dedupe-participants-by-email-name.mjs
+
       - name: Preparar inscrições antigas feitas pelo link
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
