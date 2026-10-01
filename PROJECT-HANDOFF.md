@@ -70,6 +70,19 @@ Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem v
 - `sales-management-v22.js` tinha erro de sintaxe e voltou a carregar normalmente.
 - Build do shell: `20260911-stable-admin1`. HTML não é armazenado e JS/CSS sempre revalidam; o Service Worker usa network-first para arquivos de aplicação.
 
+## Cadastro único de participantes — 01/10/2026
+- Canva/portal e link direto passam a usar CPF como identificador principal do participante, com e-mail individual por participante.
+- O portal agora coleta nome, CPF e e-mail de cada pessoa da reserva.
+- O link `/cadastro/<tripId>` também coleta CPF, nome e e-mail de cada participante.
+- Cada novo cadastro grava `registration_email_status: pending`; o motor de e-mail envia confirmação individual para cada e-mail único da lista de participantes.
+- Pagamento e cadastro continuam separados: preencher o formulário nunca transforma sozinho uma pendência em pagamento confirmado.
+- No mesmo aparelho, os dados do participante ficam reaproveitáveis localmente: ao digitar novamente o CPF em outro passeio, nome/e-mail conhecidos podem ser preenchidos automaticamente.
+- Foi preparada a camada global `functions/participant-unification.js` com `participantProfileApi` e `unifiedRegistrationApi`. Ela faz deduplicação por CPF dentro do mesmo passeio, preserva venda/pagamento existente, não desconta vaga novamente quando encontra o mesmo participante e mantém perfis protegidos no servidor.
+- O front-end possui fallback compatível: se essas Functions não estiverem disponíveis, a reserva continua funcionando pelo Firestore atual. No mesmo aparelho, uma venda do portal pode ser reconhecida pelo link direto sem ocupar outra vaga.
+- Se o passeio estiver lotado, o link direto continua abrindo para permitir que uma pessoa que já possui vaga complete seu cadastro; somente uma nova vaga é bloqueada.
+- Bloqueio atual de infraestrutura: o deploy das duas novas Functions está impedido porque `cloudbuild.googleapis.com` está desativada e a credencial de CI não possui permissão para habilitar APIs. O código passou no `node --check`; quando Cloud Build for habilitada no projeto `trilheiros-reservas`, o workflow `Publicar notificações e e-mail imediato` já está preparado para publicar `participantProfileApi` e `unifiedRegistrationApi`.
+- Nunca expor perfil de participante diretamente em uma coleção pública do Firestore. O reaproveitamento global deve continuar passando pela API protegida; CPF sozinho não pode liberar e-mail/telefone de terceiros.
+
 ## Cadastro direto por link do passeio
 Links no formato `https://trilheiros-reservas.web.app/cadastro/<tripId>` usam `public/cadastro.html`.
 
