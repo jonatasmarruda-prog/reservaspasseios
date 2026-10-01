@@ -146,7 +146,7 @@ async function openReceipt(id){
   modal(`<div class="modal-head"><div><h3>Recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">Validação: ${escapeHtml(r.verification_code||'—')}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
   <div class="receipt-status-bar"><span class="badge ${statusClass(r.accounting_status)}">${statusText(r.accounting_status)}</span><span class="muted">Registrado em ${dateTimeBR(r.created_at)}</span></div>
   <div class="receipt-view-section"><h4>Fornecedor</h4><div class="detail-grid"><div class="detail"><span>Nome / Empresa</span><strong>${escapeHtml(r.legal_name)}</strong></div><div class="detail"><span>CPF/CNPJ</span><strong>${formatCpfCnpj(r.cpf_cnpj)}</strong></div><div class="detail"><span>Telefone</span><strong>${formatPhone(r.phone)}</strong></div><div class="detail"><span>E-mail</span><strong>${escapeHtml(r.email||'Não informado')}</strong></div><div class="detail detail-full"><span>Endereço</span><strong>${escapeHtml(address||'—')}</strong></div></div></div>
-  <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid"><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(r.service_type||'—')}</strong></div><div class="detail"><span>Data do serviço</span><strong>${dateBR(serviceDate(r))}</strong></div><div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||'—')}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div><div class="detail"><span>Recebimento</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Forma</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div><div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}</div></div>
+  <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid"><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(r.service_type||'—')}</strong></div><div class="detail"><span>Data do serviço</span><strong>${dateBR(serviceDate(r))}</strong></div><div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||'—')}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div>${r.billing_mode==='per_person'?'<div class="detail"><span>Cálculo</span><strong>'+r.quantity_people+' pessoa(s) × '+brl(r.unit_amount)+'</strong></div>':''}<div class="detail"><span>Recebimento</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Forma</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div><div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}</div></div>
   ${r.attachment_data_url?'<div class="receipt-view-section"><h4>Anexo</h4><a class="btn btn-secondary" href="'+r.attachment_data_url+'" download="'+escapeHtml(r.attachment_name||'anexo')+'">Baixar '+escapeHtml(r.attachment_name||'anexo')+'</a></div>':''}
   <div class="receipt-view-section"><h4>Assinatura</h4><img class="signature-preview premium-signature-preview" src="${r.signature_data_url}"></div>
   <div class="receipt-view-section"><h4>Conferência contábil</h4><div class="field"><label>Observação da conferência</label><textarea id="reviewNotes" placeholder="Opcional">${escapeHtml(r.review_notes||'')}</textarea></div><div class="actions review-actions"><button class="btn btn-secondary" data-review="pending_review">Não conferido</button><button class="btn btn-primary" data-review="reviewed">Conferido</button><button class="btn btn-secondary" data-review="pending_issue">Com pendência</button>${S.profile.role==='admin'?'<button class="btn btn-danger" data-review="cancelled">Cancelar</button>':''}</div></div>
@@ -187,8 +187,11 @@ function editReceipt(id){
       <div class="field full"><label>Complemento</label><input name="complement" value="${escapeHtml(r.complement||'')}"></div>
       <div class="field"><label class="required">Tipo de serviço</label><select name="service_type" required>${serviceTypes.map(x=>'<option '+(x===r.service_type?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
       <div class="field"><label class="required">Data do serviço</label><input name="service_date" type="date" required value="${escapeHtml(serviceDate(r))}"></div>
-      <div class="field full"><label>Descrição / referência</label><input name="service_description" value="${escapeHtml(r.service_description||'')}"></div>
-      <div class="field"><label class="required">Valor recebido</label><input name="amount_received" required inputmode="decimal" value="${Number(r.amount_received||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}"></div>
+      <div class="field full"><label>Referência do serviço</label><input name="service_reference" value="${escapeHtml(r.service_reference||'')}"></div>
+      <div class="field"><label class="required">Forma de cobrança</label><select name="billing_mode"><option value="total" ${(r.billing_mode||'total')==='total'?'selected':''}>Valor total</option><option value="per_person" ${r.billing_mode==='per_person'?'selected':''}>Valor por pessoa</option></select></div>
+      <div class="field" id="editTotalWrap"><label class="required">Valor total</label><input name="amount_received" inputmode="decimal" value="${Number(r.amount_received||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}"></div>
+      <div class="field" id="editQtyWrap"><label>Quantidade de pessoas</label><input name="quantity_people" type="number" min="1" step="1" value="${r.quantity_people||''}"></div>
+      <div class="field" id="editUnitWrap"><label>Valor por pessoa</label><input name="unit_amount" inputmode="decimal" value="${r.unit_amount?Number(r.unit_amount).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):''}"></div>
       <div class="field"><label class="required">Data do recebimento</label><input name="payment_date" type="date" required value="${escapeHtml(r.payment_date||'')}"></div>
       <div class="field"><label class="required">Forma de pagamento</label><select name="payment_method" required>${paymentMethods.map(x=>'<option '+(x===r.payment_method?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
       <div class="field"><label>Assinado por</label><input name="declarant_name" value="${escapeHtml(r.declarant_name||r.legal_name||'')}"></div>
@@ -203,6 +206,14 @@ function editReceipt(id){
   f.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
   f.postal_code.oninput=e=>e.target.value=formatCep(e.target.value);
   f.state.oninput=e=>e.target.value=e.target.value.replace(/[^a-z]/gi,'').slice(0,2).toUpperCase();
+  const toggleEditPricing=()=>{
+    const per=f.billing_mode.value==='per_person';
+    document.getElementById('editTotalWrap').classList.toggle('hidden',per);
+    document.getElementById('editQtyWrap').classList.toggle('hidden',!per);
+    document.getElementById('editUnitWrap').classList.toggle('hidden',!per);
+  };
+  f.billing_mode.onchange=toggleEditPricing;
+  toggleEditPricing();
 
   f.onsubmit=async e=>{
     e.preventDefault();
@@ -221,9 +232,12 @@ function editReceipt(id){
       city:f.city.value.trim(),
       state:f.state.value.trim().toUpperCase(),
       service_type:f.service_type.value,
-      service_description:f.service_description.value.trim(),
+      service_reference:f.service_reference.value.trim(),
       service_date:f.service_date.value,
-      amount_received:currencyInputToNumber(f.amount_received.value),
+      billing_mode:f.billing_mode.value,
+      quantity_people:f.billing_mode.value==='per_person'?Number(f.quantity_people.value||0):null,
+      unit_amount:f.billing_mode.value==='per_person'?currencyInputToNumber(f.unit_amount.value):null,
+      amount_received:f.billing_mode.value==='total'?currencyInputToNumber(f.amount_received.value):0,
       payment_date:f.payment_date.value,
       payment_method:f.payment_method.value,
       declarant_name:f.declarant_name.value.trim(),
