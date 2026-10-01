@@ -1,7 +1,7 @@
 (()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const root=document.getElementById('root');
-let S={profile:null,settings:{},receipts:[],closures:[],view:'dashboard'};
+let S={profile:null,settings:{},receipts:[],closures:[],serviceTypes:[],deleted:[],view:'dashboard'};
 
 function roleName(r){return r==='admin'?'Administrador':'Contabilidade'}
 function withTimeout(promise,ms=8000){return Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout')),ms))])}
@@ -49,24 +49,29 @@ function login(){
   };
 }
 async function load(){
-  const [a,b,c]=await Promise.all([
+  const base=[
     withTimeout(supabaseClient.from('app_settings').select('*').eq('id',1).single(),8000),
     withTimeout(supabaseClient.from('receipts').select('*').order('created_at',{ascending:false}),8000),
-    withTimeout(supabaseClient.from('monthly_closures').select('*').order('year',{ascending:false}).order('month',{ascending:false}),8000)
-  ]);
-  S.settings=a.data||{};
-  S.receipts=b.data||[];
-  S.closures=c.data||[];
+    withTimeout(supabaseClient.from('monthly_closures').select('*').order('year',{ascending:false}).order('month',{ascending:false}),8000),
+    withTimeout(supabaseClient.from('service_types').select('*').order('sort_order',{ascending:true}),8000)
+  ];
+  if(S.profile?.role==='admin')base.push(withTimeout(supabaseClient.from('deleted_receipts_log').select('*').order('deleted_at',{ascending:false}),8000));
+  const result=await Promise.all(base);
+  S.settings=result[0].data||{};
+  S.receipts=result[1].data||[];
+  S.closures=result[2].data||[];
+  S.serviceTypes=result[3].data||[];
+  S.deleted=result[4]?.data||[];
 }
 function shell(){
-  root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos</button><button data-v="monthly">Fechamento mensal</button>${S.profile.role==='admin'?'<button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div id="content"></div></main></div>`;
+  root.innerHTML=`<div class="admin-shell"><aside class="sidebar"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros"><div><h1>Trilheiros</h1><small>Gestão de Recibos</small></div></div><nav class="nav"><button data-v="dashboard">Visão geral</button><button data-v="receipts">Recibos <span class="nav-count">${S.receipts.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length}</span></button><button data-v="monthly">Fechamento mensal</button>${S.profile.role==='admin'?'<button data-v="trash">Lixeira <span class="nav-count">'+S.deleted.length+'</span></button><button data-v="settings">Configurações</button>':''}</nav><div class="sidebar-foot"><div class="user"><strong>${escapeHtml(S.profile.display_name)}</strong><br><span style="color:#bfd3c5">${roleName(S.profile.role)}</span></div><button id="logout" class="btn btn-secondary btn-sm" style="width:100%;margin-top:9px">Sair</button></div></aside><main class="admin-main"><div id="content"></div></main></div>`;
   root.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;render()});
   document.getElementById('logout').onclick=async()=>{await supabaseClient.auth.signOut();location.reload()};
   render();
 }
 function render(){
   root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));
-  ({dashboard,receipts,monthly,settings}[S.view]||dashboard)();
+  ({dashboard,receipts,monthly,trash,settings}[S.view]||dashboard)();
 }
 async function copyText(text,btn,field){
   let ok=false;
@@ -95,12 +100,22 @@ function dashboard(){
   const tops=Object.values(topSuppliers).sort((a,b)=>b.total-a.total).slice(0,5);
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Visão geral</h2><p>Resumo financeiro e contábil dos recibos.</p></div><button class="btn btn-primary" id="publicLinkBtn">Link do fornecedor</button></div>
   <div class="kpis"><div class="kpi"><span>Recibos no mês</span><strong>${month.length}</strong></div><div class="kpi"><span>Valor no mês</span><strong>${brl(total)}</strong></div><div class="kpi"><span>Não conferidos</span><strong>${pending}</strong></div><div class="kpi"><span>Com pendência</span><strong>${issue}</strong></div></div>
-  <div class="dashboard-grid"><div class="panel"><h3>Por tipo de serviço</h3>${types.length?types.map(([k,v])=>'<div class="metric-row"><span>'+escapeHtml(k)+'</span><strong>'+brl(v)+'</strong></div>').join(''):'<div class="empty">Sem dados no mês.</div>'}</div>
+  <div class="dashboard-grid"><div class="panel"><h3>Por tipo de serviço — mês</h3>${types.length?types.map(([k,v])=>'<div class="metric-row"><span>'+escapeHtml(k)+'</span><strong>'+brl(v)+'</strong></div>').join(''):'<div class="empty">Sem dados no mês.</div>'}</div>
   <div class="panel"><h3>Principais fornecedores</h3>${tops.length?tops.map(x=>'<div class="metric-row"><span>'+escapeHtml(x.name)+' <small>('+x.count+')</small></span><strong>'+brl(x.total)+'</strong></div>').join(''):'<div class="empty">Sem dados no mês.</div>'}</div></div>
+  <div class="panel"><div class="panel-head"><h3>Resumo anual — ${now.getFullYear()}</h3></div>${annualSummary(now.getFullYear())}</div>
   <div class="panel"><div class="panel-head"><h3>Últimos recibos</h3><button class="btn btn-secondary btn-sm" id="goReceipts">Ver todos</button></div>${tableReceipts(S.receipts.slice(0,8))}</div>`;
   document.getElementById('publicLinkBtn').onclick=showPublicLink;
   document.getElementById('goReceipts').onclick=()=>{S.view='receipts';render()};
   wireReceipt();
+}
+
+function annualSummary(year){
+  const rows=S.receipts.filter(r=>Number(serviceDate(r).slice(0,4))===year&&r.accounting_status!=='cancelled');
+  if(!rows.length)return'<div class="empty">Sem recibos neste ano.</div>';
+  const byType={};rows.forEach(r=>byType[r.service_type]=(byType[r.service_type]||0)+Number(r.amount_received||0));
+  const total=rows.reduce((a,b)=>a+Number(b.amount_received||0),0);
+  return '<div class="metric-row"><span>Total anual</span><strong>'+brl(total)+'</strong></div>'+
+    Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>'<div class="metric-row"><span>'+escapeHtml(k)+'</span><strong>'+brl(v)+'</strong></div>').join('');
 }
 function tableReceipts(rows){
   if(!rows.length)return'<div class="empty">Nenhum recibo encontrado.</div>';
@@ -292,8 +307,9 @@ function monthly(){
 function monthRows(y,m){return S.receipts.filter(r=>{const d=serviceDate(r);return Number(d.slice(0,4))===y&&Number(d.slice(5,7))===m&&r.accounting_status!=='cancelled'})}
 function renderMonthSummary(){
   const y=Number(document.getElementById('cy').value),m=Number(document.getElementById('cm').value),rows=monthRows(y,m),sum=rows.reduce((a,b)=>a+Number(b.amount_received||0),0),reviewed=rows.filter(r=>r.accounting_status==='reviewed').length,pending=rows.filter(r=>(r.accounting_status||'pending_review')==='pending_review'||r.accounting_status==='pending_issue').length;
-  document.getElementById('monthSummary').innerHTML=`<div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button>${S.profile.role==='admin'?'<button class="btn btn-primary" id="closeMonth">Fechar mês</button>':''}</div><div style="height:12px"></div>${tableReceipts(rows)}</div>`;
+  document.getElementById('monthSummary').innerHTML=`<div class="kpis"><div class="kpi"><span>Recibos</span><strong>${rows.length}</strong></div><div class="kpi"><span>Total</span><strong>${brl(sum)}</strong></div><div class="kpi"><span>Conferidos</span><strong>${reviewed}</strong></div><div class="kpi"><span>Pendentes</span><strong>${pending}</strong></div></div><div class="panel"><div class="actions inline-actions"><button class="btn btn-secondary" id="monthPdf">Gerar relatório PDF</button><button class="btn btn-secondary" id="monthBackup">Backup ZIP</button>${S.profile.role==='admin'?'<button class="btn btn-primary" id="closeMonth">Fechar mês</button>':''}</div><div style="height:12px"></div>${tableReceipts(rows)}</div>`;
   document.getElementById('monthPdf').onclick=()=>generateMonthlyPDF(rows,y,m);
+  document.getElementById('monthBackup').onclick=()=>backupMonth(rows,y,m);
   document.getElementById('closeMonth')?.addEventListener('click',()=>closeMonth(y,m));
   wireReceipt();
 }
@@ -313,11 +329,66 @@ function generateMonthlyPDF(rows,y,m){
   rows.forEach(r=>{if(yy>272){d.addPage();yy=18}d.setFont('helvetica','bold');d.setFontSize(9);d.setTextColor(35);d.text((r.receipt_code||'—')+' • '+r.legal_name,M,yy);d.setFont('helvetica','normal');d.setFontSize(8);d.setTextColor(90);d.text(dateBR(serviceDate(r))+' • '+(r.service_type||'—')+' • '+brl(r.amount_received),M,yy+5);yy+=12});
   d.save('relatorio_recibos_'+y+'_'+String(m).padStart(2,'0')+'.pdf');
 }
+
+async function backupMonth(rows,y,m){
+  if(!window.JSZip){toast('Biblioteca de backup não carregou. Atualize a página.','error');return}
+  const btn=document.getElementById('monthBackup');if(btn){btn.disabled=true;btn.textContent='Gerando backup...'}
+  try{
+    const zip=new JSZip();
+    const head=['Recibo','Status','Data do serviço','Fornecedor','CPF/CNPJ','Tipo de serviço','Valor','Forma de pagamento','Validação'];
+    const body=rows.map(r=>[r.receipt_code,statusText(r.accounting_status),dateBR(serviceDate(r)),r.legal_name,formatCpfCnpj(r.cpf_cnpj),r.service_type,Number(r.amount_received).toFixed(2).replace('.',','),r.payment_method,r.verification_code]);
+    const csv='\ufeff'+[head,...body].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n');
+    zip.file('recibos_'+y+'_'+String(m).padStart(2,'0')+'.csv',csv);
+    const folder=zip.folder('pdfs');
+    for(const r of rows){
+      const doc=await generateReceiptPDF(r,null,S.settings,'blob');
+      folder.file('recibo_'+String(r.receipt_code||r.id)+'.pdf',doc.output('blob'));
+    }
+    const blob=await zip.generateAsync({type:'blob'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup_recibos_'+y+'_'+String(m).padStart(2,'0')+'.zip';a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),30000);
+    toast('Backup mensal gerado.');
+  }catch(e){console.error(e);toast('Não foi possível gerar o backup.','error')}
+  finally{if(btn){btn.disabled=false;btn.textContent='Backup ZIP'}}
+}
+
+function trash(){
+  if(S.profile.role!=='admin'){S.view='dashboard';render();return}
+  document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Lixeira</h2><p>Recibos excluídos ficam preservados aqui e podem ser restaurados.</p></div></div><div class="panel">${S.deleted.length?'<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fornecedor</th><th>Serviço</th><th>Data</th><th>Valor</th><th>Excluído em</th><th>Ação</th></tr></thead><tbody>'+S.deleted.map(x=>'<tr><td><strong>'+escapeHtml(x.receipt_code||'—')+'</strong></td><td>'+escapeHtml(x.legal_name||'—')+'<br><span class="muted">'+formatCpfCnpj(x.cpf_cnpj||'')+'</span></td><td>'+escapeHtml(x.service_type||'—')+'</td><td>'+dateBR(x.service_date)+'</td><td>'+brl(x.amount_received)+'</td><td>'+dateTimeBR(x.deleted_at)+'</td><td><button class="btn btn-primary btn-sm" data-restore="'+x.id+'">Restaurar</button></td></tr>').join('')+'</tbody></table></div>':'<div class="empty">A lixeira está vazia.</div>'}</div>`;
+  document.querySelectorAll('[data-restore]').forEach(b=>b.onclick=()=>restoreDeleted(b.dataset.restore));
+}
+async function restoreDeleted(id){
+  const {error}=await supabaseClient.rpc('restore_deleted_receipt',{p_deleted_id:id});
+  if(error){toast(error.message,'error');return}
+  await load();toast('Recibo restaurado.');trash();
+}
+
+function serviceTypesPanel(){
+  if(S.profile.role!=='admin')return'';
+  return `<div class="panel" style="margin-top:18px"><div class="panel-head"><div><h3>Tipos de serviço</h3><p class="muted">Controle os campos e a forma de cobrança sugerida no formulário público.</p></div><button class="btn btn-primary btn-sm" id="newServiceType">Novo tipo</button></div><div class="table-wrap"><table><thead><tr><th>Serviço</th><th>Referência</th><th>Cobrança padrão</th><th>Status</th><th>Ação</th></tr></thead><tbody>${S.serviceTypes.map(x=>'<tr><td><strong>'+escapeHtml(x.name)+'</strong></td><td>'+escapeHtml(x.reference_label||'—')+(x.reference_required?' <span class="badge warn">Obrigatório</span>':'')+'</td><td>'+(x.default_billing==='per_person'?'Por pessoa':'Total')+'</td><td><span class="badge '+(x.active?'success':'cancelled')+'">'+(x.active?'Ativo':'Inativo')+'</span></td><td><button class="btn btn-secondary btn-sm" data-service-edit="'+x.id+'">Editar</button></td></tr>').join('')}</tbody></table></div></div>`;
+}
+function wireServiceTypes(){
+  document.getElementById('newServiceType')?.addEventListener('click',()=>editServiceType(null));
+  document.querySelectorAll('[data-service-edit]').forEach(b=>b.onclick=()=>editServiceType(b.dataset.serviceEdit));
+}
+function editServiceType(id){
+  const x=id?S.serviceTypes.find(v=>v.id===id):{name:'',reference_label:'',reference_placeholder:'',reference_required:false,default_billing:'total',active:true,sort_order:100};
+  modal(`<div class="modal-head"><div><h3>${id?'Editar':'Novo'} tipo de serviço</h3><span class="muted">Isso altera o formulário dos fornecedores.</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div><form id="serviceTypeForm"><div class="grid"><div class="field full"><label class="required">Nome do serviço</label><input name="name" required value="${escapeHtml(x.name||'')}"></div><div class="field full"><label>Campo de referência</label><input name="reference_label" value="${escapeHtml(x.reference_label||'')}" placeholder="Ex.: Nome do hotel"></div><div class="field full"><label>Exemplo / placeholder</label><input name="reference_placeholder" value="${escapeHtml(x.reference_placeholder||'')}"></div><div class="field"><label>Cobrança padrão</label><select name="default_billing"><option value="total" ${x.default_billing==='total'?'selected':''}>Valor total</option><option value="per_person" ${x.default_billing==='per_person'?'selected':''}>Valor por pessoa</option></select></div><div class="field"><label>Ordem</label><input name="sort_order" type="number" value="${x.sort_order||100}"></div><div class="checkbox"><input id="refRequired" name="reference_required" type="checkbox" ${x.reference_required?'checked':''}><label for="refRequired">Referência obrigatória</label></div><div class="checkbox"><input id="serviceActive" name="active" type="checkbox" ${x.active?'checked':''}><label for="serviceActive">Serviço ativo</label></div></div><div id="serviceErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary">Salvar serviço</button></div></form>`);
+  const f=document.getElementById('serviceTypeForm');
+  f.onsubmit=async e=>{
+    e.preventDefault();const btn=f.querySelector('.btn-primary');btn.disabled=true;btn.textContent='Salvando...';
+    const {error}=await supabaseClient.rpc('upsert_service_type',{p_id:id||null,p_name:f.name.value.trim(),p_reference_label:f.reference_label.value.trim(),p_reference_placeholder:f.reference_placeholder.value.trim(),p_reference_required:f.reference_required.checked,p_default_billing:f.default_billing.value,p_active:f.active.checked,p_sort_order:Number(f.sort_order.value||100)});
+    if(error){document.getElementById('serviceErr').textContent=error.message;document.getElementById('serviceErr').classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar serviço';return}
+    await load();document.querySelector('.modal-backdrop')?.remove();toast('Tipo de serviço salvo.');settings();
+  };
+}
 function settings(){
   if(S.profile.role!=='admin'){S.view='dashboard';render();return}
   const s=S.settings||{};
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Dados do contratante</h2><p>Usados nos PDFs e validações.</p></div></div><form id="set" class="panel"><div class="grid"><div class="field full"><label class="required">Nome / Razão social</label><input name="business_name" required value="${escapeHtml(s.business_name||'Trilheiros de Rondonópolis')}"></div><div class="field"><label>CNPJ</label><input name="cnpj" value="${escapeHtml(s.cnpj||'')}"></div><div class="field"><label>Telefone</label><input name="phone" value="${escapeHtml(s.phone||'')}"></div><div class="field full"><label>Endereço</label><input name="address" value="${escapeHtml(s.address||'')}"></div><div class="field"><label>Cidade</label><input name="city" value="${escapeHtml(s.city||'Rondonópolis')}"></div><div class="field"><label>UF</label><input name="state" maxlength="2" value="${escapeHtml(s.state||'MT')}"></div><div class="field full"><label>E-mail</label><input name="email" type="email" value="${escapeHtml(s.email||'')}"></div></div><div class="actions"><button class="btn btn-primary">Salvar dados</button></div></form>`;
+  document.getElementById('content').insertAdjacentHTML('beforeend',serviceTypesPanel());
   document.getElementById('set').onsubmit=saveSettings;
+  wireServiceTypes();
 }
 async function saveSettings(e){
   e.preventDefault();const f=e.currentTarget,p={business_name:f.business_name.value.trim(),cnpj:formatCpfCnpj(f.cnpj.value),phone:f.phone.value.trim(),address:f.address.value.trim(),city:f.city.value.trim(),state:f.state.value.toUpperCase(),email:f.email.value.trim(),updated_at:new Date().toISOString()};
