@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#073226">
+  <title>Política de Cancelamento | Trilheiros de Rondonópolis</title>
+  <script src="/__/firebase/10.14.1/firebase-app-compat.js" defer></script>
+  <script src="/__/firebase/10.14.1/firebase-firestore-compat.js" defer></script>
+  <script src="/__/firebase/init.js" defer></script>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#eef4f1;color:#17372d;font-family:Arial,Helvetica,sans-serif}.wrap{width:min(760px,calc(100% - 28px));margin:32px auto}.head{background:#073226;color:#fff;border-radius:22px 22px 0 0;padding:28px;text-align:center}.head img{width:120px;height:120px;object-fit:contain}.head small{display:block;color:#d9b44c;font-weight:800;letter-spacing:.1em;margin-top:10px}.head h1{margin:8px 0 0;font-size:28px}.card{background:#fff;border:1px solid #d9e5df;border-top:0;border-radius:0 0 22px 22px;padding:26px;box-shadow:0 18px 50px rgba(7,50,38,.08)}.trip{padding:16px;border-radius:14px;background:#f2f7f4;margin-bottom:18px}.trip b{display:block;font-size:20px;color:#073226}.trip span{display:block;margin-top:6px;color:#657b72}.policy{white-space:pre-wrap;line-height:1.7;font-size:15px;color:#344f45}.note{margin-top:20px;padding:14px 16px;border-radius:13px;background:#fff8df;border:1px solid #ead49a;color:#5f4d13;line-height:1.55}.loading{text-align:center;padding:36px;color:#657b72}.error{color:#8f3028}
+  </style>
+</head>
+<body>
+  <main class="wrap" id="app"><div class="loading">Carregando política de cancelamento...</div></main>
+  <script>
+  window.addEventListener('DOMContentLoaded',async()=>{
+    const app=document.getElementById('app'),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])),id=decodeURIComponent((location.pathname.match(/^\/politica\/([^/?#]+)/)||[])[1]||'');
+    const br=v=>{const s=String(v||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(s))return'';const[y,m,d]=s.split('-');return`${d}/${m}/${y}`};
+    try{
+      if(!id)throw Error('Link de política inválido.');
+      const snap=await firebase.firestore().collection('trips').doc(id).get();if(!snap.exists)throw Error('Passeio não encontrado.');
+      const t=snap.data()||{},policy=String(t.cancellation_policy||'').trim();
+      app.innerHTML=`<section class="head"><img src="/assets/trilheiros-logo-email.png?v=20260925-hosted1" alt="Trilheiros de Rondonópolis"><small>INFORMAÇÃO IMPORTANTE</small><h1>Política de cancelamento</h1></section><section class="card"><div class="trip"><b>${esc(t.name||'Passeio')}</b><span>${br(t.trip_date)?'📅 '+br(t.trip_date):''}${t.destination?' • 📍 '+esc(t.destination):''}</span></div><div class="policy">${esc(policy||'A política de cancelamento deste passeio ainda não foi publicada. Entre em contato com a organização.')}</div><div class="note">Ao realizar o cadastro, você confirma que teve acesso à política de cancelamento do passeio.</div></section>`;
+    }catch(e){app.innerHTML=`<section class="card"><div class="loading error">${esc(e.message||'Não foi possível abrir a política.')}</div></section>`}
+  });
+  </script>
+</body>
+</html>
