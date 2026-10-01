@@ -111,7 +111,7 @@ function reqFor(r){return S.requests.find(q=>q.id===r.request_id)||{}}
 function render(){root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));({dashboard,receipts,settings}[S.view]||dashboard)()}
 function dashboard(){
   const now=new Date();
-  const month=S.receipts.filter(r=>{const d=new Date(r.payment_date+'T12:00:00');return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()});
+  const month=S.receipts.filter(r=>{const raw=r.service_date||r.payment_date;const d=new Date(raw+'T12:00:00');return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()});
   const total=month.reduce((a,b)=>a+Number(b.amount_received||0),0);
   const types=new Set(S.receipts.map(r=>r.service_type||reqFor(r).category).filter(Boolean)).size;
   document.getElementById('content').innerHTML=`<div class="admin-head"><div><h2>Visão geral</h2><p>Controle dos recibos enviados pelos fornecedores.</p></div><button class="btn btn-primary" id="publicLinkBtn">Link do fornecedor</button></div><div class="kpis"><div class="kpi"><span>Recibos no mês</span><strong>${month.length}</strong></div><div class="kpi"><span>Valor no mês</span><strong>${brl(total)}</strong></div><div class="kpi"><span>Total arquivado</span><strong>${S.receipts.length}</strong></div><div class="kpi"><span>Tipos de serviço</span><strong>${types}</strong></div></div><div class="panel"><h3>Últimos recibos</h3>${tableReceipts(S.receipts.slice(0,8))}</div>`;
@@ -121,7 +121,7 @@ function dashboard(){
 function tableReceipts(rows){
   if(!rows.length)return'<div class="empty">Nenhum recibo encontrado.</div>';
   return'<div class="table-wrap"><table><thead><tr><th>Recibo</th><th>Fornecedor</th><th>Tipo de serviço</th><th>Data</th><th>Valor</th><th>Ações</th></tr></thead><tbody>'+
-  rows.map(r=>{const q=reqFor(r),type=r.service_type||q.category||'—';return`<tr><td><strong>${escapeHtml(r.receipt_code||'—')}</strong></td><td>${escapeHtml(r.legal_name)}<br><span class="muted">${formatCpfCnpj(r.cpf_cnpj)}</span></td><td>${escapeHtml(type)}</td><td>${dateBR(r.payment_date)}</td><td class="money">${brl(r.amount_received)}</td><td><div class="table-actions"><button class="btn btn-secondary btn-sm" data-open="${r.id}">Ver</button><button class="btn btn-primary btn-sm" data-pdf="${r.id}">PDF</button></div></td></tr>`}).join('')+
+  rows.map(r=>{const q=reqFor(r),type=r.service_type||q.category||'—';return`<tr><td><strong>${escapeHtml(r.receipt_code||'—')}</strong></td><td>${escapeHtml(r.legal_name)}<br><span class="muted">${formatCpfCnpj(r.cpf_cnpj)}</span></td><td>${escapeHtml(type)}</td><td>${dateBR(r.service_date||r.payment_date)}</td><td class="money">${brl(r.amount_received)}</td><td><div class="table-actions"><button class="btn btn-secondary btn-sm" data-open="${r.id}">Ver</button><button class="btn btn-primary btn-sm" data-pdf="${r.id}">PDF</button></div></td></tr>`}).join('')+
   '</tbody></table></div>';
 }
 function wireReceipt(){
@@ -143,7 +143,7 @@ function filtered(){
   const end=document.getElementById('fd2')?.value||'';
   const q=(document.getElementById('fq')?.value||'').toLowerCase().trim();
   return S.receipts.filter(r=>{
-    const legacy=reqFor(r),rt=r.service_type||legacy.category||'',date=r.payment_date||'';
+    const legacy=reqFor(r),rt=r.service_type||legacy.category||'',date=r.service_date||r.payment_date||'';
     const hay=(r.legal_name+' '+r.cpf_cnpj+' '+rt).toLowerCase();
     return(!type||rt===type)&&(!start||date>=start)&&(!end||date<=end)&&(!q||hay.includes(q));
   });
@@ -157,7 +157,28 @@ function settings(){if(S.profile.role!=='admin'){S.view='dashboard';render();ret
 async function saveSettings(e){e.preventDefault();const f=e.currentTarget,p={business_name:f.business_name.value.trim(),cnpj:formatCpfCnpj(f.cnpj.value),phone:f.phone.value.trim(),address:f.address.value.trim(),city:f.city.value.trim(),state:f.state.value.toUpperCase(),email:f.email.value.trim(),updated_at:new Date().toISOString()};const {error}=await supabaseClient.from('app_settings').update(p).eq('id',1);if(error)toast(error.message,'error');else{await load();toast('Dados salvos.')}}
 function openReceipt(id){
   const r=S.receipts.find(x=>x.id===id),q=reqFor(r),type=r.service_type||q.category||'—';
-  modal(`<div class="modal-head"><div><h3>Recibo ${escapeHtml(r.receipt_code)}</h3><span class="muted">Código ${escapeHtml(r.verification_code)}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div><div class="detail-grid"><div class="detail"><span>Fornecedor</span><strong>${escapeHtml(r.legal_name)}</strong></div><div class="detail"><span>CPF/CNPJ</span><strong>${formatCpfCnpj(r.cpf_cnpj)}</strong></div><div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(type)}</strong></div><div class="detail"><span>Data</span><strong>${dateBR(r.payment_date)}</strong></div><div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div></div>${r.notes?'<div class="detail" style="margin-top:12px"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}<h4>Assinatura</h4><img class="signature-preview" src="${r.signature_data_url}"><div class="actions"><button class="btn btn-primary" id="pdfNow">Gerar PDF</button></div>`);
+  const address=[r.address,r.address_number,r.neighborhood,r.complement,r.city,r.state].filter(Boolean).join(', ');
+  modal(`<div class="modal-head"><div><h3>Recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">Validação: ${escapeHtml(r.verification_code||'—')}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
+  <div class="receipt-view-section"><h4>Fornecedor</h4><div class="detail-grid">
+    <div class="detail"><span>Nome / Empresa</span><strong>${escapeHtml(r.legal_name)}</strong></div>
+    <div class="detail"><span>CPF/CNPJ</span><strong>${formatCpfCnpj(r.cpf_cnpj)}</strong></div>
+    <div class="detail"><span>Telefone / WhatsApp</span><strong>${formatPhone(r.phone)}</strong></div>
+    <div class="detail"><span>E-mail</span><strong>${escapeHtml(r.email||'Não informado')}</strong></div>
+    <div class="detail detail-full"><span>Endereço</span><strong>${escapeHtml(address||'—')}</strong></div>
+    ${r.postal_code?'<div class="detail"><span>CEP</span><strong>'+formatCep(r.postal_code)+'</strong></div>':''}
+  </div></div>
+  <div class="receipt-view-section"><h4>Serviço e pagamento</h4><div class="detail-grid">
+    <div class="detail"><span>Tipo de serviço</span><strong>${escapeHtml(type)}</strong></div>
+    <div class="detail"><span>Data do serviço</span><strong>${dateBR(r.service_date||r.payment_date)}</strong></div>
+    <div class="detail detail-full"><span>Descrição</span><strong>${escapeHtml(r.service_description||type)}</strong></div>
+    <div class="detail"><span>Valor recebido</span><strong>${brl(r.amount_received)}</strong></div>
+    <div class="detail"><span>Data do recebimento</span><strong>${dateBR(r.payment_date)}</strong></div>
+    <div class="detail"><span>Forma de pagamento</span><strong>${escapeHtml(r.payment_method||'—')}</strong></div>
+    <div class="detail"><span>Assinado por</span><strong>${escapeHtml(r.declarant_name||r.legal_name)}</strong></div>
+    ${r.notes?'<div class="detail detail-full"><span>Observação</span><strong>'+escapeHtml(r.notes)+'</strong></div>':''}
+  </div></div>
+  <div class="receipt-view-section"><h4>Assinatura</h4><img class="signature-preview premium-signature-preview" src="${r.signature_data_url}"></div>
+  <div class="actions"><button class="btn btn-primary" id="pdfNow">Baixar PDF</button></div>`);
   document.getElementById('pdfNow').onclick=()=>generateReceiptPDF(r,q,S.settings);
 }
 function modal(html){const el=document.createElement('div');el.className='modal-backdrop';el.innerHTML='<div class="modal">'+html+'</div>';document.body.appendChild(el);el.onclick=e=>{if(e.target===el||e.target.closest('[data-close]'))el.remove()}}
