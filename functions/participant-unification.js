@@ -172,7 +172,7 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
       const tripSnap=await tx.get(tripRef);if(!tripSnap.exists)throw Object.assign(new Error('PASSEIO_NAO_ENCONTRADO'),{status:404});
       const t=tripSnap.data()||{};if(t.status!=='open')throw Object.assign(new Error('PASSEIO_FECHADO'),{status:409});
       const saleSnap=await tx.get(saleRef),resSnap=await tx.get(resRef);
-      const keySnaps=[];for(const r of keyRefs)keySnaps.push(await tx.get(r));
+      const keySnaps=[];for(const r of keyRefs)keySnaps.push(await tx.get(r));if(!match&&keySnaps.some(s=>s.exists)&&!saleSnap.exists&&!resSnap.exists)throw Object.assign(new Error('REGISTRATION_CONFLICT'),{status:409});
       const profileSnaps=[];for(const r of profileRefs)profileSnaps.push(await tx.get(r));
       const sd=saleSnap.exists?saleSnap.data()||{}:{},rd=resSnap.exists?resSnap.data()||{}:{};
       const exists=saleSnap.exists||resSnap.exists||!!match;
@@ -189,7 +189,7 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
       const balance=round(Math.max(0,targetTotal-paid));
       const paymentStatus=paid>0?(balance<=0.009?'paid':'partial'):(clean(sd.payment_status||rd.payment_status)==='paid'?'paid':'pending');
       const method=source==='public_portal_v27'?(incomingMethod||sd.payment_method||rd.payment_method||'a_confirmar'):(sd.payment_method||rd.payment_method||'a_confirmar');
-      const common={trip_id:tripId,trip_name:t.name||clean(b.trip_name),trip_date:t.trip_date||'',responsible_name:responsible.full_name,responsible_cpf:responsible.cpf,email:responsible.email,seats:newSeats,participants:baseParticipants,protocol:code,registration_status:'completed',registration_completed_at:now,status:'active',sale_total:targetTotal,paid_amount:paid,balance_due:balance,refunded_amount:Math.max(num(sd.refunded_amount),num(rd.refunded_amount)),payment_status:paymentStatus,payment_method:method,policy_text:t.cancellation_policy||'',policy_accepted:true,policy_accepted_at:now,updated_at:now};
+      const common={trip_id:tripId,trip_name:t.name||clean(b.trip_name),trip_date:t.trip_date||'',responsible_name:responsible.full_name,responsible_cpf:responsible.cpf,email:responsible.email,seats:newSeats,participants:baseParticipants,protocol:code,registration_status:'completed',registration_completed_at:rd.registration_completed_at||sd.registered_at||now,registration_email_status:'pending',registration_email_requested_at:now,status:'active',sale_total:targetTotal,paid_amount:paid,balance_due:balance,refunded_amount:Math.max(num(sd.refunded_amount),num(rd.refunded_amount)),payment_status:paymentStatus,payment_method:method,policy_text:t.cancellation_policy||'',policy_accepted:true,policy_accepted_at:rd.policy_accepted_at||now,updated_at:now};
       const salePatch={trip_id:tripId,trip_name:t.name||clean(b.trip_name),trip_date:t.trip_date||'',customer_name:responsible.full_name,customer_cpf:responsible.cpf,customer_email:responsible.email,seats:newSeats,participants:baseParticipants,protocol:code,registration_status:'completed',sale_status:active(sd.sale_status)?(sd.sale_status||'active'):'active',sale_total:targetTotal,paid_amount:paid,balance_due:balance,refunded_amount:Math.max(num(sd.refunded_amount),num(rd.refunded_amount)),payment_status:paymentStatus,payment_method:method,installment_total:source==='public_portal_v27'?incomingInstallments:(sd.installment_total||rd.installment_total||1),category:source==='public_portal_v27'?clean(b.category||sd.category||rd.category):clean(sd.category||rd.category),claimed_uid:sd.claimed_uid||user.uid,registration_sources:FieldValue.arrayUnion(source),updated_at:now};
       if(source==='public_portal_v27'){salePatch.payment_trigger=clean(b.payment_trigger);salePatch.payment_started_at=sd.payment_started_at||now}
       if(!saleSnap.exists){salePatch.created_at=now;salePatch.payment_history=[];salePatch.received_date='';salePatch.notes=source==='public_portal_v27'?'Reserva iniciada pelo portal de passeios.':'Cadastro pelo link do passeio; pagamento aguardando conferência.';tx.set(saleRef,salePatch)}
@@ -220,7 +220,7 @@ export const unifiedRegistrationApi=onRequest({region:REGION,memory:'256MiB',tim
   }catch(e){
     logger.error('unifiedRegistrationApi',e);
     const msg=String(e?.message||'UNIFIED_ERROR');
-    if(msg==='AMBIGUOUS_MATCH'||msg==='AMBIGUOUS_RESERVATION')return send(res,{ok:false,error:'Encontramos mais de um cadastro com o mesmo CPF neste passeio. Fale com o Jonatas para conferência.'},409);
+    if(msg==='AMBIGUOUS_MATCH'||msg==='AMBIGUOUS_RESERVATION'||msg==='REGISTRATION_CONFLICT')return send(res,{ok:false,error:'Este CPF já está ligado a outro cadastro neste passeio. Fale com o Jonatas para conferência.'},409);
     if(msg==='AUTH_REQUIRED')return send(res,{ok:false,error:'AUTH_REQUIRED'},401);
     if(msg==='PASSEIO_NAO_ENCONTRADO')return send(res,{ok:false,error:'Passeio não encontrado.'},404);
     if(msg==='PASSEIO_FECHADO')return send(res,{ok:false,error:'Este passeio não está aberto para cadastro.'},409);
