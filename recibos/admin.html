@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2235">
+<link rel="stylesheet" href="styles.css?v=20261001-0835">
 </head>
 <body>
 <div id="root">
@@ -31,7 +31,11 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script><script>window.TRILHEIROS_RECEIPTS_CONFIG = {
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script>window.TRILHEIROS_RECEIPTS_CONFIG = {
   SUPABASE_URL: "https://dvblpobtfjtjypsjcjpy.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz",
   BUSINESS_NAME: "Trilheiros de Rondonópolis",
@@ -39,7 +43,8 @@
   WHATSAPP_NUMBER: "5566996926174",
   DEMO_MODE: false
 };
-</script><script>const CFG = window.TRILHEIROS_RECEIPTS_CONFIG || {};
+</script>
+<script>const CFG = window.TRILHEIROS_RECEIPTS_CONFIG || {};
 const isConfigured = Boolean(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const demoMode = CFG.DEMO_MODE || !isConfigured;
 let supabaseClient = null;
@@ -144,7 +149,8 @@ function demoSeed(){
 function demoLoad(){try{return JSON.parse(localStorage.getItem(DEMO_KEY))||demoSeed()}catch{return demoSeed()}}
 function demoSave(db){localStorage.setItem(DEMO_KEY,JSON.stringify(db))}
 window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,reset(){const d=demoSeed();demoSave(d);return d}};
-</script><script>async function generateReceiptPDF(r,q,b,mode='download'){
+</script>
+<script>async function generateReceiptPDF(r,q,b,mode='download'){
   const previewWindow=mode==='preview'?window.open('about:blank','_blank'):null;
   const {jsPDF}=window.jspdf;
   const d=new jsPDF({unit:'mm',format:'a4'});
@@ -287,8 +293,38 @@ window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,rese
   return d;
 }
 async function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
+
+async function shareReceiptPDF(r,q,b){
+  const doc=await generateReceiptPDF(r,q,b,'blob');
+  const blob=doc.output('blob');
+  const filename='recibo_'+String(r.receipt_code||'documento').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';
+  const file=new File([blob],filename,{type:'application/pdf'});
+  const shareData={
+    title:'Recibo '+String(r.receipt_code||''),
+    text:'Recibo digital de '+String(r.legal_name||'fornecedor')+' — '+brl(r.amount_received),
+    files:[file]
+  };
+
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share(shareData);
+      if(typeof toast==='function')toast('PDF compartilhado.');
+      return true;
+    }
+  }catch(e){
+    if(e?.name==='AbortError')return false;
+    console.warn('Compartilhamento do PDF:',e);
+  }
+
+  doc.save(filename);
+  if(typeof toast==='function')toast('Este navegador não suporta compartilhar o PDF diretamente. O arquivo foi baixado para você enviar.','info');
+  return false;
+}
+
 window.generateReceiptPDF=generateReceiptPDF;
-window.previewReceiptPDF=previewReceiptPDF;</script><script>(()=>{
+window.previewReceiptPDF=previewReceiptPDF;
+window.shareReceiptPDF=shareReceiptPDF;</script>
+<script>(()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const root=document.getElementById('root');
 let S={profile:null,settings:{},receipts:[],closures:[],serviceTypes:[],deleted:[],users:[],globalQuery:'',view:'dashboard'};
@@ -430,9 +466,24 @@ function tableReceipts(rows){
 }
 function wireReceipt(){
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openReceipt(b.dataset.open));
-  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>{const r=S.receipts.find(x=>x.id===b.dataset.pdf);if(r)previewReceiptPDF(r,null,S.settings)});
+  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>showPdfActions(b.dataset.pdf));
   document.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>supplierHistory(b.dataset.history));
 }
+
+function showPdfActions(id){
+  const r=S.receipts.find(x=>x.id===id);if(!r)return;
+  modal(`<div class="modal-head"><div><h3>PDF do recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">${escapeHtml(r.legal_name||'Fornecedor')} • ${brl(r.amount_received)}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
+    <div class="notice info">Escolha o que deseja fazer com o PDF.</div>
+    <div class="actions receipt-pdf-actions">
+      <button class="btn btn-secondary" id="pdfActionPreview">Visualizar PDF</button>
+      <button class="btn btn-secondary" id="pdfActionShare">Compartilhar PDF</button>
+      <button class="btn btn-primary" id="pdfActionDownload">Baixar PDF</button>
+    </div>`);
+  document.getElementById('pdfActionPreview').onclick=()=>previewReceiptPDF(r,null,S.settings);
+  document.getElementById('pdfActionShare').onclick=()=>shareReceiptPDF(r,null,S.settings);
+  document.getElementById('pdfActionDownload').onclick=()=>generateReceiptPDF(r,null,S.settings,'download');
+}
+
 function setQuickRange(kind){
   const a=document.getElementById('fd1'),b=document.getElementById('fd2'),now=new Date();let start='',end='';
   if(kind==='today'){start=end=localISO(now)}
@@ -475,10 +526,12 @@ async function openReceipt(id){
     ${S.profile.role==='admin'?'<button class="btn btn-secondary" id="editReceiptBtn">Editar recibo</button><button class="btn btn-danger" id="deleteReceiptBtn">Excluir recibo</button>'+(r.finance_synced_at?'<button class="btn btn-secondary" disabled>Financeiro: '+escapeHtml(r.finance_trip_name||'Enviado')+'</button>':'<button class="btn btn-secondary" id="sendFinanceBtn">Enviar para o Financeiro</button>'):''}
     <button class="btn btn-secondary" id="validateNow">Validar documento</button>
     <button class="btn btn-secondary" id="previewPdfNow">Visualizar PDF</button>
+    <button class="btn btn-secondary" id="sharePdfNow">Compartilhar PDF</button>
     <button class="btn btn-primary" id="pdfNow">Baixar PDF</button>
   </div>`);
   document.getElementById('pdfNow').onclick=()=>generateReceiptPDF(r,null,S.settings,'download');
   document.getElementById('previewPdfNow').onclick=()=>previewReceiptPDF(r,null,S.settings);
+  document.getElementById('sharePdfNow').onclick=()=>shareReceiptPDF(r,null,S.settings);
   document.getElementById('validateNow').onclick=()=>window.open(validationLink(r),'_blank','noopener');
   document.getElementById('editReceiptBtn')?.addEventListener('click',()=>editReceipt(r.id));
   document.getElementById('deleteReceiptBtn')?.addEventListener('click',()=>deleteReceipt(r.id));
@@ -853,4 +906,5 @@ function exportCSV(){
   const csv='\ufeff'+[head,...body].map(row=>row.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\n'),a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='recibos_trilheiros.csv';a.click();
 }
 boot();
-})();</script></body></html>
+})();</script>
+</body></html>
