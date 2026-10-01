@@ -11,6 +11,7 @@
       {"source": "/reservas", "destination": "/reservar.html"},
       {"source": "/reservar", "destination": "/reservar.html"},
       {"source": "/cadastro/**", "destination": "/cadastro.html"},
+      {"source": "/politica/**", "destination": "/politica.html"},
       {"source": "**", "destination": "/index.html"}
     ],
     "headers": [
