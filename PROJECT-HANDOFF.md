@@ -77,6 +77,7 @@ Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem v
 - Cada novo cadastro grava `registration_email_status: pending`; o motor de e-mail envia confirmação individual para cada e-mail único da lista de participantes.
 - Pagamento e cadastro continuam separados: preencher o formulário nunca transforma sozinho uma pendência em pagamento confirmado.
 - No mesmo aparelho, os dados do participante ficam reaproveitáveis localmente: ao digitar novamente o CPF em outro passeio, nome/e-mail conhecidos podem ser preenchidos automaticamente.
+- Cadastro feito somente pelo link do grupo também cria uma venda pendente no controle financeiro, usando o preço padrão do passeio até conferência/ajuste; não é marcado como pago automaticamente.
 - Foi preparada a camada global `functions/participant-unification.js` com `participantProfileApi` e `unifiedRegistrationApi`. Ela faz deduplicação por CPF dentro do mesmo passeio, preserva venda/pagamento existente, não desconta vaga novamente quando encontra o mesmo participante e mantém perfis protegidos no servidor.
 - O front-end possui fallback compatível: se essas Functions não estiverem disponíveis, a reserva continua funcionando pelo Firestore atual. No mesmo aparelho, uma venda do portal pode ser reconhecida pelo link direto sem ocupar outra vaga.
 - Se o passeio estiver lotado, o link direto continua abrindo para permitir que uma pessoa que já possui vaga complete seu cadastro; somente uma nova vaga é bloqueada.
