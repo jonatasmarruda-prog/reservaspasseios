@@ -1,12 +1,4 @@
-<!doctype html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title>
-<meta name="theme-color" content="#102b1c"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2215"></head>
-<body><div class="shell"><header class="topbar"><div class="topbar-inner"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros de Rondonópolis</h1><small>Portal de Recibos de Fornecedores</small></div></div><div style="font-size:12px;color:#cfe3d6">Documento eletrônico</div></div></header><main class="container narrow" id="app"><section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo digital.</p></div></section></main></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>window.TRILHEIROS_RECEIPTS_CONFIG = {
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Recibo de Fornecedor | Trilheiros de Rondonópolis</title><meta name="theme-color" content="#102b1c"><meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0"><link rel="stylesheet" href="styles.css?v=20260930-2235"></head><body><div class="shell"><header class="topbar"><div class="topbar-inner"><div class="brand"><img class="brand-logo" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1>Trilheiros de Rondonópolis</h1><small>Portal de Recibos de Fornecedores</small></div></div><div style="font-size:12px;color:#cfe3d6">Documento eletrônico</div></div></header><main class="container narrow" id="app"><section class="status-screen"><div class="status-box"><div class="status-icon">…</div><h2>Abrindo formulário</h2><p>Preparando o recibo digital.</p></div></section></main></div><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>window.TRILHEIROS_RECEIPTS_CONFIG = {
   SUPABASE_URL: "https://dvblpobtfjtjypsjcjpy.supabase.co",
   SUPABASE_ANON_KEY: "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz",
   BUSINESS_NAME: "Trilheiros de Rondonópolis",
@@ -14,8 +6,7 @@
   WHATSAPP_NUMBER: "5566996926174",
   DEMO_MODE: false
 };
-</script>
-<script>const CFG = window.TRILHEIROS_RECEIPTS_CONFIG || {};
+</script><script>const CFG = window.TRILHEIROS_RECEIPTS_CONFIG || {};
 const isConfigured = Boolean(CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY);
 const demoMode = CFG.DEMO_MODE || !isConfigured;
 let supabaseClient = null;
@@ -120,8 +111,7 @@ function demoSeed(){
 function demoLoad(){try{return JSON.parse(localStorage.getItem(DEMO_KEY))||demoSeed()}catch{return demoSeed()}}
 function demoSave(db){localStorage.setItem(DEMO_KEY,JSON.stringify(db))}
 window.DemoDB={get(){const d=demoLoad();demoSave(d);return d},save:demoSave,reset(){const d=demoSeed();demoSave(d);return d}};
-</script>
-<script>
+</script><script>
 (()=>{
 const {supabaseClient}=window.ReceiptsApp;
 const app=document.getElementById('app');
@@ -142,8 +132,20 @@ let SERVICES={
   'Manutenção / Serviço técnico':{ref:'Equipamento / serviço realizado',placeholder:'Ex.: Manutenção do veículo',billing:'total',required:false},
   'Outro':{ref:'Qual serviço foi realizado?',placeholder:'Descreva rapidamente o serviço',billing:'total',required:true}
 };
-const PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let PUBLIC_SETTINGS={};
 let FORM_SESSION=null;
+
+async function loadPublicSettings(){
+  try{
+    const {data,error}=await supabaseClient.rpc('get_public_receipt_settings');
+    if(error)throw error;
+    const x=data?.[0]||{};
+    PUBLIC_SETTINGS=x;
+    if(Array.isArray(x.payment_methods)&&x.payment_methods.length)PAYMENT_METHODS=x.payment_methods;
+    const logo=document.querySelector('.brand-logo');if(logo&&x.logo_url)logo.src=x.logo_url;
+  }catch(e){console.warn('Configurações públicas:',e)}
+}
 
 async function loadServiceTypes(){
   try{
@@ -203,7 +205,9 @@ function prefillKnownSupplier(f){
 }
 function lockReceipt(data){try{sessionStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
 function thankYou(data){
-  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. Para um novo serviço, basta abrir novamente o mesmo link em uma nova aba ou pelo link recebido.</p></div></section>';
+  const verify=data?.code&&data?.verification?'validation.html?code='+encodeURIComponent(data.code)+'&v='+encodeURIComponent(data.verification):'validation.html';
+  app.innerHTML='<section class="status-screen premium-thanks"><div class="status-box"><div class="status-icon">✓</div><h2>Obrigado! Recibo enviado com sucesso.</h2><p>Seu recibo foi salvo e encaminhado para os <strong>Trilheiros de Rondonópolis</strong>.</p><div class="receipt-success-card"><span>Protocolo</span><strong>'+escapeHtml(data?.code||'Registrado')+'</strong>'+(data?.verification?'<small>Validação: '+escapeHtml(data.verification)+'</small>':'')+'</div><p class="muted">Este recibo foi concluído e não pode mais ser alterado. O mesmo link continua válido para futuros serviços.</p><div class="actions thanks-actions"><a class="btn btn-secondary" href="'+verify+'">Validar / baixar cópia</a><button class="btn btn-primary" id="newReceiptBtn" type="button">Preencher novo recibo</button></div></div></section>';
+  document.getElementById('newReceiptBtn')?.addEventListener('click',()=>{try{sessionStorage.removeItem(LOCK_KEY)}catch{} location.reload()});
 }
 function serviceOptions(){
   return '<option value="">Selecione</option>'+Object.keys(SERVICES).map(x=>'<option value="'+escapeHtml(x)+'">'+escapeHtml(x)+'</option>').join('');
@@ -273,7 +277,7 @@ function render(){
       '<div style="height:16px"></div>'+
       '<div class="signature-panel"><div class="signature-panel-head"><div><strong>Assinatura</strong><div class="muted">Assine com o dedo ou mouse dentro do quadro.</div></div><button type="button" class="btn btn-secondary btn-sm" id="clearSig">Limpar</button></div><canvas id="signature" class="signature-canvas premium-signature"></canvas></div>'+
       '<div style="height:16px"></div>'+
-      '<div class="checkbox"><input id="declaration" type="checkbox" required><label for="declaration">Declaro que as informações são verdadeiras e que <strong>recebi o valor informado</strong> pelo serviço registrado neste recibo.</label></div>'+
+      '<div class="checkbox"><input id="declaration" type="checkbox" required><label for="declaration">'+escapeHtml(PUBLIC_SETTINGS.declaration_text||'Declaro que as informações são verdadeiras e que recebi o valor informado pelo serviço registrado neste recibo.')+'</label></div>'+
       '<div id="err" class="notice error hidden"></div>'+
       '<div class="actions split-actions"><button type="button" class="btn btn-secondary" id="backToForm">Voltar e revisar</button><button id="sendBtn" class="btn btn-primary btn-large">Salvar e enviar recibo</button></div>'+
     '</section>'+
@@ -488,7 +492,6 @@ async function submit(e){
     err.classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar e enviar recibo';
   }
 }
-(async()=>{await Promise.allSettled([loadServiceTypes(),startFormSession()]);render()})();
+(async()=>{await Promise.allSettled([loadServiceTypes(),loadPublicSettings(),startFormSession()]);render()})();
 })();
-</script>
-</body></html>
+</script></body></html>
