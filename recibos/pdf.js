@@ -82,7 +82,7 @@ async function generateReceiptPDF(r,q,b,mode='download'){
     b.cnpj?'CNPJ '+b.cnpj:'',
     b.city&&b.state?b.city+' / '+b.state:''
   ].filter(Boolean).join(' — ');
-  const declaration='Declaro, para os devidos fins, que recebi de '+contractor+' o valor de '+brl(r.amount_received)+', referente ao serviço acima descrito, dando quitação do pagamento registrado neste recibo. Confirmo que os dados informados são verdadeiros e que a assinatura abaixo foi realizada eletronicamente.';
+  const declaration=(b.declaration_text||'Declaro que as informações são verdadeiras e que recebi o valor informado pelo serviço registrado neste recibo.')+' Pagamento registrado: '+brl(r.amount_received)+' — '+contractor+'.';
   d.setFont('helvetica','normal');d.setFontSize(9.7);d.setTextColor(45);
   const declLines=d.splitTextToSize(declaration,CONTENT_W);
   d.text(declLines,M,y);
@@ -106,7 +106,8 @@ async function generateReceiptPDF(r,q,b,mode='download'){
   title('Registro eletrônico');
   ensure(28);
   pair('Protocolo',r.receipt_code||'—','Código de validação',r.verification_code||'—');
-  pair('Registrado em',dateTimeBR(r.created_at),'Identificador',String(r.id||'').slice(0,24));
+  pair('Registrado em',dateTimeBR(r.created_at),'Situação contábil',({pending_review:'Não conferido',reviewed:'Conferido',pending_issue:'Com pendência',cancelled:'Cancelado'})[r.accounting_status]||'Não conferido');
+  pair('Identificador',String(r.id||'').slice(0,24),'Financeiro',r.finance_synced_at?('Vinculado a '+(r.finance_trip_name||'passeio')):'Não vinculado');
   if(qrData){
     ensure(36);
     try{d.addImage(qrData,'PNG',M,y,28,28)}catch(e){}
@@ -118,7 +119,7 @@ async function generateReceiptPDF(r,q,b,mode='download'){
 
   d.setFillColor(248,249,248);d.roundedRect(M,y-1,CONTENT_W,18,2,2,'F');
   d.setFont('helvetica','normal');d.setFontSize(7.5);d.setTextColor(95);
-  d.text('Este documento registra uma declaração de recebimento. Quando houver obrigação fiscal aplicável, nota fiscal ou documento equivalente continua sendo exigido conforme a legislação.',M+4,y+5,{maxWidth:CONTENT_W-8});
+  d.text(b.receipt_footer||'Este documento registra uma declaração de recebimento. Quando houver obrigação fiscal aplicável, nota fiscal ou documento equivalente continua sendo exigido conforme a legislação.',M+4,y+5,{maxWidth:CONTENT_W-8});
   y+=20;
 
   d.setDrawColor(230);d.line(M,287,PAGE_W-M,287);
