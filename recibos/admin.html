@@ -8,7 +8,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<link rel="stylesheet" href="styles.css?v=20260930-2050">
+<link rel="stylesheet" href="styles.css?v=20260930-2055">
 </head>
 <body>
 <div id="root">
@@ -26,7 +26,7 @@
         <div class="field"><label>Senha</label><div class="password-field"><input type="password" autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha"><svg viewBox="0 0 24 24"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z"/></svg></button></div></div>
         <div class="actions"><button class="btn btn-primary" type="button" style="width:100%">Entrar no painel</button></div>
       </form>
-      <div style="text-align:center;margin-top:16px"><a href="setup.html?v=20260930-2050">Primeiro acesso — cadastrar meu acesso</a></div>
+      <div style="text-align:center;margin-top:16px"><a href="setup.html?v=20260930-2055">Primeiro acesso — cadastrar meu acesso</a></div>
     </div>
   </div>
 </div>
@@ -292,7 +292,7 @@ async function boot(){
 }
 
 function login(){
-  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8Z"/></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="m3.3 2 18.7 18.7-1.3 1.3-3.1-3.1A11.5 11.5 0 0 1 12 20C7 20 3 15.5 2 13a12.8 12.8 0 0 1 4.2-5.3L2 3.3 3.3 2Zm5.2 8.5a4 4 0 0 0 5 5l-5-5ZM12 6c5 0 9 4.5 10 7a13.5 13.5 0 0 1-2.6 3.8l-2.1-2.1A4 4 0 0 0 11.3 9L9 6.7A10.8 10.8 0 0 1 12 6Z"/></svg></button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div style="text-align:center;margin-top:16px"><a class="first-access-link" href="setup.html?v=20260930-2050">Primeiro acesso — cadastrar meu acesso</a></div><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
+  root.innerHTML='<div class="login-wrap"><div class="login-card"><div class="brand"><img class="brand-logo brand-logo-large" src="https://i.postimg.cc/09t8GNX6/LOGO-TRILHEIROS-Photoroom.png" alt="Logo Trilheiros de Rondonópolis"><div><h1 style="font-size:17px;margin:0">Trilheiros de Rondonópolis</h1><small style="color:#657168">Gestão de Recibos</small></div></div><h1>Acesso ao sistema</h1><p>Acesso restrito ao Administrador e à Contabilidade.</p><form id="login"><div class="field"><label>E-mail</label><input name="email" type="email" required autocomplete="email" placeholder="Digite seu e-mail"></div><div style="height:12px"></div><div class="field"><label>Senha</label><div class="password-field"><input id="loginPassword" name="password" type="password" required autocomplete="current-password" placeholder="Digite sua senha"><button class="password-eye" type="button" id="toggleLoginPassword" aria-label="Mostrar senha" title="Mostrar senha"><svg class="eye-open" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c-5 0-9 4.5-10 7 1 2.5 5 7 10 7s9-4.5 10-7c-1-2.5-5-7-10-7Zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm0-2.2A1.8 1.8 0 1 0 12 10a1.8 1.8 0 0 0 0 3.8Z"/></svg><svg class="eye-closed" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="m3.3 2 18.7 18.7-1.3 1.3-3.1-3.1A11.5 11.5 0 0 1 12 20C7 20 3 15.5 2 13a12.8 12.8 0 0 1 4.2-5.3L2 3.3 3.3 2Zm5.2 8.5a4 4 0 0 0 5 5l-5-5ZM12 6c5 0 9 4.5 10 7a13.5 13.5 0 0 1-2.6 3.8l-2.1-2.1A4 4 0 0 0 11.3 9L9 6.7A10.8 10.8 0 0 1 12 6Z"/></svg></button></div></div><div id="loginErr" class="notice error hidden"></div><div class="actions"><button class="btn btn-primary" style="width:100%">Entrar no painel</button></div></form><div style="text-align:center;margin-top:16px"><a class="first-access-link" href="setup.html?v=20260930-2055">Primeiro acesso — cadastrar meu acesso</a></div><div class="notice info" style="margin-top:16px">Somente dois perfis são autorizados: <strong>Administrador</strong> e <strong>Contabilidade</strong>.</div></div></div>';
 
   const eye=document.getElementById('toggleLoginPassword');
   eye.onclick=()=>{
@@ -357,6 +357,94 @@ function shell(){
 }
 function reqFor(r){return S.requests.find(q=>q.id===r.request_id)||{}}
 function render(){root.querySelectorAll('[data-v]').forEach(b=>b.classList.toggle('active',b.dataset.v===S.view));({dashboard,receipts,settings}[S.view]||dashboard)()}
+
+function publicFormLink(){
+  return new URL('./',location.href).href.split('?')[0].split('#')[0];
+}
+
+async function copyPublicLink(text,button,field){
+  let copied=false;
+  try{
+    if(navigator.clipboard&&window.isSecureContext){
+      await navigator.clipboard.writeText(text);
+      copied=true;
+    }
+  }catch(e){}
+
+  if(!copied){
+    try{
+      field.removeAttribute('readonly');
+      field.focus();
+      field.select();
+      field.setSelectionRange(0,field.value.length);
+      copied=document.execCommand('copy');
+      field.setAttribute('readonly','readonly');
+      window.getSelection()?.removeAllRanges();
+    }catch(e){}
+  }
+
+  if(copied){
+    const original=button.textContent;
+    button.textContent='✓ Link copiado';
+    button.classList.add('copy-success');
+    toast('Link copiado para a área de transferência.');
+    setTimeout(()=>{
+      if(document.body.contains(button)){
+        button.textContent=original;
+        button.classList.remove('copy-success');
+      }
+    },2200);
+    return true;
+  }
+
+  field.removeAttribute('readonly');
+  field.focus();
+  field.select();
+  field.setSelectionRange(0,field.value.length);
+  toast('Selecione o link e toque em Copiar.','error');
+  return false;
+}
+
+function showPublicLink(){
+  const link=publicFormLink();
+  modal(`
+    <div class="modal-head">
+      <div>
+        <h3>Link único do fornecedor</h3>
+        <span class="muted">Este é o mesmo link para todos os fornecedores.</span>
+      </div>
+      <button class="btn btn-secondary btn-sm" data-close>Fechar</button>
+    </div>
+
+    <div class="notice success">
+      Envie este link para o fornecedor preencher, revisar, assinar e enviar o recibo.
+    </div>
+
+    <div class="field">
+      <label>Link do formulário</label>
+      <textarea id="publicLink" readonly rows="3">${escapeHtml(link)}</textarea>
+    </div>
+
+    <div class="actions link-actions">
+      <button class="btn btn-secondary" id="copyPublic" type="button">Copiar link</button>
+      <button class="btn btn-primary" id="whatsappPublic" type="button">Enviar pelo WhatsApp</button>
+      <button class="btn btn-secondary" id="openPublic" type="button">Abrir formulário</button>
+    </div>
+  `);
+
+  const field=document.getElementById('publicLink');
+  const copyBtn=document.getElementById('copyPublic');
+
+  copyBtn.onclick=()=>copyPublicLink(link,copyBtn,field);
+
+  document.getElementById('whatsappPublic').onclick=()=>{
+    const msg='Olá! Segue o link para preencher e assinar o recibo digital dos Trilheiros de Rondonópolis:%0A%0A'+encodeURIComponent(link);
+    window.open('https://wa.me/?text='+msg,'_blank','noopener');
+  };
+
+  document.getElementById('openPublic').onclick=()=>window.open(link,'_blank','noopener');
+}
+
 function dashboard(){
   const now=new Date();
   const month=S.receipts.filter(r=>{const raw=r.service_date||r.payment_date;const d=new Date(raw+'T12:00:00');return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()});
