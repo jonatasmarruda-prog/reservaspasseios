@@ -1,4 +1,5 @@
-function generateReceiptPDF(r,q,b,mode='download'){
+async function generateReceiptPDF(r,q,b,mode='download'){
+  const previewWindow=mode==='preview'?window.open('about:blank','_blank'):null;
   const {jsPDF}=window.jspdf;
   const d=new jsPDF({unit:'mm',format:'a4'});
   const M=16, PAGE_W=210, CONTENT_W=PAGE_W-M*2, GREEN=[16,43,28], MID=[31,111,67], SOFT=[241,246,243];
@@ -7,6 +8,10 @@ function generateReceiptPDF(r,q,b,mode='download'){
   const serviceType=r.service_type||q?.category||'—';
   const serviceDate=r.service_date||q?.service_date||r.payment_date;
   const address=[r.address,r.address_number,r.neighborhood,r.complement,r.city,r.state].filter(Boolean).join(', ');
+  const pricingText=r.billing_mode==='per_person'?(String(r.quantity_people||0)+' pessoa(s) × '+brl(r.unit_amount||0)+' = '+brl(r.amount_received)):'Valor total: '+brl(r.amount_received);
+  const validationUrl=new URL('validation.html?code='+encodeURIComponent(r.receipt_code||'')+'&v='+encodeURIComponent(r.verification_code||''),new URL('./',location.href)).href;
+  let qrData=null;
+  try{if(window.QRCode?.toDataURL)qrData=await window.QRCode.toDataURL(validationUrl,{width:180,margin:1})}catch(e){}
 
   function ensure(h){
     if(y+h>278){
@@ -65,7 +70,8 @@ function generateReceiptPDF(r,q,b,mode='download'){
   title('Serviço prestado');
   pair('Tipo de serviço',serviceType,'Data do serviço',dateBR(serviceDate));
   full('Descrição do serviço',r.service_description||serviceType);
-  pair('Forma de pagamento',r.payment_method||'—','Assinado por',r.declarant_name||r.legal_name);
+  pair('Forma de pagamento',r.payment_method||'—','Cálculo do valor',pricingText);
+  pair('Assinado por',r.declarant_name||r.legal_name,'Anexo',r.attachment_name||'Não informado');
   if(r.notes) full('Observação',r.notes);
   line();
 
@@ -101,6 +107,14 @@ function generateReceiptPDF(r,q,b,mode='download'){
   ensure(28);
   pair('Protocolo',r.receipt_code||'—','Código de validação',r.verification_code||'—');
   pair('Registrado em',dateTimeBR(r.created_at),'Identificador',String(r.id||'').slice(0,24));
+  if(qrData){
+    ensure(36);
+    try{d.addImage(qrData,'PNG',M,y,28,28)}catch(e){}
+    d.setFont('helvetica','bold');d.setFontSize(8);d.setTextColor(70);d.text('VALIDAR ESTE DOCUMENTO',M+34,y+7);
+    d.setFont('helvetica','normal');d.setFontSize(7.4);d.setTextColor(105);
+    d.text(d.splitTextToSize('Escaneie o QR Code ou acesse a página de validação usando o número do recibo e o código acima.',CONTENT_W-38),M+34,y+13);
+    y+=33;
+  }
 
   d.setFillColor(248,249,248);d.roundedRect(M,y-1,CONTENT_W,18,2,2,'F');
   d.setFont('helvetica','normal');d.setFontSize(7.5);d.setTextColor(95);
@@ -116,13 +130,13 @@ function generateReceiptPDF(r,q,b,mode='download'){
   if(mode==='preview'){
     const blob=d.output('blob');
     const url=URL.createObjectURL(blob);
-    window.open(url,'_blank','noopener');
+    if(previewWindow)previewWindow.location.href=url;else window.open(url,'_blank','noopener');
     setTimeout(()=>URL.revokeObjectURL(url),60000);
   }else{
     d.save(filename);
   }
   return d;
 }
-function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
+async function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
 window.generateReceiptPDF=generateReceiptPDF;
 window.previewReceiptPDF=previewReceiptPDF;
