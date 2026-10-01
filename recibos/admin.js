@@ -110,7 +110,7 @@ function tableReceipts(rows){
 }
 function wireReceipt(){
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openReceipt(b.dataset.open));
-  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>{const r=S.receipts.find(x=>x.id===b.dataset.pdf);if(r)generateReceiptPDF(r,null,S.settings)});
+  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>{const r=S.receipts.find(x=>x.id===b.dataset.pdf);if(r)previewReceiptPDF(r,null,S.settings)});
   document.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>supplierHistory(b.dataset.history));
 }
 function setQuickRange(kind){
@@ -151,12 +151,111 @@ async function openReceipt(id){
   <div class="receipt-view-section"><h4>Assinatura</h4><img class="signature-preview premium-signature-preview" src="${r.signature_data_url}"></div>
   <div class="receipt-view-section"><h4>Conferência contábil</h4><div class="field"><label>Observação da conferência</label><textarea id="reviewNotes" placeholder="Opcional">${escapeHtml(r.review_notes||'')}</textarea></div><div class="actions review-actions"><button class="btn btn-secondary" data-review="pending_review">Não conferido</button><button class="btn btn-primary" data-review="reviewed">Conferido</button><button class="btn btn-secondary" data-review="pending_issue">Com pendência</button>${S.profile.role==='admin'?'<button class="btn btn-danger" data-review="cancelled">Cancelar</button>':''}</div></div>
   <div id="auditBox" class="receipt-view-section"><h4>Histórico</h4><div class="muted">Carregando...</div></div>
-  <div class="actions"><button class="btn btn-secondary" id="validateNow">Validar documento</button><button class="btn btn-primary" id="pdfNow">Baixar PDF premium</button></div>`);
-  document.getElementById('pdfNow').onclick=()=>generateReceiptPDF(r,null,S.settings);
+  <div class="actions receipt-main-actions">
+    ${S.profile.role==='admin'?'<button class="btn btn-secondary" id="editReceiptBtn">Editar recibo</button><button class="btn btn-danger" id="deleteReceiptBtn">Excluir recibo</button>':''}
+    <button class="btn btn-secondary" id="validateNow">Validar documento</button>
+    <button class="btn btn-secondary" id="previewPdfNow">Visualizar PDF</button>
+    <button class="btn btn-primary" id="pdfNow">Baixar PDF</button>
+  </div>`);
+  document.getElementById('pdfNow').onclick=()=>generateReceiptPDF(r,null,S.settings,'download');
+  document.getElementById('previewPdfNow').onclick=()=>previewReceiptPDF(r,null,S.settings);
   document.getElementById('validateNow').onclick=()=>window.open(validationLink(r),'_blank','noopener');
+  document.getElementById('editReceiptBtn')?.addEventListener('click',()=>editReceipt(r.id));
+  document.getElementById('deleteReceiptBtn')?.addEventListener('click',()=>deleteReceipt(r.id));
   document.querySelectorAll('[data-review]').forEach(b=>b.onclick=()=>reviewReceipt(r.id,b.dataset.review,document.getElementById('reviewNotes').value));
   loadAudit(r.id);
 }
+
+function editReceipt(id){
+  const r=S.receipts.find(x=>x.id===id);if(!r)return;
+  const serviceTypes=['Transporte / Ônibus','Hotel / Pousada','Alimentação','Guia / Condutor','Atrativo / Ingresso','Fotografia','Seguro','Combustível','Locação','Manutenção / Serviço técnico','Outro'];
+  const paymentMethods=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+
+  modal(`<div class="modal-head"><div><h3>Editar recibo ${escapeHtml(r.receipt_code||'')}</h3><span class="muted">As alterações ficam registradas no histórico.</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
+  <form id="editReceiptForm">
+    <div class="grid">
+      <div class="field full"><label class="required">Nome / Empresa</label><input name="legal_name" required value="${escapeHtml(r.legal_name||'')}"></div>
+      <div class="field"><label class="required">CPF/CNPJ</label><input name="cpf_cnpj" required value="${escapeHtml(formatCpfCnpj(r.cpf_cnpj||''))}"></div>
+      <div class="field"><label class="required">Telefone</label><input name="phone" required value="${escapeHtml(formatPhone(r.phone||''))}"></div>
+      <div class="field full"><label>E-mail</label><input name="email" type="email" value="${escapeHtml(r.email||'')}"></div>
+      <div class="field"><label>CEP</label><input name="postal_code" value="${escapeHtml(r.postal_code?formatCep(r.postal_code):'')}"></div>
+      <div class="field"><label class="required">Cidade</label><input name="city" required value="${escapeHtml(r.city||'')}"></div>
+      <div class="field"><label class="required">UF</label><input name="state" maxlength="2" required value="${escapeHtml(r.state||'')}"></div>
+      <div class="field full"><label>Endereço</label><input name="address" value="${escapeHtml(r.address||'')}"></div>
+      <div class="field"><label>Número</label><input name="address_number" value="${escapeHtml(r.address_number||'')}"></div>
+      <div class="field"><label>Bairro</label><input name="neighborhood" value="${escapeHtml(r.neighborhood||'')}"></div>
+      <div class="field full"><label>Complemento</label><input name="complement" value="${escapeHtml(r.complement||'')}"></div>
+      <div class="field"><label class="required">Tipo de serviço</label><select name="service_type" required>${serviceTypes.map(x=>'<option '+(x===r.service_type?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
+      <div class="field"><label class="required">Data do serviço</label><input name="service_date" type="date" required value="${escapeHtml(serviceDate(r))}"></div>
+      <div class="field full"><label>Descrição / referência</label><input name="service_description" value="${escapeHtml(r.service_description||'')}"></div>
+      <div class="field"><label class="required">Valor recebido</label><input name="amount_received" required inputmode="decimal" value="${Number(r.amount_received||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}"></div>
+      <div class="field"><label class="required">Data do recebimento</label><input name="payment_date" type="date" required value="${escapeHtml(r.payment_date||'')}"></div>
+      <div class="field"><label class="required">Forma de pagamento</label><select name="payment_method" required>${paymentMethods.map(x=>'<option '+(x===r.payment_method?'selected':'')+'>'+escapeHtml(x)+'</option>').join('')}</select></div>
+      <div class="field"><label>Assinado por</label><input name="declarant_name" value="${escapeHtml(r.declarant_name||r.legal_name||'')}"></div>
+      <div class="field full"><label>Observação</label><textarea name="notes">${escapeHtml(r.notes||'')}</textarea></div>
+    </div>
+    <div id="editErr" class="notice error hidden"></div>
+    <div class="actions"><button type="button" class="btn btn-secondary" data-close>Cancelar</button><button class="btn btn-primary">Salvar alterações</button></div>
+  </form>`);
+
+  const f=document.getElementById('editReceiptForm');
+  f.cpf_cnpj.oninput=e=>e.target.value=formatCpfCnpj(e.target.value);
+  f.phone.oninput=e=>e.target.value=formatPhone(e.target.value);
+  f.postal_code.oninput=e=>e.target.value=formatCep(e.target.value);
+  f.state.oninput=e=>e.target.value=e.target.value.replace(/[^a-z]/gi,'').slice(0,2).toUpperCase();
+
+  f.onsubmit=async e=>{
+    e.preventDefault();
+    const btn=f.querySelector('.btn-primary'),err=document.getElementById('editErr');
+    err.classList.add('hidden');btn.disabled=true;btn.textContent='Salvando...';
+    const payload={
+      legal_name:f.legal_name.value.trim(),
+      cpf_cnpj:onlyDigits(f.cpf_cnpj.value),
+      phone:onlyDigits(f.phone.value),
+      email:f.email.value.trim(),
+      postal_code:onlyDigits(f.postal_code.value),
+      address:f.address.value.trim(),
+      address_number:f.address_number.value.trim(),
+      neighborhood:f.neighborhood.value.trim(),
+      complement:f.complement.value.trim(),
+      city:f.city.value.trim(),
+      state:f.state.value.trim().toUpperCase(),
+      service_type:f.service_type.value,
+      service_description:f.service_description.value.trim(),
+      service_date:f.service_date.value,
+      amount_received:currencyInputToNumber(f.amount_received.value),
+      payment_date:f.payment_date.value,
+      payment_method:f.payment_method.value,
+      declarant_name:f.declarant_name.value.trim(),
+      notes:f.notes.value.trim()
+    };
+    try{
+      const {error}=await supabaseClient.rpc('update_receipt_admin',{p_receipt_id:id,p_payload:payload});
+      if(error)throw error;
+      await load();
+      document.querySelector('.modal-backdrop')?.remove();
+      toast('Recibo atualizado com sucesso.');
+      render();
+    }catch(ex){
+      err.textContent=ex.message||'Não foi possível atualizar.';
+      err.classList.remove('hidden');
+      btn.disabled=false;btn.textContent='Salvar alterações';
+    }
+  };
+}
+
+async function deleteReceipt(id){
+  const r=S.receipts.find(x=>x.id===id);if(!r)return;
+  const ok=window.confirm('Excluir definitivamente o recibo '+(r.receipt_code||'')+' de '+r.legal_name+'?\n\nUma cópia será preservada no histórico administrativo.');
+  if(!ok)return;
+  const {error}=await supabaseClient.rpc('delete_receipt_admin',{p_receipt_id:id});
+  if(error){toast(error.message,'error');return}
+  await load();
+  document.querySelector('.modal-backdrop')?.remove();
+  toast('Recibo excluído. Cópia preservada no histórico administrativo.');
+  render();
+}
+
 async function loadAudit(id){
   const box=document.getElementById('auditBox');if(!box)return;
   const {data}=await supabaseClient.from('receipt_audit_log').select('*').eq('receipt_id',id).order('created_at',{ascending:false});
