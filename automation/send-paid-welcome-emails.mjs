@@ -67,6 +67,16 @@ function participantNames(row){
   const names=participants.map(x=>clean(x?.full_name||x?.name)).filter(Boolean);
   return names.length?names:(clean(row?.customer_name||row?.name)?[clean(row?.customer_name||row?.name)]:[]);
 }
+function participantRecipients(row){
+  const out=[],seen=new Set();
+  const add=(name,emailValue)=>{
+    const e=clean(emailValue).toLowerCase();if(!validEmail(e)||seen.has(e))return;
+    seen.add(e);out.push({name:clean(name)||firstName(e.split('@')[0]),email:e});
+  };
+  for(const p of (Array.isArray(row?.participants)?row.participants:[]))add(p?.full_name||p?.name,p?.email);
+  add(row?.customer_name||row?.responsible_name||row?.name,row?.customer_email||row?.email);
+  return out;
+}
 function whatsappUrl(row,trip){
   const msg=`Olá Jonatas! Estou falando sobre o passeio ${clean(trip?.name||row?.trip_name)||'dos Trilheiros'}. Protocolo: ${clean(row?.protocol)||'não informado'}.`;
   return `https://wa.me/${WHATSAPP}?text=${encodeURIComponent(msg)}`;
@@ -204,31 +214,36 @@ for(const tripDoc of tripsSnap.docs){
   const trip={id:tripDoc.id,...tripDoc.data()};
   if(isCancelled(trip))continue;
   let reservations;
-  try{reservations=await tripDoc.ref.collection('reservations').where('registration_source','==','direct_trip_link').limit(500).get()}
+  try{reservations=await tripDoc.ref.collection('reservations').limit(500).get()}
   catch(err){console.error(`Falha ao consultar cadastros de ${trip.name||trip.id}: ${String(err?.message||err)}`);directFailed++;continue}
   for(const resDoc of reservations.docs){
     const reservation={id:resDoc.id,...resDoc.data()};
     if(norm(reservation.registration_status)!=='completed'||isCancelled(reservation))continue;
-    if(reservation.registration_email_sent_at||reservation.registration_email_status==='sent')continue;
-    const email=clean(reservation.email).toLowerCase();
-    if(!validEmail(email)){
+    const recipients=participantRecipients(reservation);
+    if(!recipients.length){
       await resDoc.ref.set({registration_email_status:'skipped_no_email',registration_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
       continue;
     }
-    const anchor=String(stampMs(reservation.registration_completed_at)||'first');
-    const c=await claim({kind:'registration_confirmed',sourceRef:resDoc.ref,sourceType:'reservation',anchor,email,validator:r=>norm(r.registration_status)==='completed'&&!isCancelled(r)&&!(r.registration_email_sent_at||r.registration_email_status==='sent')});
-    if(!c.claimed)continue;
-    try{
-      const payload=await sendResend({to:email,...registrationTemplate(reservation,trip),key:`registration-${c.id}`});
-      await markSent(c.ref,payload,email);
-      await resDoc.ref.set({registration_email_status:'sent',registration_email_sent_at:FieldValue.serverTimestamp(),registration_email_resend_id:payload.id||'',registration_email_to:email,registration_email_version:2,registration_email_error:FieldValue.delete()},{merge:true});
-      directSent++;
-      console.log(`Cadastro confirmado por e-mail: ${reservation.name||email} • ${trip.name||trip.id}`);
-    }catch(err){
-      directFailed++;
-      const msg=await markFailure(c.ref,err,c.attempt);
-      await resDoc.ref.set({registration_email_status:'error',registration_email_error:msg,registration_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
-      console.error(`Falha cadastro ${trip.id}/${reservation.id}: ${msg}`);
+    const baseAnchor=String(stampMs(reservation.registration_completed_at)||stampMs(reservation.updated_at)||stampMs(reservation.created_at)||'first');
+    for(const recipient of recipients){
+      const legacyPrimary=clean(reservation.email).toLowerCase()===recipient.email&&(reservation.registration_email_sent_at||reservation.registration_email_status==='sent');
+      if(legacyPrimary)continue;
+      const anchor=`${baseAnchor}|${recipient.email}`;
+      const claimResult=await claim({kind:'registration_confirmed_v3',sourceRef:resDoc.ref,sourceType:'reservation',anchor,email:recipient.email,validator:r=>norm(r.registration_status)==='completed'&&!isCancelled(r)});
+      if(!claimResult.claimed)continue;
+      try{
+        const personalized={...reservation,name:recipient.name,responsible_name:recipient.name,email:recipient.email};
+        const payload=await sendResend({to:recipient.email,...registrationTemplate(personalized,trip),key:`registration-${claimResult.id}`});
+        await markSent(claimResult.ref,payload,recipient.email);
+        await resDoc.ref.set({registration_email_status:'sent',registration_email_last_sent_at:FieldValue.serverTimestamp(),registration_email_last_to:recipient.email,registration_email_version:3,registration_email_error:FieldValue.delete()},{merge:true});
+        directSent++;
+        console.log(`Cadastro confirmado por e-mail: ${recipient.name||recipient.email} • ${trip.name||trip.id}`);
+      }catch(err){
+        directFailed++;
+        const msg=await markFailure(claimResult.ref,err,claimResult.attempt);
+        await resDoc.ref.set({registration_email_status:'error',registration_email_error:msg,registration_email_last_attempt_at:FieldValue.serverTimestamp()},{merge:true}).catch(()=>{});
+        console.error(`Falha cadastro ${trip.id}/${reservation.id}/${recipient.email}: ${msg}`);
+      }
     }
   }
 }
