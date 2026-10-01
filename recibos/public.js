@@ -5,7 +5,7 @@ const app=document.getElementById('app');
 const LOCK_KEY='trilheiros_receipt_submitted_v4';
 let canvas=null,ctx=null,drawing=false,signed=false,cepTimer=null;
 
-const SERVICES={
+let SERVICES={
   'Transporte / Ônibus':{ref:'Destino / trecho do transporte',placeholder:'Ex.: Rondonópolis → Chapada dos Guimarães',billing:'total',required:false},
   'Hotel / Pousada':{ref:'Nome do hotel / pousada',placeholder:'Ex.: Hotel Serra Azul',billing:'total',required:true},
   'Alimentação':{ref:'Tipo de refeição / local',placeholder:'Ex.: Café da manhã, almoço, jantar...',billing:'per_person',required:false},
@@ -19,6 +19,32 @@ const SERVICES={
   'Outro':{ref:'Qual serviço foi realizado?',placeholder:'Descreva rapidamente o serviço',billing:'total',required:true}
 };
 const PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let FORM_SESSION=null;
+
+async function loadServiceTypes(){
+  try{
+    const {data,error}=await supabaseClient.from('service_types')
+      .select('name,reference_label,reference_placeholder,reference_required,default_billing,sort_order')
+      .eq('active',true).order('sort_order',{ascending:true});
+    if(!error&&data?.length){
+      const next={};
+      data.forEach(x=>next[x.name]={
+        ref:x.reference_label||'Referência do serviço',
+        placeholder:x.reference_placeholder||'',
+        required:!!x.reference_required,
+        billing:x.default_billing||'total'
+      });
+      SERVICES=next;
+    }
+  }catch(e){console.warn('Tipos de serviço:',e)}
+}
+async function startFormSession(){
+  try{
+    const {data,error}=await supabaseClient.rpc('start_receipt_form');
+    if(error)throw error;
+    FORM_SESSION=data?.[0]?.token||null;
+  }catch(e){console.warn('Sessão do formulário:',e)}
+}
 
 function lockedReceipt(){try{return JSON.parse(localStorage.getItem(LOCK_KEY)||'null')}catch{return null}}
 function lockReceipt(data){try{localStorage.setItem(LOCK_KEY,JSON.stringify(data))}catch{}}
@@ -188,7 +214,7 @@ function wire(){
     const invalid=required.find(x=>!x.checkValidity());
     if(invalid){invalid.reportValidity();err.textContent='Preencha os campos obrigatórios.';err.classList.remove('hidden');invalid.scrollIntoView({behavior:'smooth',block:'center'});return}
     const doc=onlyDigits(f.elements.cpf_cnpj.value);
-    if(doc.length!==11&&doc.length!==14){err.textContent='Informe um CPF ou CNPJ completo.';err.classList.remove('hidden');f.elements.cpf_cnpj.focus();return}
+    if(!isValidCpfCnpj(doc)){err.textContent='CPF ou CNPJ inválido. Confira os números informados.';err.classList.remove('hidden');f.elements.cpf_cnpj.focus();return}
     if(onlyDigits(f.elements.phone.value).length<10){err.textContent='Informe um telefone/WhatsApp válido.';err.classList.remove('hidden');f.elements.phone.focus();return}
     if(f.elements.billing_mode.value==='total'&&currencyInputToNumber(f.elements.amount_received.value)<=0){err.textContent='Informe o valor total recebido.';err.classList.remove('hidden');return}
     if(f.elements.billing_mode.value==='per_person'&&(Number(f.elements.quantity_people.value)<=0||currencyInputToNumber(f.elements.unit_amount.value)<=0)){err.textContent='Informe a quantidade e o valor por pessoa.';err.classList.remove('hidden');return}
@@ -260,6 +286,7 @@ async function submit(e){
   if(!signed){err.textContent='Faça sua assinatura antes de enviar.';err.classList.remove('hidden');return}
   let attachment;
   try{attachment=await readAttachment(f.elements.attachment?.files?.[0]||null)}catch(ex){err.textContent=ex.message;err.classList.remove('hidden');return}
+  if(!isValidCpfCnpj(f.elements.cpf_cnpj.value)){err.textContent='CPF ou CNPJ inválido. Confira os números.';err.classList.remove('hidden');return}
   const payload={
     legal_name:f.elements.legal_name.value.trim(),
     cpf_cnpj:onlyDigits(f.elements.cpf_cnpj.value),
@@ -292,14 +319,19 @@ async function submit(e){
   };
   const btn=document.getElementById('sendBtn');btn.disabled=true;btn.textContent='Salvando recibo...';
   try{
-    const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_payload:payload});
+    if(!FORM_SESSION)await startFormSession();
+    if(!FORM_SESSION)throw new Error('Não foi possível iniciar uma sessão segura do formulário. Atualize a página.');
+    const {data,error}=await supabaseClient.rpc('submit_public_receipt_open',{p_session:FORM_SESSION,p_payload:payload});
     if(error)throw error;
     const result=data?.[0]||{},lock={code:result.receipt_code||'Registrado',verification:result.verification_code||'',submitted_at:new Date().toISOString()};
     lockReceipt(lock);thankYou(lock);window.scrollTo({top:0,behavior:'smooth'});
   }catch(ex){
-    err.textContent=ex?.message||'Não foi possível salvar o recibo.';
+    let msg=ex?.message||'Não foi possível salvar o recibo.';
+    if(/cpf_cnpj_valid|CPF\/CNPJ/i.test(msg))msg='CPF ou CNPJ inválido. Confira os números.';
+    if(/duplicate|mesmo CPF\/CNPJ|já existe/i.test(msg))msg='Já existe um recibo com o mesmo CPF/CNPJ, serviço, data e valor.';
+    err.textContent=msg;
     err.classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar e enviar recibo';
   }
 }
-render();
+(async()=>{await Promise.allSettled([loadServiceTypes(),startFormSession()]);render()})();
 })();
