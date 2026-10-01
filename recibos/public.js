@@ -160,6 +160,11 @@ function render(){
             <label>Observação <span class="muted">(opcional)</span></label>
             <input name="notes" maxlength="500" placeholder="Informação adicional">
           </div>
+          <div class="field full">
+            <label>Nota fiscal / NFS-e / comprovante <span class="muted">(opcional)</span></label>
+            <input name="attachment" type="file" accept=".pdf,image/jpeg,image/png,image/webp">
+            <div class="help">PDF, JPG, PNG ou WEBP de até 1,5 MB.</div>
+          </div>
         </div>
         <div id="formErr" class="notice error hidden"></div>
         <div class="actions">
@@ -278,6 +283,7 @@ function reviewHtml(f){
       <div><span>Recebimento</span><strong>${dateBR(f.elements.payment_date.value)} • ${escapeHtml(f.elements.payment_method.value)}</strong></div>
       <div class="review-full"><span>Endereço</span><strong>${escapeHtml(address)}</strong></div>
       <div class="review-full"><span>Serviço realizado</span><strong>${escapeHtml(f.elements.service_description.value)}</strong></div>
+      <div class="review-full"><span>Anexo</span><strong>${escapeHtml(f.elements.attachment?.files?.[0]?.name||'Nenhum anexo')}</strong></div>
     </div>`;
 }
 
@@ -312,6 +318,15 @@ function initCanvas(){
   document.getElementById('clearSig').onclick=()=>{ctx.clearRect(0,0,canvas.width,canvas.height);signed=false};
 }
 
+async function readAttachment(file){
+  if(!file)return {name:null,type:null,data:null};
+  const allowed=['application/pdf','image/jpeg','image/png','image/webp'];
+  if(!allowed.includes(file.type))throw new Error('Anexo inválido. Envie PDF, JPG, PNG ou WEBP.');
+  if(file.size>1572864)throw new Error('O anexo deve ter no máximo 1,5 MB.');
+  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error('Não foi possível ler o anexo.'));reader.readAsDataURL(file)});
+  return {name:file.name.slice(0,180),type:file.type,data:String(data)};
+}
+
 async function submit(e){
   e.preventDefault();
   const f=e.currentTarget,err=document.getElementById('err');
@@ -328,6 +343,10 @@ async function submit(e){
     err.classList.remove('hidden');
     return;
   }
+
+  let attachment;
+  try{attachment=await readAttachment(f.elements.attachment?.files?.[0]||null)}
+  catch(fileError){err.textContent=fileError.message;err.classList.remove('hidden');return}
 
   const payload={
     legal_name:f.elements.legal_name.value.trim(),
@@ -351,6 +370,9 @@ async function submit(e){
     declarant_name:f.elements.declarant_name.value.trim(),
     declaration_accepted:true,
     signature_data_url:canvas.toDataURL('image/png'),
+    attachment_name:attachment.name,
+    attachment_type:attachment.type,
+    attachment_data_url:attachment.data,
     user_agent:navigator.userAgent
   };
 
