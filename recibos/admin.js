@@ -140,9 +140,24 @@ function tableReceipts(rows){
 }
 function wireReceipt(){
   document.querySelectorAll('[data-open]').forEach(b=>b.onclick=()=>openReceipt(b.dataset.open));
-  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>{const r=S.receipts.find(x=>x.id===b.dataset.pdf);if(r)previewReceiptPDF(r,null,S.settings)});
+  document.querySelectorAll('[data-pdf]').forEach(b=>b.onclick=()=>showPdfActions(b.dataset.pdf));
   document.querySelectorAll('[data-history]').forEach(b=>b.onclick=()=>supplierHistory(b.dataset.history));
 }
+
+function showPdfActions(id){
+  const r=S.receipts.find(x=>x.id===id);if(!r)return;
+  modal(`<div class="modal-head"><div><h3>PDF do recibo ${escapeHtml(r.receipt_code||'—')}</h3><span class="muted">${escapeHtml(r.legal_name||'Fornecedor')} • ${brl(r.amount_received)}</span></div><button class="btn btn-secondary btn-sm" data-close>Fechar</button></div>
+    <div class="notice info">Escolha o que deseja fazer com o PDF.</div>
+    <div class="actions receipt-pdf-actions">
+      <button class="btn btn-secondary" id="pdfActionPreview">Visualizar PDF</button>
+      <button class="btn btn-secondary" id="pdfActionShare">Compartilhar PDF</button>
+      <button class="btn btn-primary" id="pdfActionDownload">Baixar PDF</button>
+    </div>`);
+  document.getElementById('pdfActionPreview').onclick=()=>previewReceiptPDF(r,null,S.settings);
+  document.getElementById('pdfActionShare').onclick=()=>shareReceiptPDF(r,null,S.settings);
+  document.getElementById('pdfActionDownload').onclick=()=>generateReceiptPDF(r,null,S.settings,'download');
+}
+
 function setQuickRange(kind){
   const a=document.getElementById('fd1'),b=document.getElementById('fd2'),now=new Date();let start='',end='';
   if(kind==='today'){start=end=localISO(now)}
@@ -185,10 +200,12 @@ async function openReceipt(id){
     ${S.profile.role==='admin'?'<button class="btn btn-secondary" id="editReceiptBtn">Editar recibo</button><button class="btn btn-danger" id="deleteReceiptBtn">Excluir recibo</button>'+(r.finance_synced_at?'<button class="btn btn-secondary" disabled>Financeiro: '+escapeHtml(r.finance_trip_name||'Enviado')+'</button>':'<button class="btn btn-secondary" id="sendFinanceBtn">Enviar para o Financeiro</button>'):''}
     <button class="btn btn-secondary" id="validateNow">Validar documento</button>
     <button class="btn btn-secondary" id="previewPdfNow">Visualizar PDF</button>
+    <button class="btn btn-secondary" id="sharePdfNow">Compartilhar PDF</button>
     <button class="btn btn-primary" id="pdfNow">Baixar PDF</button>
   </div>`);
   document.getElementById('pdfNow').onclick=()=>generateReceiptPDF(r,null,S.settings,'download');
   document.getElementById('previewPdfNow').onclick=()=>previewReceiptPDF(r,null,S.settings);
+  document.getElementById('sharePdfNow').onclick=()=>shareReceiptPDF(r,null,S.settings);
   document.getElementById('validateNow').onclick=()=>window.open(validationLink(r),'_blank','noopener');
   document.getElementById('editReceiptBtn')?.addEventListener('click',()=>editReceipt(r.id));
   document.getElementById('deleteReceiptBtn')?.addEventListener('click',()=>deleteReceipt(r.id));
