@@ -56,3 +56,8 @@
 .link-actions .btn{flex:1 1 160px}
 #publicLink{min-height:86px;word-break:break-all}
 @media(max-width:640px){.link-actions{flex-direction:column}.link-actions .btn{width:100%;flex:auto}}
+
+.receipt-main-actions{padding-top:14px;border-top:1px solid #e7ece8}
+.receipt-main-actions .btn{min-width:140px}
+.edit-warning{background:#fff8e8;border:1px solid #efdfa9;color:#69500d;padding:12px;border-radius:12px}
+@media(max-width:640px){.receipt-main-actions{flex-direction:column}.receipt-main-actions .btn{width:100%}}
