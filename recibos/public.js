@@ -19,8 +19,20 @@ let SERVICES={
   'Manutenção / Serviço técnico':{ref:'Equipamento / serviço realizado',placeholder:'Ex.: Manutenção do veículo',billing:'total',required:false},
   'Outro':{ref:'Qual serviço foi realizado?',placeholder:'Descreva rapidamente o serviço',billing:'total',required:true}
 };
-const PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let PAYMENT_METHODS=['PIX','Transferência bancária','Dinheiro','Cartão','Boleto','Outro'];
+let PUBLIC_SETTINGS={};
 let FORM_SESSION=null;
+
+async function loadPublicSettings(){
+  try{
+    const {data,error}=await supabaseClient.rpc('get_public_receipt_settings');
+    if(error)throw error;
+    const x=data?.[0]||{};
+    PUBLIC_SETTINGS=x;
+    if(Array.isArray(x.payment_methods)&&x.payment_methods.length)PAYMENT_METHODS=x.payment_methods;
+    const logo=document.querySelector('.brand-logo');if(logo&&x.logo_url)logo.src=x.logo_url;
+  }catch(e){console.warn('Configurações públicas:',e)}
+}
 
 async function loadServiceTypes(){
   try{
@@ -150,7 +162,7 @@ function render(){
       '<div style="height:16px"></div>'+
       '<div class="signature-panel"><div class="signature-panel-head"><div><strong>Assinatura</strong><div class="muted">Assine com o dedo ou mouse dentro do quadro.</div></div><button type="button" class="btn btn-secondary btn-sm" id="clearSig">Limpar</button></div><canvas id="signature" class="signature-canvas premium-signature"></canvas></div>'+
       '<div style="height:16px"></div>'+
-      '<div class="checkbox"><input id="declaration" type="checkbox" required><label for="declaration">Declaro que as informações são verdadeiras e que <strong>recebi o valor informado</strong> pelo serviço registrado neste recibo.</label></div>'+
+      '<div class="checkbox"><input id="declaration" type="checkbox" required><label for="declaration">'+escapeHtml(PUBLIC_SETTINGS.declaration_text||'Declaro que as informações são verdadeiras e que recebi o valor informado pelo serviço registrado neste recibo.')+'</label></div>'+
       '<div id="err" class="notice error hidden"></div>'+
       '<div class="actions split-actions"><button type="button" class="btn btn-secondary" id="backToForm">Voltar e revisar</button><button id="sendBtn" class="btn btn-primary btn-large">Salvar e enviar recibo</button></div>'+
     '</section>'+
@@ -365,5 +377,5 @@ async function submit(e){
     err.classList.remove('hidden');btn.disabled=false;btn.textContent='Salvar e enviar recibo';
   }
 }
-(async()=>{await Promise.allSettled([loadServiceTypes(),startFormSession()]);render()})();
+(async()=>{await Promise.allSettled([loadServiceTypes(),loadPublicSettings(),startFormSession()]);render()})();
 })();
