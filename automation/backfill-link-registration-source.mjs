@@ -22,14 +22,15 @@ for(const tripDoc of trips.docs){
   for(const doc of reservations.docs){
     scanned++;
     const r=doc.data()||{};
-    const source=norm(r.source),registrationSource=norm(r.registration_source),completed=norm(r.registration_status)==='completed';
-    const fromLink=source.includes('public_portal')||registrationSource==='direct_trip_link';
-    if(!completed||!fromLink||isPaid(r))continue;
-    const patch={registration_source:'direct_trip_link',updated_at:FV.serverTimestamp()};
+    const registrationSource=norm(r.registration_source),completed=norm(r.registration_status)==='completed';
+    if(!completed||isPaid(r))continue;
+    if(registrationSource!=='direct_trip_link'&&!r.registration_email_status)continue;
+    const patch={updated_at:FV.serverTimestamp()};
     if(!r.registration_completed_at)patch.registration_completed_at=r.created_at||r.updated_at||FV.serverTimestamp();
+    if(registrationSource==='direct_trip_link'&&!r.registration_email_status)patch.registration_email_status='pending';
     batch.set(doc.ref,patch,{merge:true});batchCount++;updated++;
     if(batchCount>=400){await batch.commit();batchCount=0}
   }
   if(batchCount>0)await batch.commit();
 }
-console.log(`Backfill de inscrições pelo link: ${scanned} lida(s), ${updated} marcada(s) para confirmação por e-mail.`);
+console.log(`Backfill de inscrições: ${scanned} lida(s), ${updated} ajustada(s) sem alterar a origem do cadastro.`);
