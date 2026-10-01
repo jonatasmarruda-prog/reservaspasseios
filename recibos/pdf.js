@@ -141,5 +141,34 @@ async function generateReceiptPDF(r,q,b,mode='download'){
   return d;
 }
 async function previewReceiptPDF(r,q,b){return generateReceiptPDF(r,q,b,'preview')}
+
+async function shareReceiptPDF(r,q,b){
+  const doc=await generateReceiptPDF(r,q,b,'blob');
+  const blob=doc.output('blob');
+  const filename='recibo_'+String(r.receipt_code||'documento').replace(/[^a-zA-Z0-9_-]/g,'_')+'.pdf';
+  const file=new File([blob],filename,{type:'application/pdf'});
+  const shareData={
+    title:'Recibo '+String(r.receipt_code||''),
+    text:'Recibo digital de '+String(r.legal_name||'fornecedor')+' — '+brl(r.amount_received),
+    files:[file]
+  };
+
+  try{
+    if(navigator.share && (!navigator.canShare || navigator.canShare({files:[file]}))){
+      await navigator.share(shareData);
+      if(typeof toast==='function')toast('PDF compartilhado.');
+      return true;
+    }
+  }catch(e){
+    if(e?.name==='AbortError')return false;
+    console.warn('Compartilhamento do PDF:',e);
+  }
+
+  doc.save(filename);
+  if(typeof toast==='function')toast('Este navegador não suporta compartilhar o PDF diretamente. O arquivo foi baixado para você enviar.','info');
+  return false;
+}
+
 window.generateReceiptPDF=generateReceiptPDF;
 window.previewReceiptPDF=previewReceiptPDF;
+window.shareReceiptPDF=shareReceiptPDF;
