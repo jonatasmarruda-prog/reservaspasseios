@@ -138,3 +138,10 @@
  .trend-bars{gap:3px}.trend-item span{font-size:8px}.trend-bar{width:80%}
  .thanks-actions{flex-direction:column}.thanks-actions .btn{width:100%}
 }
+
+.receipt-pdf-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:14px}
+.receipt-pdf-actions .btn{width:100%;min-height:46px}
+@media(max-width:640px){
+  .receipt-pdf-actions{grid-template-columns:1fr}
+  .receipt-pdf-actions .btn{width:100%}
+}
