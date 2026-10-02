@@ -424,6 +424,7 @@
     hide("setupScreen"); show("appScreen"); $("houseLabel").textContent=state.household.name;
     $("monthPicker").value=$("monthPicker").value||currentMonth();
     await refreshAll();
+    startAutoSync();
   }
 
   $("createHouseForm").onsubmit=async function(e){
@@ -702,6 +703,86 @@
 
   $("copyInvite").onclick=async function(){await navigator.clipboard.writeText(state.household.invite_code);this.textContent="Copiado ✓";var self=this;setTimeout(function(){self.textContent="Copiar código"},1500)};
   $("rotateInvite").onclick=async function(){ if(!confirm("Gerar novo código? O código atual deixa de funcionar."))return; var r=await sb.rpc("finance_rotate_invite",{p_household_id:state.household.id}); if(r.error){alert("Não foi possível gerar outro código.");return}state.household.invite_code=r.data;renderSettings(); };
+  function pdfSafe(s){
+    return String(s==null?"":s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[\u0000-\u001f]/g," ").trim();
+  }
+  function monthLabel(value){
+    var p=(value||currentMonth()).split("-"), d=new Date(Number(p[0]),Number(p[1])-1,1);
+    return d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}).replace(/^./,function(x){return x.toUpperCase()});
+  }
+  function getMonthlyMetrics(){
+    var t=state.transactions, expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0,byPerson={};
+    state.members.forEach(function(m){byPerson[m.user_id]={name:m.display_name,expense:0,income:0}});
+    t.forEach(function(x){
+      var a=Number(x.amount||0),pid=x.person_user_id||x.created_by;
+      if(!byPerson[pid])byPerson[pid]={name:memberName(pid),expense:0,income:0};
+      if(x.kind==="income"){incExpected+=a;byPerson[pid].income+=a;if(x.status==="received")incReceived+=a}
+      else{expExpected+=a;byPerson[pid].expense+=a;if(x.status==="paid")expPaid+=a;else if(x.status==="planned")debt+=a;if(x.expense_type==="fixed")fixed+=a;else variable+=a}
+    });
+    return {expExpected:expExpected,incExpected:incExpected,expPaid:expPaid,incReceived:incReceived,debt:debt,fixed:fixed,variable:variable,realBalance:incReceived-expPaid,expectedBalance:incExpected-expExpected,commitment:incExpected>0?expExpected/incExpected*100:0,byPerson:byPerson};
+  }
+  async function generatePremiumPdf(){
+    var btn=$("pdfBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="Gerando PDF...";
+    try{
+      await refreshAll();
+      if(!window.jspdf||!window.jspdf.jsPDF)throw new Error("PDF library unavailable");
+      var jsPDF=window.jspdf.jsPDF,doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+      var m=getMonthlyMetrics(),month=$("monthPicker").value||currentMonth(),pageW=210,margin=14,contentW=182;
+      var navy=[15,23,42],teal=[15,118,110],green=[5,150,105],red=[220,38,38],gray=[100,116,139],light=[248,250,252];
+      function tMoney(v){return money(Number(v||0))}
+      function addHeader(subtitle){
+        doc.setFillColor(navy[0],navy[1],navy[2]);doc.rect(0,0,pageW,28,"F");
+        doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(17);doc.text("NOSSO CONTROLE",margin,11);
+        doc.setFont("helvetica","normal");doc.setFontSize(9);doc.text(pdfSafe(subtitle),margin,18);
+        doc.setTextColor(203,213,225);doc.setFontSize(7.5);doc.text("Relatorio financeiro familiar • atualizado em "+new Date().toLocaleString("pt-BR"),margin,23);
+      }
+      function card(x,y,w,label,value,good){
+        doc.setFillColor(light[0],light[1],light[2]);doc.roundedRect(x,y,w,20,2,2,"F");
+        doc.setTextColor(gray[0],gray[1],gray[2]);doc.setFont("helvetica","normal");doc.setFontSize(7);doc.text(pdfSafe(label),x+4,y+6);
+        var col=good===true?green:good===false?red:navy;doc.setTextColor(col[0],col[1],col[2]);doc.setFont("helvetica","bold");doc.setFontSize(11);doc.text(pdfSafe(value),x+4,y+14);
+      }
+      addHeader("Fechamento de "+monthLabel(month)+" • "+(state.household&&state.household.name||"Familia"));
+      doc.setTextColor(navy[0],navy[1],navy[2]);doc.setFont("helvetica","bold");doc.setFontSize(14);doc.text("Resumo executivo",margin,38);
+      var gap=3,cw=(contentW-gap*2)/3;
+      card(margin,43,cw,"Renda prevista",tMoney(m.incExpected),true);
+      card(margin+cw+gap,43,cw,"Gastos previstos",tMoney(m.expExpected),false);
+      card(margin+(cw+gap)*2,43,cw,"Sobra prevista",tMoney(m.expectedBalance),m.expectedBalance>=0);
+      card(margin,66,cw,"Entrou de verdade",tMoney(m.incReceived),true);
+      card(margin+cw+gap,66,cw,"Saiu de verdade",tMoney(m.expPaid),false);
+      card(margin+(cw+gap)*2,66,cw,"Ainda a pagar",tMoney(m.debt),m.debt===0);
+      doc.setFillColor(navy[0],navy[1],navy[2]);doc.roundedRect(margin,90,contentW,27,3,3,"F");
+      doc.setTextColor(255,255,255);doc.setFont("helvetica","bold");doc.setFontSize(9);doc.text("Diagnostico do mes",margin+5,98);
+      doc.setFont("helvetica","normal");doc.setFontSize(8);var insight=pdfSafe($("financialInsight").textContent);doc.text(doc.splitTextToSize(insight,contentW-10),margin+5,105);
+      doc.setTextColor(203,213,225);doc.setFontSize(7);doc.text("Renda comprometida: "+Math.round(m.commitment)+"%   •   Fixos: "+tMoney(m.fixed)+"   •   Variaveis: "+tMoney(m.variable),margin+5,113);
+
+      doc.setTextColor(navy[0],navy[1],navy[2]);doc.setFont("helvetica","bold");doc.setFontSize(12);doc.text("Resultado por pessoa",margin,127);
+      var people=Object.keys(m.byPerson).map(function(id){return m.byPerson[id]});
+      doc.autoTable({startY:131,head:[["Pessoa","Receitas","Gastos","Saldo"]],body:people.map(function(p){return [pdfSafe(p.name),tMoney(p.income),tMoney(p.expense),tMoney(p.income-p.expense)]}),theme:"grid",styles:{font:"helvetica",fontSize:8,cellPadding:2.6},headStyles:{fillColor:navy,textColor:255},alternateRowStyles:{fillColor:light},margin:{left:margin,right:margin}});
+
+      var y=doc.lastAutoTable.finalY+9;
+      doc.setFont("helvetica","bold");doc.setFontSize(12);doc.setTextColor(navy[0],navy[1],navy[2]);doc.text("Graficos do mes",margin,y);y+=4;
+      if(y+60>282){doc.addPage();addHeader("Graficos • "+monthLabel(month));y=36}
+      try{
+        var cat=$("categoryChart").toDataURL("image/png",1),ppl=$("peopleChart").toDataURL("image/png",1);
+        doc.addImage(cat,"PNG",margin,y,87,58);doc.addImage(ppl,"PNG",margin+95,y,87,58);
+      }catch(e){console.warn(e)}
+      y+=64;
+      if(y+58>282){doc.addPage();addHeader("Fluxo do mes • "+monthLabel(month));y=36}
+      try{doc.addImage($("flowChart").toDataURL("image/png",1),"PNG",margin,y,contentW,56)}catch(e){console.warn(e)}
+
+      doc.addPage();addHeader("Lancamentos detalhados • "+monthLabel(month));
+      var txRows=state.transactions.slice().sort(function(a,b){return String(a.transaction_date).localeCompare(String(b.transaction_date))}).map(function(x){
+        return [pdfSafe(x.transaction_date),pdfSafe(memberName(x.person_user_id||x.created_by)),x.kind==="income"?"Receita":"Gasto",pdfSafe(x.title),pdfSafe(x.category),x.expense_type==="fixed"?"Fixo":x.kind==="expense"?"Variavel":"-",tMoney(x.amount),x.status==="planned"?"Pendente":x.status==="received"?"Recebido":"Pago"];
+      });
+      doc.autoTable({startY:35,head:[["Data","Pessoa","Tipo","Descricao","Categoria","Natureza","Valor","Status"]],body:txRows.length?txRows:[["-","-","-","Nenhum lancamento neste mes","-","-","-","-"]],theme:"striped",styles:{font:"helvetica",fontSize:6.5,cellPadding:1.9,overflow:"linebreak"},headStyles:{fillColor:teal,textColor:255,fontSize:6.7},columnStyles:{0:{cellWidth:18},1:{cellWidth:22},2:{cellWidth:16},3:{cellWidth:38},4:{cellWidth:25},5:{cellWidth:18},6:{cellWidth:23,halign:"right"},7:{cellWidth:21}},margin:{left:8,right:8,top:34,bottom:14}});
+      var pages=doc.getNumberOfPages();
+      for(var i=1;i<=pages;i++){doc.setPage(i);doc.setTextColor(gray[0],gray[1],gray[2]);doc.setFontSize(7);doc.text("Nosso Controle Familiar",margin,292);doc.text("Pagina "+i+" de "+pages,196,292,{align:"right"})}
+      var filename="Nosso-Controle-"+month+".pdf",blob=doc.output("blob"),url=URL.createObjectURL(blob),a=document.createElement("a");
+      a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},5000);
+    }catch(err){console.error(err);alert("Nao foi possivel gerar o PDF agora. Tente novamente.")}
+    finally{btn.disabled=false;btn.textContent=old}
+  }
+  $("pdfBtn").onclick=generatePremiumPdf;
   $("printBtn").onclick=function(){window.print()};
   $("csvBtn").onclick=function(){
     var rows=[["Data","Pessoa","Tipo","Natureza","Descrição","Categoria","Valor","Status","Forma"]].concat(state.transactions.map(function(x){return [x.transaction_date,memberName(x.person_user_id||x.created_by),x.kind,x.expense_type||"",x.title,x.category,Number(x.amount).toFixed(2),x.status,x.payment_method||""]}));
@@ -713,6 +794,10 @@
   $("installBtn").onclick=async function(){if(!state.deferredInstall)return;state.deferredInstall.prompt();await state.deferredInstall.userChoice;state.deferredInstall=null;hide("installBanner")};
   window.addEventListener("appinstalled",function(){hide("installBanner")});
   window.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&state.household)refreshAll()});
+  function startAutoSync(){
+    if(state.syncTimer)clearInterval(state.syncTimer);
+    state.syncTimer=setInterval(function(){if(document.visibilityState==="visible"&&state.household)refreshAll()},30000);
+  }
   if("serviceWorker" in navigator)window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(console.warn)});
   sb.auth.onAuthStateChange(function(event,session){
     if(event==="PASSWORD_RECOVERY"){
