@@ -711,7 +711,7 @@
   function fillCategory(selectId, kind){
     var arr=kind==="income"?incomeCategories:expenseCategories; var s=$(selectId); var old=s.value; s.innerHTML=arr.map(function(x){return '<option>'+esc(x)+'</option>'}).join(""); if(arr.indexOf(old)>=0)s.value=old;
   }
-  fillCategory("txCategory","expense"); fillCategory("recCategory","expense");
+  fillCategory("txCategory","expense"); fillCategory("recCategory","expense"); fillCategory("budgetCategory","expense");
   $("txKind").onchange=function(){
     fillCategory("txCategory",this.value);
     $("txStatus").innerHTML=this.value==="income"?'<option value="received">Recebido</option><option value="planned">Previsto</option>':'<option value="paid">Pago</option><option value="planned">Pendente / previsto</option>';
@@ -814,7 +814,7 @@
     var spend=expenseByCategory(getVisibleTransactions());
     root.innerHTML=state.budgets.map(function(b){
       var used=Number(spend[b.category]||0),limit=Number(b.monthly_limit||0),pct=limit?used/limit*100:0,cls=pct>=100?"over":pct>=80?"warn":"";
-      return '<div class="budget-row '+cls+'"><div class="budget-top"><span>'+esc(b.category)+'</span><strong>'+money(used)+' / '+money(limit)+'</strong></div><div class="progress-track"><span style="width:'+Math.min(100,pct)+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% utilizado</div></div>';
+      return '<div class="budget-row '+cls+'"><div class="budget-top"><span>'+esc(b.category)+'</span><strong>'+money(used)+' / '+money(limit)+'</strong></div><div class="progress-track"><span style="width:'+Math.min(100,pct)+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% utilizado</div><div class="card-actions no-print"><button class="btn btn-ghost btn-sm" data-budget-delete="'+b.id+'">Remover</button></div></div>';
     }).join("");
   }
   function renderAlerts(){
@@ -877,6 +877,12 @@
     }
     await refreshAll({skipSync:true});
     var m=getMonthlyMetrics(),selected=$("monthPicker").value||currentMonth();
+    var openCardNames=state.cards.filter(function(card){
+      var total=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0);
+      var st=state.cardStatements.find(function(s){return s.card_id===card.id});
+      return total>0&&(!st||st.status!=="closed");
+    }).map(function(card){return card.name});
+    if(openCardNames.length){toast("Feche primeiro "+openCardNames.length+" fatura"+(openCardNames.length===1?"":"s")+": "+openCardNames.join(", "));return}
     var question="Fechar "+monthLabel(selected)+"?\n\nReceitas: "+money(m.incExpected)+"\nGastos: "+money(m.expExpected)+"\nPendentes: "+money(m.debt)+"\nSobra prevista: "+money(m.expectedBalance);
     if(m.debt>0)question+="\n\nAtenção: ainda existem contas pendentes.";
     if(!confirm(question))return;
@@ -989,6 +995,82 @@
     }).join(""):'<div class="empty">Cadastre salários e contas fixas para o mês já começar projetado.</div>';
   }
 
+  function openCardModal(){
+    if(!navigator.onLine){toast("Conecte à internet para cadastrar cartões.");return}
+    $("cardForm").reset();
+    $("cardClosingDay").value=30;
+    $("cardDueDay").value=10;
+    updatePeopleSelects();
+    if($("cardOwner")&&state.user)$("cardOwner").value=state.user.id;
+    msg("cardMsg","");
+    show("cardModal");
+  }
+  function openBudgetModal(){
+    if(!navigator.onLine){toast("Conecte à internet para cadastrar orçamento.");return}
+    $("budgetForm").reset();
+    fillCategory("budgetCategory","expense");
+    msg("budgetMsg","");
+    show("budgetModal");
+  }
+  async function closeCardStatement(cardId){
+    if(!navigator.onLine){toast("Conecte à internet para fechar a fatura.");return}
+    var card=state.cards.find(function(x){return x.id===cardId});if(!card)return;
+    var selected=$("monthPicker").value||currentMonth(),ref=monthStart(selected);
+    var tx=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===cardId});
+    var total=tx.reduce(function(s,x){return s+Number(x.amount||0)},0);
+    if(!tx.length){toast("Este cartão não tem compras neste mês.");return}
+    if(!confirm("Fechar a fatura de "+card.name+" em "+money(total)+"?"))return;
+    var row={
+      household_id:state.household.id,card_id:cardId,reference_month:ref,status:"closed",
+      total_amount:total,closed_by:state.user.id,closed_at:new Date().toISOString(),reopened_at:null,
+      snapshot:{month:selected,card:{id:card.id,name:card.name,owner_user_id:card.owner_user_id},transactions:tx,total:total}
+    };
+    var r=await sb.from("finance_card_statements").upsert(row,{onConflict:"card_id,reference_month"}).select("*").single();
+    if(r.error){console.error(r.error);toast("Não foi possível fechar a fatura.");return}
+    toast("💳 Fatura fechada: "+money(total));
+    await refreshAll({skipSync:true});
+  }
+  async function reopenCardStatement(cardId){
+    if(!navigator.onLine){toast("Conecte à internet para reabrir a fatura.");return}
+    var selected=$("monthPicker").value||currentMonth(),ref=monthStart(selected);
+    if(!confirm("Reabrir esta fatura para fazer ajustes?"))return;
+    var r=await sb.from("finance_card_statements").update({status:"reopened",reopened_at:new Date().toISOString()}).eq("household_id",state.household.id).eq("card_id",cardId).eq("reference_month",ref);
+    if(r.error){console.error(r.error);toast("Não foi possível reabrir a fatura.");return}
+    toast("Fatura reaberta.");
+    await refreshAll({skipSync:true});
+  }
+
+  $("openCardBtn").onclick=openCardModal;
+  $("openBudgetBtn").onclick=openBudgetModal;
+
+  $("cardForm").onsubmit=async function(e){
+    e.preventDefault();
+    if(!navigator.onLine){msg("cardMsg","Conecte à internet para salvar o cartão.","error");return}
+    var name=$("cardName").value.trim(),owner=$("cardOwner").value,limit=numBR($("cardLimit").value)||0,closing=Number($("cardClosingDay").value),due=Number($("cardDueDay").value);
+    if(!name){msg("cardMsg","Informe o nome do cartão.","error");return}
+    if(!owner){msg("cardMsg","Selecione o dono do cartão.","error");return}
+    if(!(closing>=1&&closing<=31&&due>=1&&due<=31)){msg("cardMsg","Confira os dias de fechamento e vencimento.","error");return}
+    var btn=e.currentTarget.querySelector('button[type="submit"],button.btn-block');btn.disabled=true;btn.textContent="Salvando...";
+    var row={household_id:state.household.id,created_by:state.user.id,owner_user_id:owner,name:name,brand:$("cardBrand").value.trim()||null,limit_amount:limit,closing_day:closing,due_day:due,active:true,updated_at:new Date().toISOString()};
+    var r=await sb.from("finance_cards").insert(row).select("*").single();
+    if(r.error){console.error(r.error);msg("cardMsg","Não foi possível salvar o cartão.","error");btn.disabled=false;btn.textContent="Salvar cartão";return}
+    hide("cardModal");toast("💳 Cartão "+name+" cadastrado.");
+    btn.disabled=false;btn.textContent="Salvar cartão";await refreshAll({skipSync:true});
+  };
+
+  $("budgetForm").onsubmit=async function(e){
+    e.preventDefault();
+    if(!navigator.onLine){msg("budgetMsg","Conecte à internet para salvar o orçamento.","error");return}
+    var category=$("budgetCategory").value,amount=numBR($("budgetAmount").value);
+    if(!category||!amount||amount<=0){msg("budgetMsg","Informe a categoria e um limite válido.","error");return}
+    var btn=e.currentTarget.querySelector('button[type="submit"],button.btn-block');btn.disabled=true;btn.textContent="Salvando...";
+    var row={household_id:state.household.id,category:category,monthly_limit:amount,active:true,created_by:state.user.id,updated_at:new Date().toISOString()};
+    var r=await sb.from("finance_budgets").upsert(row,{onConflict:"household_id,category"}).select("*").single();
+    if(r.error){console.error(r.error);msg("budgetMsg","Não foi possível salvar o orçamento.","error");btn.disabled=false;btn.textContent="Salvar orçamento";return}
+    hide("budgetModal");toast("🎯 Orçamento de "+category+" salvo.");
+    btn.disabled=false;btn.textContent="Salvar orçamento";await refreshAll({skipSync:true});
+  };
+
   function renderSettings(){
     $("inviteCode").textContent=state.household.invite_code;
     $("membersList").innerHTML=state.members.map(function(m){return '<div class="member"><div><strong>'+esc(m.display_name)+'</strong><div class="muted" style="font-size:12px">'+(m.role==="owner"?"Administrador":"Membro")+'</div></div><span>'+ (m.user_id===state.user.id?"Você":"") +'</span></div>'}).join("");
@@ -997,6 +1079,25 @@
   }
 
   document.addEventListener("click",async function(e){
+    var pv=e.target.closest("[data-person-view]");if(pv){state.viewPerson=pv.dataset.personView;renderAll();return}
+    var cc=e.target.closest("[data-card-close]");if(cc){await closeCardStatement(cc.dataset.cardClose);return}
+    var cr=e.target.closest("[data-card-reopen]");if(cr){await reopenCardStatement(cr.dataset.cardReopen);return}
+    var cd=e.target.closest("[data-card-delete]");if(cd){
+      if(!navigator.onLine){toast("Conecte à internet para alterar cartões.");return}
+      if(confirm("Desativar este cartão? As compras já lançadas continuarão no histórico.")){
+        var dr=await sb.from("finance_cards").update({active:false,updated_at:new Date().toISOString()}).eq("id",cd.dataset.cardDelete).eq("household_id",state.household.id);
+        if(dr.error){console.error(dr.error);toast("Não foi possível desativar o cartão.");return}
+        toast("Cartão desativado.");await refreshAll({skipSync:true});
+      }return
+    }
+    var bd=e.target.closest("[data-budget-delete]");if(bd){
+      if(!navigator.onLine){toast("Conecte à internet para alterar orçamentos.");return}
+      if(confirm("Remover este orçamento mensal?")){
+        var br=await sb.from("finance_budgets").delete().eq("id",bd.dataset.budgetDelete).eq("household_id",state.household.id);
+        if(br.error){console.error(br.error);toast("Não foi possível remover o orçamento.");return}
+        toast("Orçamento removido.");await refreshAll({skipSync:true});
+      }return
+    }
     var b=e.target.closest("[data-open-transaction]"); if(b){openTransaction("expense");return}
     var pi=e.target.closest("[data-photo-entry]"); if(pi){openTransaction("expense");try{$("txReceipt").click()}catch(err){}return}
     var oi=e.target.closest("[data-open-income]"); if(oi){openTransaction("income");return}
