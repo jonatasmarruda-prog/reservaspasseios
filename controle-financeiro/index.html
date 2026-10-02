@@ -48,6 +48,7 @@
     .nature-fixed{background:#dbeafe;color:#1e40af}.nature-variable{background:#f3e8ff;color:#7e22ce}.person-chip{background:#ecfeff;color:#155e75}.health-meter{height:10px;background:rgba(255,255,255,.16);border-radius:99px;overflow:hidden;margin-top:10px}.health-meter span{display:block;height:100%;background:#fff;border-radius:99px}
     .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}.sync-pending{background:#fff7ed;color:#9a3412}.sync-offline{background:#fef2f2;color:#991b1b}
     .app-toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.25);font-size:13px;font-weight:800;max-width:calc(100% - 28px);text-align:center}
+    .close-card{margin:14px 0;border:1px solid #cbd5e1;background:linear-gradient(135deg,#fff,#f8fafc)}.close-card.closed{border-color:#a7f3d0;background:#f0fdf4}.close-card.attention{border-color:#fed7aa;background:#fff7ed}.close-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.close-head h3{margin:0 0 4px}.close-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.close-mini{background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:12px;padding:10px}.close-mini small{display:block;color:var(--muted);font-size:10px}.close-mini strong{display:block;margin-top:3px}.close-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}@media(max-width:760px){.close-grid{grid-template-columns:1fr 1fr}}
     @media(max-width:900px){.pro-summary{grid-template-columns:repeat(3,1fr)}.quick-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:760px){.summary,.pro-summary{grid-template-columns:1fr 1fr}.grid2,.settings-grid,.setup-grid,.chart-grid{grid-template-columns:1fr}.chart-wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stat .value{font-size:19px}.month-row{align-items:flex-end}.month-row .btn{display:none}.people-split{grid-template-columns:1fr 1fr}.quick-action{padding:11px}}
     @media(print){.topbar,.bottom,.fab,.no-print,.install-banner{display:none!important}.app{padding:0}.content{max-width:none}.card,.stat{box-shadow:none}.summary{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
@@ -175,6 +176,26 @@
           <div id="financialInsight" class="analysis-main">Cadastre suas receitas e despesas para gerar a análise.</div>
           <div class="health-meter"><span id="healthMeter" style="width:0%"></span></div>
           <div id="analysisTags" class="analysis-tags"></div>
+        </div>
+
+        <div id="monthCloseCard" class="card close-card">
+          <div class="close-head">
+            <div>
+              <h3>📅 Fechamento mensal</h3>
+              <div id="monthCloseText" class="muted">Carregando situação do mês...</div>
+            </div>
+            <span id="monthCloseStatus" class="chip">Aberto</span>
+          </div>
+          <div class="close-grid">
+            <div class="close-mini"><small>Salários / receitas</small><strong id="closeIncome">R$ 0,00</strong></div>
+            <div class="close-mini"><small>Gastos totais</small><strong id="closeExpense">R$ 0,00</strong></div>
+            <div class="close-mini"><small>Ainda pendente</small><strong id="closePending">R$ 0,00</strong></div>
+            <div class="close-mini"><small>Sobra do mês</small><strong id="closeBalance">R$ 0,00</strong></div>
+          </div>
+          <div class="close-actions no-print">
+            <button id="closeMonthBtn" class="btn btn-primary btn-sm">🔒 Fechar este mês</button>
+            <button id="reopenMonthBtn" class="btn btn-ghost btn-sm hidden">↩ Reabrir mês</button>
+          </div>
         </div>
 
         <div class="chart-grid">
@@ -309,7 +330,7 @@
   var SUPABASE_URL = "https://dvblpobtfjtjypsjcjpy.supabase.co";
   var SUPABASE_KEY = "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz";
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
+  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], currentClosure:null, filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
   var expenseCategories = ["Moradia","Mercado","Alimentação","Transporte","Combustível","Saúde","Educação","Lazer","Assinaturas","Cartão","Compras","Pets","Viagem","Impostos","Outros"];
   var incomeCategories = ["Salário","Renda extra","Turismo","Reembolso","Venda","Investimentos","Outros"];
 
@@ -367,7 +388,7 @@
     try{
       var snap=await localGet("cache",monthCacheKey(month||$("monthPicker").value||currentMonth()));
       if(!snap)return false;
-      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];renderAll();await updateSyncStatus();return true;
+      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];state.currentClosure=null;renderAll();await updateSyncStatus();return true;
     }catch(e){return false}
   }
   async function restoreOfflineProfile(){
@@ -588,11 +609,12 @@
       var results=await Promise.all([
         sb.from("finance_transactions").select("*").eq("household_id",state.household.id).gte("reference_month",month).lt("reference_month",nextMonth).order("transaction_date",{ascending:false}).order("created_at",{ascending:false}),
         sb.from("finance_recurring").select("*").eq("household_id",state.household.id).order("kind").order("due_day"),
-        sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at")
+        sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at"),
+        sb.from("finance_month_closures").select("*").eq("household_id",state.household.id).eq("reference_month",month).maybeSingle()
       ]);
-      var tx=results[0],rec=results[1],mem=results[2];
-      if(tx.error||rec.error||mem.error)throw(tx.error||rec.error||mem.error);
-      state.transactions=tx.data||[];state.recurring=rec.data||[];state.members=mem.data||[];
+      var tx=results[0],rec=results[1],mem=results[2],closure=results[3];
+      if(tx.error||rec.error||mem.error||closure.error)throw(tx.error||rec.error||mem.error||closure.error);
+      state.transactions=tx.data||[];state.recurring=rec.data||[];state.members=mem.data||[];state.currentClosure=closure.data||null;
       renderAll();state.lastSync=new Date();await persistOfflineSnapshot();await updateSyncStatus();
     }catch(err){
       console.warn("refresh offline fallback",err);await restoreMonthSnapshot(selected);await updateSyncStatus();
@@ -617,7 +639,72 @@
     if(rows.length){ var ins=await sb.from("finance_transactions").insert(rows); if(ins.error)console.warn(ins.error); }
   }
 
-  function renderAll(){ updatePeopleSelects(); renderDashboard(); renderTransactions(); renderRecurring(); renderSettings(); }
+  function renderAll(){ updatePeopleSelects(); renderDashboard(); renderTransactions(); renderRecurring(); renderSettings(); renderMonthClosure(); }
+
+  function previousMonthValue(){
+    var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  }
+  function renderMonthClosure(){
+    if(!$("monthCloseCard"))return;
+    var m=getMonthlyMetrics(),selected=$("monthPicker").value||currentMonth(),cl=state.currentClosure;
+    $("closeIncome").textContent=money(m.incExpected);
+    $("closeExpense").textContent=money(m.expExpected);
+    $("closePending").textContent=money(m.debt);
+    $("closeBalance").textContent=money(m.expectedBalance);
+    $("closeBalance").style.color=m.expectedBalance>=0?"var(--good)":"var(--bad)";
+    $("monthCloseCard").classList.remove("closed","attention");
+    if(cl&&cl.status==="closed"){
+      $("monthCloseCard").classList.add("closed");
+      $("monthCloseStatus").textContent="Fechado";
+      $("monthCloseText").textContent="Fechado em "+new Date(cl.closed_at).toLocaleString("pt-BR")+". O resultado deste mês ficou registrado.";
+      hide("closeMonthBtn");show("reopenMonthBtn");
+    }else{
+      $("monthCloseStatus").textContent="Aberto";
+      var needsAttention=selected===previousMonthValue()&&new Date().getDate()>=4;
+      if(needsAttention)$("monthCloseCard").classList.add("attention");
+      $("monthCloseText").textContent=needsAttention?"Conferir cartão, contas e salários e fechar o mês anterior.":"Confira as contas antes de fechar. O sistema salva um retrato completo do mês.";
+      show("closeMonthBtn");hide("reopenMonthBtn");
+    }
+  }
+  async function closeSelectedMonth(){
+    var q=await queueForCurrent();
+    if(q.length){
+      toast("Sincronize os "+q.length+" lançamento"+(q.length===1?"":"s")+" pendente"+(q.length===1?"":"s")+" antes de fechar.");
+      if(navigator.onLine)await syncOfflineQueue(true);
+      return;
+    }
+    await refreshAll({skipSync:true});
+    var m=getMonthlyMetrics(),selected=$("monthPicker").value||currentMonth();
+    var question="Fechar "+monthLabel(selected)+"?\n\nReceitas: "+money(m.incExpected)+"\nGastos: "+money(m.expExpected)+"\nPendentes: "+money(m.debt)+"\nSobra prevista: "+money(m.expectedBalance);
+    if(m.debt>0)question+="\n\nAtenção: ainda existem contas pendentes.";
+    if(!confirm(question))return;
+    var snapshot={
+      month:selected,
+      members:state.members,
+      transactions:state.transactions,
+      totals:m,
+      generated_at:new Date().toISOString()
+    };
+    var row={
+      household_id:state.household.id,reference_month:monthStart(selected),closed_by:state.user.id,status:"closed",
+      closed_at:new Date().toISOString(),reopened_at:null,
+      income_expected:m.incExpected,income_received:m.incReceived,expense_expected:m.expExpected,expense_paid:m.expPaid,
+      pending_total:m.debt,fixed_total:m.fixed,variable_total:m.variable,balance_expected:m.expectedBalance,balance_real:m.realBalance,
+      snapshot:snapshot
+    };
+    var r=await sb.from("finance_month_closures").upsert(row,{onConflict:"household_id,reference_month"}).select("*").single();
+    if(r.error){alert("Não foi possível fechar o mês.");console.error(r.error);return}
+    state.currentClosure=r.data;renderMonthClosure();toast("🔒 Mês fechado. Sobra: "+money(m.expectedBalance));
+  }
+  async function reopenSelectedMonth(){
+    if(!state.currentClosure||!confirm("Reabrir este mês para fazer ajustes?"))return;
+    var r=await sb.from("finance_month_closures").update({status:"reopened",reopened_at:new Date().toISOString()}).eq("id",state.currentClosure.id).select("*").single();
+    if(r.error){alert("Não foi possível reabrir o mês.");return}
+    state.currentClosure=r.data;renderMonthClosure();toast("Mês reaberto para ajustes.");
+  }
+  $("closeMonthBtn").onclick=closeSelectedMonth;
+  $("reopenMonthBtn").onclick=reopenSelectedMonth;
 
   function renderDashboard(){
     var t=state.transactions, expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0;
