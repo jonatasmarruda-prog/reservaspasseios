@@ -1,0 +1,54 @@
+name: Publicar Nosso Controle Familiar
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'controle-financeiro/**'
+      - 'firebase-finance.json'
+      - '.github/workflows/firebase-finance-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nosso-controle-familiar-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validar aplicativo financeiro
+        run: |
+          set -e
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('controle-financeiro/index.html','utf8');
+          const scripts=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(x=>x[1]);
+          for(const s of scripts)new Function(s);
+          console.log('Finance app inline scripts ok:',scripts.length);
+          JSON.parse(fs.readFileSync('controle-financeiro/manifest.webmanifest','utf8'));
+          NODE
+          node --check controle-financeiro/sw.js
+
+      - name: Instalar Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Autenticar no Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+      - name: Garantir site separado
+        run: |
+          firebase hosting:sites:create controle-familiar-jonatas --project trilheiros-reservas --non-interactive || true
+
+      - name: Publicar app financeiro separado
+        run: firebase deploy --project trilheiros-reservas --only hosting --config firebase-finance.json --non-interactive
