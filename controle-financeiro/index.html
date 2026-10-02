@@ -663,15 +663,28 @@
       await ensureRecurringForMonth(selected);
       var month=monthStart(selected);
       var next=new Date(month+"T12:00:00");next.setMonth(next.getMonth()+1);var nextMonth=next.toISOString().slice(0,10);
+      var year=selected.slice(0,4),yearStart=year+"-01-01",nextYear=(Number(year)+1)+"-01-01";
       var results=await Promise.all([
         sb.from("finance_transactions").select("*").eq("household_id",state.household.id).gte("reference_month",month).lt("reference_month",nextMonth).order("transaction_date",{ascending:false}).order("created_at",{ascending:false}),
         sb.from("finance_recurring").select("*").eq("household_id",state.household.id).order("kind").order("due_day"),
         sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at"),
-        sb.from("finance_month_closures").select("*").eq("household_id",state.household.id).eq("reference_month",month).maybeSingle()
+        sb.from("finance_month_closures").select("*").eq("household_id",state.household.id).eq("reference_month",month).maybeSingle(),
+        sb.from("finance_cards").select("*").eq("household_id",state.household.id).eq("active",true).order("created_at"),
+        sb.from("finance_card_statements").select("*").eq("household_id",state.household.id).eq("reference_month",month),
+        sb.from("finance_budgets").select("*").eq("household_id",state.household.id).eq("active",true).order("category"),
+        sb.from("finance_transactions").select("reference_month,kind,amount,status,person_user_id,created_by").eq("household_id",state.household.id).gte("reference_month",yearStart).lt("reference_month",nextYear)
       ]);
-      var tx=results[0],rec=results[1],mem=results[2],closure=results[3];
-      if(tx.error||rec.error||mem.error||closure.error)throw(tx.error||rec.error||mem.error||closure.error);
-      state.transactions=tx.data||[];state.recurring=rec.data||[];state.members=mem.data||[];state.currentClosure=closure.data||null;
+      var tx=results[0],rec=results[1],mem=results[2],closure=results[3],cards=results[4],statements=results[5],budgets=results[6],annual=results[7];
+      var all=[tx,rec,mem,closure,cards,statements,budgets,annual],firstError=all.find(function(x){return x&&x.error});
+      if(firstError)throw firstError.error;
+      state.transactions=tx.data||[];
+      state.recurring=rec.data||[];
+      state.members=mem.data||[];
+      state.currentClosure=closure.data||null;
+      state.cards=cards.data||[];
+      state.cardStatements=statements.data||[];
+      state.budgets=budgets.data||[];
+      state.annualTransactions=annual.data||[];
       renderAll();state.lastSync=new Date();await persistOfflineSnapshot();await updateSyncStatus();
     }catch(err){
       console.warn("refresh offline fallback",err);await restoreMonthSnapshot(selected);await updateSyncStatus();
@@ -696,7 +709,7 @@
     if(rows.length){ var ins=await sb.from("finance_transactions").insert(rows); if(ins.error)console.warn(ins.error); }
   }
 
-  function renderAll(){ updatePeopleSelects(); renderDashboard(); renderTransactions(); renderRecurring(); renderSettings(); renderMonthClosure(); }
+  function renderAll(){ updatePeopleSelects(); renderPersonFilter(); renderDashboard(); renderTransactions(); renderRecurring(); renderSettings(); renderMonthClosure(); renderCards(); renderBudgets(); renderAlerts(); renderAnnualChart(); }
 
   function previousMonthValue(){
     var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);
