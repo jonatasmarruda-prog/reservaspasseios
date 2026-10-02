@@ -200,9 +200,14 @@
 
   /* ---------- PDFs: guia nº 01, nome completo e linha em destaque ---------- */
   function actualPeople(tripId){
-    const out=[];
+    const out=[],seen=new Set();
+    const normPerson=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
     (state?.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
-      (r.participants||[]).forEach((p,i)=>out.push({key:digits(p.cpf)||`${r.id}-${i}`,name:p.full_name||'',cpf:p.cpf||'',responsible:r.responsible_name||'',special:false}));
+      const list=Array.isArray(r.participants)&&r.participants.length?r.participants:[{full_name:r.responsible_name||'',email:r.email||'',cpf:r.responsible_cpf||''}];
+      list.forEach((p,i)=>{
+        const name=p.full_name||'',email=String(p.email||r.email||'').trim().toLowerCase(),cpf=digits(p.cpf),key=email&&normPerson(name)?`${email}|${normPerson(name)}`:(cpf||`${r.id}-${i}`);
+        if(seen.has(key))return;seen.add(key);out.push({key,name,cpf:p.cpf||'',responsible:r.responsible_name||'',special:false});
+      });
     });
     return out;
   }
