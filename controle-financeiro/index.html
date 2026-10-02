@@ -11,6 +11,8 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
   <style>
     :root{--bg:#f5f7fb;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--brand:#0f766e;--brand2:#14b8a6;--nav:#0f172a;--good:#047857;--bad:#b91c1c;--warn:#b45309;--shadow:0 12px 32px rgba(15,23,42,.08)}
     *{box-sizing:border-box}html{background:var(--bg)}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);min-height:100vh}
@@ -44,6 +46,7 @@
     .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}.chart-card{min-height:310px}.chart-wrap{position:relative;height:245px}.chart-wide{grid-column:1/-1}.people-split{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.person-card{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px}.person-card strong{display:block;font-size:18px;margin-top:4px}
     .detected-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}.detected-row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px}.detected-row span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detected-row strong{font-size:12px}.mode-note{font-size:12px;color:var(--muted);margin-top:6px}
     .nature-fixed{background:#dbeafe;color:#1e40af}.nature-variable{background:#f3e8ff;color:#7e22ce}.person-chip{background:#ecfeff;color:#155e75}.health-meter{height:10px;background:rgba(255,255,255,.16);border-radius:99px;overflow:hidden;margin-top:10px}.health-meter span{display:block;height:100%;background:#fff;border-radius:99px}
+    .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}
     @media(max-width:900px){.pro-summary{grid-template-columns:repeat(3,1fr)}.quick-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:760px){.summary,.pro-summary{grid-template-columns:1fr 1fr}.grid2,.settings-grid,.setup-grid,.chart-grid{grid-template-columns:1fr}.chart-wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stat .value{font-size:19px}.month-row{align-items:flex-end}.month-row .btn{display:none}.people-split{grid-template-columns:1fr 1fr}.quick-action{padding:11px}}
     @media(print){.topbar,.bottom,.fab,.no-print,.install-banner{display:none!important}.app{padding:0}.content{max-width:none}.card,.stat{box-shadow:none}.summary{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
@@ -142,7 +145,12 @@
       <section id="viewDashboard">
         <div class="month-row">
           <div><small class="muted">Mês selecionado</small><input id="monthPicker" class="field" type="month"></div>
-          <div class="section-actions no-print"><button id="printBtn" class="btn btn-ghost btn-sm">🖨️ Relatório</button><button id="csvBtn" class="btn btn-ghost btn-sm">⬇️ CSV</button></div>
+          <div class="section-actions no-print">
+            <span class="sync-pill"><span class="sync-dot"></span><span id="lastSyncLabel">Atualizando...</span></span>
+            <button id="pdfBtn" class="btn btn-sm pdf-btn">📄 PDF Premium</button>
+            <button id="printBtn" class="btn btn-ghost btn-sm">🖨️ Imprimir</button>
+            <button id="csvBtn" class="btn btn-ghost btn-sm">⬇️ CSV</button>
+          </div>
         </div>
 
         <div class="quick-grid no-print">
@@ -298,7 +306,7 @@
   var SUPABASE_URL = "https://dvblpobtfjtjypsjcjpy.supabase.co";
   var SUPABASE_KEY = "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz";
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{} };
+  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null };
   var expenseCategories = ["Moradia","Mercado","Alimentação","Transporte","Combustível","Saúde","Educação","Lazer","Assinaturas","Cartão","Compras","Pets","Viagem","Impostos","Outros"];
   var incomeCategories = ["Salário","Renda extra","Turismo","Reembolso","Venda","Investimentos","Outros"];
 
@@ -431,7 +439,7 @@
     localStorage.removeItem("finance_pending_name"); await boot();
   };
   $("setupLogout").onclick=logout; $("logoutBtn").onclick=logout;
-  async function logout(){ await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{}}; location.reload(); }
+  async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null}; location.reload(); }
 
   function fillCategory(selectId, kind){
     var arr=kind==="income"?incomeCategories:expenseCategories; var s=$(selectId); var old=s.value; s.innerHTML=arr.map(function(x){return '<option>'+esc(x)+'</option>'}).join(""); if(arr.indexOf(old)>=0)s.value=old;
@@ -456,6 +464,8 @@
     var mem=await sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at");
     state.members=mem.data||[];
     renderAll();
+    state.lastSync=new Date();
+    if($("lastSyncLabel"))$("lastSyncLabel").textContent="Atualizado "+state.lastSync.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
   }
 
   async function ensureRecurringForMonth(month){
