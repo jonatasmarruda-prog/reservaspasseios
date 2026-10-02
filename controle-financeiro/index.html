@@ -46,7 +46,7 @@
     .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}.chart-card{min-height:310px}.chart-wrap{position:relative;height:245px}.chart-wide{grid-column:1/-1}.people-split{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.person-card{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px}.person-card strong{display:block;font-size:18px;margin-top:4px}
     .detected-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}.detected-row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px}.detected-row span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detected-row strong{font-size:12px}.mode-note{font-size:12px;color:var(--muted);margin-top:6px}
     .nature-fixed{background:#dbeafe;color:#1e40af}.nature-variable{background:#f3e8ff;color:#7e22ce}.person-chip{background:#ecfeff;color:#155e75}.health-meter{height:10px;background:rgba(255,255,255,.16);border-radius:99px;overflow:hidden;margin-top:10px}.health-meter span{display:block;height:100%;background:#fff;border-radius:99px}
-    .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}
+    .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}.sync-pending{background:#fff7ed;color:#9a3412}.sync-offline{background:#fef2f2;color:#991b1b}
     @media(max-width:900px){.pro-summary{grid-template-columns:repeat(3,1fr)}.quick-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:760px){.summary,.pro-summary{grid-template-columns:1fr 1fr}.grid2,.settings-grid,.setup-grid,.chart-grid{grid-template-columns:1fr}.chart-wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stat .value{font-size:19px}.month-row{align-items:flex-end}.month-row .btn{display:none}.people-split{grid-template-columns:1fr 1fr}.quick-action{padding:11px}}
     @media(print){.topbar,.bottom,.fab,.no-print,.install-banner{display:none!important}.app{padding:0}.content{max-width:none}.card,.stat{box-shadow:none}.summary{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
@@ -306,7 +306,7 @@
   var SUPABASE_URL = "https://dvblpobtfjtjypsjcjpy.supabase.co";
   var SUPABASE_KEY = "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz";
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null };
+  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
   var expenseCategories = ["Moradia","Mercado","Alimentação","Transporte","Combustível","Saúde","Educação","Lazer","Assinaturas","Cartão","Compras","Pets","Viagem","Impostos","Outros"];
   var incomeCategories = ["Salário","Renda extra","Turismo","Reembolso","Venda","Investimentos","Outros"];
 
@@ -321,6 +321,115 @@
   function msg(id,text,type){ var e=$(id); e.textContent=text||""; e.className="msg "+(type||""); }
   function show(id){ $(id).classList.remove("hidden"); }
   function hide(id){ $(id).classList.add("hidden"); }
+
+  var LOCAL_DB_NAME="nosso-controle-offline-v1", LOCAL_DB_VERSION=1;
+  function localDb(){
+    return new Promise(function(resolve,reject){
+      var req=indexedDB.open(LOCAL_DB_NAME,LOCAL_DB_VERSION);
+      req.onupgradeneeded=function(){
+        var db=req.result;
+        if(!db.objectStoreNames.contains("queue"))db.createObjectStore("queue",{keyPath:"id"});
+        if(!db.objectStoreNames.contains("cache"))db.createObjectStore("cache",{keyPath:"key"});
+      };
+      req.onsuccess=function(){resolve(req.result)}; req.onerror=function(){reject(req.error)};
+    });
+  }
+  async function localPut(store,value){var db=await localDb();return new Promise(function(resolve,reject){var tx=db.transaction(store,"readwrite");tx.objectStore(store).put(value);tx.oncomplete=function(){db.close();resolve(value)};tx.onerror=function(){db.close();reject(tx.error)}})}
+  async function localGet(store,key){var db=await localDb();return new Promise(function(resolve,reject){var tx=db.transaction(store,"readonly"),r=tx.objectStore(store).get(key);r.onsuccess=function(){db.close();resolve(r.result||null)};r.onerror=function(){db.close();reject(r.error)}})}
+  async function localDelete(store,key){var db=await localDb();return new Promise(function(resolve,reject){var tx=db.transaction(store,"readwrite");tx.objectStore(store).delete(key);tx.oncomplete=function(){db.close();resolve()};tx.onerror=function(){db.close();reject(tx.error)}})}
+  async function localAll(store){var db=await localDb();return new Promise(function(resolve,reject){var tx=db.transaction(store,"readonly"),r=tx.objectStore(store).getAll();r.onsuccess=function(){db.close();resolve(r.result||[])};r.onerror=function(){db.close();reject(r.error)}})}
+  function newSyncId(){return crypto&&crypto.randomUUID?crypto.randomUUID():"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(ch){var r=Math.random()*16|0,v=ch==="x"?r:(r&3|8);return v.toString(16)})}
+  function monthCacheKey(month){return state.user&&state.household?"month:"+state.user.id+":"+state.household.id+":"+(month||currentMonth()):""}
+  async function queueForCurrent(){
+    var all=await localAll("queue");
+    return all.filter(function(q){return state.user&&state.household&&q.user_id===state.user.id&&q.household_id===state.household.id}).sort(function(a,b){return a.created_at-b.created_at});
+  }
+  async function queueOperation(type,payload,target,file){
+    var q={id:newSyncId(),user_id:state.user.id,household_id:state.household.id,type:type,payload:payload||null,target:target||null,file:file||null,created_at:Date.now()};
+    await localPut("queue",q); await updateSyncStatus(); return q;
+  }
+  async function persistOfflineSnapshot(){
+    if(!state.user||!state.household)return;
+    try{
+      await localPut("cache",{key:"profile:"+state.user.id,household:state.household,membership:state.membership,members:state.members,month:$("monthPicker").value||currentMonth(),saved_at:Date.now()});
+      await localPut("cache",{key:monthCacheKey($("monthPicker").value||currentMonth()),transactions:state.transactions,recurring:state.recurring,members:state.members,saved_at:Date.now()});
+    }catch(e){console.warn("cache",e)}
+  }
+  async function restoreMonthSnapshot(month){
+    try{
+      var snap=await localGet("cache",monthCacheKey(month||$("monthPicker").value||currentMonth()));
+      if(!snap)return false;
+      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];renderAll();await updateSyncStatus();return true;
+    }catch(e){return false}
+  }
+  async function restoreOfflineProfile(){
+    if(!state.user)return false;
+    try{
+      var p=await localGet("cache","profile:"+state.user.id);if(!p||!p.household)return false;
+      state.household=p.household;state.membership=p.membership;state.members=p.members||[];
+      hide("authScreen");hide("setupScreen");show("appScreen");$("houseLabel").textContent=state.household.name;$("monthPicker").value=p.month||currentMonth();
+      await restoreMonthSnapshot($("monthPicker").value);startAutoSync();await updateSyncStatus();return true;
+    }catch(e){return false}
+  }
+  async function updateSyncStatus(){
+    if(!$("lastSyncLabel"))return;
+    var n=0;try{n=(await queueForCurrent()).length}catch(e){}
+    if(!navigator.onLine){$("lastSyncLabel").textContent="Sem internet • "+n+" pendente"+(n===1?"":"s");return}
+    if(state.syncing){$("lastSyncLabel").textContent="Sincronizando • "+n+" pendente"+(n===1?"":"s");return}
+    if(n){$("lastSyncLabel").textContent=n+" para sincronizar";return}
+    $("lastSyncLabel").textContent=state.lastSync?"Atualizado "+state.lastSync.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"}):"Sincronizado";
+  }
+  function localTargetQuery(table,target){
+    var q=sb.from(table);return target&&target.kind==="sync"?q.eq("client_sync_id",target.value):q.eq("id",target&&target.value||target);
+  }
+  async function syncOfflineQueue(refreshAfter){
+    if(!navigator.onLine||!state.user||!state.household||state.syncing)return false;
+    state.syncing=true;await updateSyncStatus();var changed=false;
+    try{
+      var list=await queueForCurrent();
+      for(var i=0;i<list.length;i++){
+        var op=list[i],ok=false;
+        try{
+          if(op.type==="tx_insert"){
+            var existing=await sb.from("finance_transactions").select("id,receipt_path").eq("client_sync_id",op.payload.client_sync_id).maybeSingle();
+            if(existing.error)throw existing.error;
+            var serverId=existing.data&&existing.data.id;
+            if(!serverId){var ins=await sb.from("finance_transactions").insert(op.payload).select("id").single();if(ins.error)throw ins.error;serverId=ins.data.id}
+            if(op.file){
+              var ext=(op.file.name&&op.file.name.split(".").pop()||"jpg").toLowerCase(),path=state.household.id+"/"+state.user.id+"/"+op.payload.client_sync_id+"."+ext;
+              var up=await sb.storage.from("finance-receipts").upload(path,op.file,{upsert:true,contentType:op.file.type||"image/jpeg"});
+              if(!up.error)await sb.from("finance_transactions").update({receipt_path:path}).eq("id",serverId);
+            }
+            ok=true;
+          }else if(op.type==="tx_batch_insert"){
+            var receiptPath=null;
+            if(op.file){
+              var bext=(op.file.name&&op.file.name.split(".").pop()||"jpg").toLowerCase();receiptPath=state.household.id+"/"+state.user.id+"/batch-"+op.id+"."+bext;
+              var bup=await sb.storage.from("finance-receipts").upload(receiptPath,op.file,{upsert:true,contentType:op.file.type||"image/jpeg"});if(bup.error)receiptPath=null;
+            }
+            for(var j=0;j<op.payload.length;j++){
+              var row=Object.assign({},op.payload[j]);if(receiptPath)row.receipt_path=receiptPath;
+              var ex=await sb.from("finance_transactions").select("id").eq("client_sync_id",row.client_sync_id).maybeSingle();if(ex.error)throw ex.error;
+              if(!ex.data){var bi=await sb.from("finance_transactions").insert(row);if(bi.error)throw bi.error}
+            }
+            ok=true;
+          }else if(op.type==="tx_update"){
+            var uq=sb.from("finance_transactions").update(op.payload);uq=op.target.kind==="sync"?uq.eq("client_sync_id",op.target.value):uq.eq("id",op.target.value);var ur=await uq;if(ur.error)throw ur.error;ok=true;
+          }else if(op.type==="tx_delete"){
+            var dq=sb.from("finance_transactions").delete();dq=op.target.kind==="sync"?dq.eq("client_sync_id",op.target.value):dq.eq("id",op.target.value);var dr=await dq;if(dr.error)throw dr.error;ok=true;
+          }else if(op.type==="rec_insert"){
+            var rex=await sb.from("finance_recurring").select("id").eq("client_sync_id",op.payload.client_sync_id).maybeSingle();if(rex.error)throw rex.error;
+            if(!rex.data){var ri=await sb.from("finance_recurring").insert(op.payload);if(ri.error)throw ri.error}ok=true;
+          }else if(op.type==="rec_delete"){
+            var rdq=sb.from("finance_recurring").delete();rdq=op.target.kind==="sync"?rdq.eq("client_sync_id",op.target.value):rdq.eq("id",op.target.value);var rdr=await rdq;if(rdr.error)throw rdr.error;ok=true;
+          }
+          if(ok){await localDelete("queue",op.id);changed=true}
+        }catch(err){console.warn("offline sync",err);break}
+      }
+    }finally{state.syncing=false;await updateSyncStatus()}
+    if(changed&&refreshAfter)await refreshAll({skipSync:true});
+    return changed;
+  }
   function memberName(id){ var m=state.members.find(function(x){return x.user_id===id}); return m?m.display_name:"Família"; }
   function fillPeople(selectId){
     var s=$(selectId); if(!s)return; var current=s.value||state.user&&state.user.id||"";
@@ -409,7 +518,7 @@
     if(!state.user){ show("authScreen"); hide("resetPasswordScreen"); hide("setupScreen"); hide("appScreen"); return; }
     hide("authScreen");
     var membershipRes=await sb.from("finance_household_members").select("household_id,display_name,role").eq("user_id",state.user.id).limit(1);
-    if(membershipRes.error){ console.error(membershipRes.error); }
+    if(membershipRes.error){console.warn(membershipRes.error);if(await restoreOfflineProfile())return}
     var membership=membershipRes.data&&membershipRes.data[0];
     if(!membership){
       hide("appScreen"); show("setupScreen");
@@ -424,6 +533,7 @@
     hide("setupScreen"); show("appScreen"); $("houseLabel").textContent=state.household.name;
     $("monthPicker").value=$("monthPicker").value||currentMonth();
     await refreshAll();
+    await persistOfflineSnapshot();
     startAutoSync();
   }
 
@@ -453,20 +563,32 @@
   };
   $("recKind").onchange=function(){fillCategory("recCategory",this.value)};
 
-  async function refreshAll(){
+  async function refreshAll(options){
     if(!state.household)return;
-    await ensureRecurringForMonth($("monthPicker").value||currentMonth());
-    var month=monthStart($("monthPicker").value||currentMonth());
-    var next=new Date(month+"T12:00:00"); next.setMonth(next.getMonth()+1); var nextMonth=next.toISOString().slice(0,10);
-    var tx=await sb.from("finance_transactions").select("*").eq("household_id",state.household.id).gte("reference_month",month).lt("reference_month",nextMonth).order("transaction_date",{ascending:false}).order("created_at",{ascending:false});
-    state.transactions=tx.data||[];
-    var rec=await sb.from("finance_recurring").select("*").eq("household_id",state.household.id).order("kind").order("due_day");
-    state.recurring=rec.data||[];
-    var mem=await sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at");
-    state.members=mem.data||[];
-    renderAll();
-    state.lastSync=new Date();
-    if($("lastSyncLabel"))$("lastSyncLabel").textContent="Atualizado "+state.lastSync.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});
+    options=options||{};
+    var selected=$("monthPicker").value||currentMonth();
+    if(!navigator.onLine){
+      await restoreMonthSnapshot(selected);
+      await updateSyncStatus();
+      return;
+    }
+    if(!options.skipSync)await syncOfflineQueue(false);
+    try{
+      await ensureRecurringForMonth(selected);
+      var month=monthStart(selected);
+      var next=new Date(month+"T12:00:00");next.setMonth(next.getMonth()+1);var nextMonth=next.toISOString().slice(0,10);
+      var results=await Promise.all([
+        sb.from("finance_transactions").select("*").eq("household_id",state.household.id).gte("reference_month",month).lt("reference_month",nextMonth).order("transaction_date",{ascending:false}).order("created_at",{ascending:false}),
+        sb.from("finance_recurring").select("*").eq("household_id",state.household.id).order("kind").order("due_day"),
+        sb.from("finance_household_members").select("user_id,display_name,role,joined_at").eq("household_id",state.household.id).order("joined_at")
+      ]);
+      var tx=results[0],rec=results[1],mem=results[2];
+      if(tx.error||rec.error||mem.error)throw(tx.error||rec.error||mem.error);
+      state.transactions=tx.data||[];state.recurring=rec.data||[];state.members=mem.data||[];
+      renderAll();state.lastSync=new Date();await persistOfflineSnapshot();await updateSyncStatus();
+    }catch(err){
+      console.warn("refresh offline fallback",err);await restoreMonthSnapshot(selected);await updateSyncStatus();
+    }
   }
 
   async function ensureRecurringForMonth(month){
@@ -551,7 +673,8 @@
       var person=memberName(x.person_user_id||x.created_by);
       var nature=x.kind==="expense"?(x.expense_type==="fixed"?"Fixo":"Variável"):"Receita";
       var natureClass=x.expense_type==="fixed"?"nature-fixed":"nature-variable";
-      return '<div class="item"><div class="item-icon">'+txIcon(x)+'</div><div class="item-main"><div class="item-title">'+esc(x.title)+'</div><div class="item-sub">'+esc(x.category)+' • '+esc(x.transaction_date)+' <span class="chip person-chip">'+esc(person)+'</span> <span class="chip '+natureClass+'">'+nature+'</span> <span class="chip '+esc(x.status)+'">'+status+'</span></div></div><div class="item-value '+cls+'">'+sign+money(x.amount)+'</div>'+receipt+'<button class="btn btn-ghost btn-sm" data-toggle="'+esc(x.id)+'">'+(x.status==="planned"?"✓":"↩")+'</button><button class="btn btn-ghost btn-sm" data-delete="'+esc(x.id)+'">⋯</button></div>';
+      var pending=x._pending?'<span class="chip sync-pending">Aguardando sincronização</span>':'';
+      return '<div class="item"><div class="item-icon">'+txIcon(x)+'</div><div class="item-main"><div class="item-title">'+esc(x.title)+'</div><div class="item-sub">'+esc(x.category)+' • '+esc(x.transaction_date)+' <span class="chip person-chip">'+esc(person)+'</span> <span class="chip '+natureClass+'">'+nature+'</span> <span class="chip '+esc(x.status)+'">'+status+'</span> '+pending+'</div></div><div class="item-value '+cls+'">'+sign+money(x.amount)+'</div>'+receipt+'<button class="btn btn-ghost btn-sm" data-toggle="'+esc(x.id)+'">'+(x.status==="planned"?"✓":"↩")+'</button><button class="btn btn-ghost btn-sm" data-delete="'+esc(x.id)+'">⋯</button></div>';
     }).join("");
   }
 
@@ -565,7 +688,7 @@
   function renderRecurring(){
     $("recurringList").innerHTML=state.recurring.length?state.recurring.map(function(r){
       var cls=r.kind==="income"?"income":"expense"; var sign=r.kind==="income"?"+":"-"; var person=memberName(r.person_user_id||r.created_by);
-      return '<div class="item"><div class="item-icon">'+(r.kind==="income"?"💰":"🔁")+'</div><div class="item-main"><div class="item-title">'+esc(r.title)+'</div><div class="item-sub">Todo dia '+r.due_day+' • '+esc(r.category)+' <span class="chip person-chip">'+esc(person)+'</span></div></div><div class="item-value '+cls+'">'+sign+money(r.amount)+'</div><button class="btn btn-ghost btn-sm" data-rec-delete="'+r.id+'">⋯</button></div>';
+      return '<div class="item"><div class="item-icon">'+(r.kind==="income"?"💰":"🔁")+'</div><div class="item-main"><div class="item-title">'+esc(r.title)+'</div><div class="item-sub">Todo dia '+r.due_day+' • '+esc(r.category)+' <span class="chip person-chip">'+esc(person)+'</span> '+(r._pending?'<span class="chip sync-pending">Aguardando sincronização</span>':'')+'</div></div><div class="item-value '+cls+'">'+sign+money(r.amount)+'</div><button class="btn btn-ghost btn-sm" data-rec-delete="'+r.id+'">⋯</button></div>';
     }).join(""):'<div class="empty">Cadastre salários e contas fixas para o mês já começar projetado.</div>';
   }
 
@@ -581,9 +704,9 @@
     var oi=e.target.closest("[data-open-income]"); if(oi){openTransaction("income");return}
     var or=e.target.closest("[data-open-recurring]"); if(or){openRecurring();return}
     var c=e.target.closest("[data-close]"); if(c){hide(c.dataset.close);return}
-    var d=e.target.closest("[data-delete]"); if(d){ if(confirm("Excluir este lançamento?")){await sb.from("finance_transactions").delete().eq("id",d.dataset.delete);await refreshAll()} return}
-    var rd=e.target.closest("[data-rec-delete]"); if(rd){ if(confirm("Excluir este recorrente? Os lançamentos já gerados não serão apagados.")){await sb.from("finance_recurring").delete().eq("id",rd.dataset.recDelete);await refreshAll()} return}
-    var tg=e.target.closest("[data-toggle]"); if(tg){ var x=state.transactions.find(function(a){return a.id===tg.dataset.toggle}); if(x){var ns=x.status==="planned"?(x.kind==="income"?"received":"paid"):"planned"; await sb.from("finance_transactions").update({status:ns}).eq("id",x.id);await refreshAll()}return}
+    var d=e.target.closest("[data-delete]"); if(d){ if(confirm("Excluir este lançamento?")){var dx=state.transactions.find(function(a){return a.id===d.dataset.delete});if(dx){await queueOperation("tx_delete",null,{kind:dx.client_sync_id?"sync":"id",value:dx.client_sync_id||dx.id});state.transactions=state.transactions.filter(function(a){return a.id!==dx.id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}} return}
+    var rd=e.target.closest("[data-rec-delete]"); if(rd){ if(confirm("Excluir este recorrente? Os lançamentos já gerados não serão apagados.")){var rx=state.recurring.find(function(a){return a.id===rd.dataset.recDelete});if(rx){await queueOperation("rec_delete",null,{kind:rx.client_sync_id?"sync":"id",value:rx.client_sync_id||rx.id});state.recurring=state.recurring.filter(function(a){return a.id!==rx.id});state.transactions=state.transactions.filter(function(a){return a._projection_for!==rx.client_sync_id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}} return}
+    var tg=e.target.closest("[data-toggle]"); if(tg){var x=state.transactions.find(function(a){return a.id===tg.dataset.toggle});if(x){var ns=x.status==="planned"?(x.kind==="income"?"received":"paid"):"planned";x.status=ns;x._pending=true;await queueOperation("tx_update",{status:ns},{kind:x.client_sync_id?"sync":"id",value:x.client_sync_id||x.id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}return}
     var rc=e.target.closest("[data-receipt]"); if(rc){await openReceipt(rc.dataset.receipt);return}
   });
 
@@ -657,43 +780,39 @@
   }
 
   $("transactionForm").onsubmit=async function(e){
-    e.preventDefault();msg("txMsg","Salvando...","");
-    var amount=numBR($("txAmount").value); if(!amount||amount<=0){msg("txMsg","Informe um valor válido.","error");return}
-    var kind=$("txKind").value; var status=$("txStatus").value; var month=($("txDate").value||today()).slice(0,7);
-    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("txPerson").value||state.user.id,reference_month:monthStart(month),kind:kind,title:$("txTitle").value.trim(),category:$("txCategory").value,amount:amount,transaction_date:$("txDate").value,due_date:$("txDueDate").value||null,status:status,payment_method:$("txMethod").value||null,installment_current:Number($("txInstallmentCurrent").value)||null,installment_total:Number($("txInstallmentTotal").value)||null,notes:$("txNotes").value.trim()||null,receipt_ocr_text:state.ocrText||null,expense_type:kind==="expense"?$("txExpenseType").value:null,entry_source:$("txReceipt").files[0]?"receipt":"manual"};
-    var ins=await sb.from("finance_transactions").insert(row).select("id").single();
-    if(ins.error){msg("txMsg",ins.error.message,"error");return}
-    var file=$("txReceipt").files[0];
-    if(file){
-      var ext=(file.name.split(".").pop()||"jpg").toLowerCase(); var path=state.household.id+"/"+state.user.id+"/"+ins.data.id+"."+ext;
-      var up=await sb.storage.from("finance-receipts").upload(path,file,{upsert:false,contentType:file.type});
-      if(!up.error)await sb.from("finance_transactions").update({receipt_path:path}).eq("id",ins.data.id);
-    }
-    hide("transactionModal");$("monthPicker").value=month;await refreshAll();
+    e.preventDefault();msg("txMsg","Salvando no celular...","");
+    var amount=numBR($("txAmount").value);if(!amount||amount<=0){msg("txMsg","Informe um valor válido.","error");return}
+    var kind=$("txKind").value,status=$("txStatus").value,month=($("txDate").value||today()).slice(0,7),syncId=newSyncId();
+    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("txPerson").value||state.user.id,reference_month:monthStart(month),kind:kind,title:$("txTitle").value.trim(),category:$("txCategory").value,amount:amount,transaction_date:$("txDate").value,due_date:$("txDueDate").value||null,status:status,payment_method:$("txMethod").value||null,installment_current:Number($("txInstallmentCurrent").value)||null,installment_total:Number($("txInstallmentTotal").value)||null,notes:$("txNotes").value.trim()||null,receipt_ocr_text:state.ocrText||null,expense_type:kind==="expense"?$("txExpenseType").value:null,entry_source:$("txReceipt").files[0]?"receipt":"manual",client_sync_id:syncId};
+    var file=$("txReceipt").files[0]||null;
+    await queueOperation("tx_insert",row,null,file);
+    var localRow=Object.assign({},row,{id:"local-"+syncId,_pending:true,created_at:new Date().toISOString()});state.transactions.unshift(localRow);
+    hide("transactionModal");$("monthPicker").value=month;renderAll();await persistOfflineSnapshot();
+    if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();
   };
 
   $("recurringForm").onsubmit=async function(e){
-    e.preventDefault();msg("recMsg","Salvando...","");
-    var amount=numBR($("recAmount").value); if(!amount){msg("recMsg","Informe um valor válido.","error");return}
-    var kind=$("recKind").value;
-    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("recPerson").value||state.user.id,kind:kind,title:$("recTitle").value.trim(),category:$("recCategory").value,amount:amount,due_day:Number($("recDay").value),payment_method:$("recMethod").value||null,start_month:monthStart($("monthPicker").value||currentMonth()),expense_type:kind==="expense"?"fixed":null};
-    var r=await sb.from("finance_recurring").insert(row); if(r.error){msg("recMsg",r.error.message,"error");return} hide("recurringModal");await refreshAll();
+    e.preventDefault();msg("recMsg","Salvando no celular...","");
+    var amount=numBR($("recAmount").value);if(!amount){msg("recMsg","Informe um valor válido.","error");return}
+    var kind=$("recKind").value,syncId=newSyncId();
+    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("recPerson").value||state.user.id,kind:kind,title:$("recTitle").value.trim(),category:$("recCategory").value,amount:amount,due_day:Number($("recDay").value),payment_method:$("recMethod").value||null,start_month:monthStart($("monthPicker").value||currentMonth()),expense_type:kind==="expense"?"fixed":null,client_sync_id:syncId};
+    await queueOperation("rec_insert",row);
+    state.recurring.unshift(Object.assign({},row,{id:"local-rec-"+syncId,_pending:true}));
+    var month=$("monthPicker").value||currentMonth(),d=dayDate(month,row.due_day);
+    state.transactions.unshift({id:"projection-"+syncId,_projection_for:syncId,_pending:true,household_id:row.household_id,created_by:row.created_by,person_user_id:row.person_user_id,reference_month:monthStart(month),kind:row.kind,title:row.title,category:row.category,amount:row.amount,transaction_date:d,due_date:d,status:"planned",payment_method:row.payment_method,expense_type:row.kind==="expense"?"fixed":null,entry_source:"recurring"});
+    hide("recurringModal");renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();
   };
 
   $("importBatchBtn").onclick=async function(){
     var selected=Array.from(document.querySelectorAll("[data-ocr-index]:checked")).map(function(el){return state.ocrCandidates[Number(el.dataset.ocrIndex)]}).filter(Boolean);
     if(!selected.length){msg("txMsg","Selecione pelo menos um gasto.","error");return}
     if(!confirm("Importar "+selected.length+" gastos detectados? Confira os valores antes de continuar."))return;
-    msg("txMsg","Importando gastos...","");
-    var file=$("txReceipt").files[0], receiptPath=null;
-    if(file){
-      var ext=(file.name.split(".").pop()||"jpg").toLowerCase(); receiptPath=state.household.id+"/"+state.user.id+"/batch-"+Date.now()+"."+ext;
-      var up=await sb.storage.from("finance-receipts").upload(receiptPath,file,{upsert:false,contentType:file.type}); if(up.error)receiptPath=null;
-    }
-    var date=$("txDate").value||today(), month=date.slice(0,7), person=$("txPerson").value||state.user.id;
-    var rows=selected.map(function(x){return {household_id:state.household.id,created_by:state.user.id,person_user_id:person,reference_month:monthStart(month),kind:"expense",title:x.title,category:$("txCategory").value||"Outros",amount:x.amount,transaction_date:date,due_date:null,status:"paid",payment_method:$("txMethod").value||null,notes:"Importado por leitura de imagem",receipt_path:receiptPath,receipt_ocr_text:state.ocrText||null,expense_type:$("txExpenseType").value||"variable",entry_source:"receipt"}});
-    var r=await sb.from("finance_transactions").insert(rows); if(r.error){msg("txMsg",r.error.message,"error");return}
-    hide("transactionModal"); $("monthPicker").value=month; await refreshAll();
+    msg("txMsg","Salvando no celular...","");
+    var file=$("txReceipt").files[0]||null,date=$("txDate").value||today(),month=date.slice(0,7),person=$("txPerson").value||state.user.id;
+    var rows=selected.map(function(x){var sid=newSyncId();return {household_id:state.household.id,created_by:state.user.id,person_user_id:person,reference_month:monthStart(month),kind:"expense",title:x.title,category:$("txCategory").value||"Outros",amount:x.amount,transaction_date:date,due_date:null,status:"paid",payment_method:$("txMethod").value||null,notes:"Importado por leitura de imagem",receipt_ocr_text:state.ocrText||null,expense_type:$("txExpenseType").value||"variable",entry_source:"receipt",client_sync_id:sid}});
+    await queueOperation("tx_batch_insert",rows,null,file);
+    rows.slice().reverse().forEach(function(row){state.transactions.unshift(Object.assign({},row,{id:"local-"+row.client_sync_id,_pending:true,created_at:new Date().toISOString()}))});
+    hide("transactionModal");$("monthPicker").value=month;renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();
   };
 
   async function openReceipt(id){
@@ -796,8 +915,10 @@
   window.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&state.household)refreshAll()});
   function startAutoSync(){
     if(state.syncTimer)clearInterval(state.syncTimer);
-    state.syncTimer=setInterval(function(){if(document.visibilityState==="visible"&&state.household)refreshAll()},30000);
+    state.syncTimer=setInterval(function(){if(document.visibilityState==="visible"&&state.household){if(navigator.onLine)syncOfflineQueue(true);else updateSyncStatus()}},15000);
   }
+  window.addEventListener("online",function(){updateSyncStatus();if(state.household)syncOfflineQueue(true)});
+  window.addEventListener("offline",function(){updateSyncStatus()});
   if("serviceWorker" in navigator)window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(console.warn)});
   sb.auth.onAuthStateChange(function(event,session){
     if(event==="PASSWORD_RECOVERY"){
