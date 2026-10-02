@@ -737,7 +737,7 @@
   };
 
   $("setupLogout").onclick=logout; $("logoutBtn").onclick=logout;
-  async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],cards:[],cardStatements:[],budgets:[],annualTransactions:[],currentClosure:null,viewPerson:"family",filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null,syncing:false}; location.reload(); }
+  async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],cards:[],cardStatements:[],budgets:[],annualTransactions:[],currentClosure:null,viewPerson:"family",filter:"all",search:"",txEditId:null,recEditId:null,ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null,syncing:false}; location.reload(); }
 
   function fillCategory(selectId, kind){
     var arr=kind==="income"?incomeCategories:expenseCategories; var s=$(selectId); var old=s.value; s.innerHTML=arr.map(function(x){return '<option>'+esc(x)+'</option>'}).join(""); if(arr.indexOf(old)>=0)s.value=old;
@@ -1081,7 +1081,7 @@
     var row={
       household_id:state.household.id,card_id:cardId,reference_month:ref,status:"closed",
       total_amount:total,closed_by:state.user.id,closed_at:new Date().toISOString(),reopened_at:null,
-      snapshot:{month:selected,card:{id:card.id,name:card.name,owner_user_id:card.owner_user_id},transactions:tx,total:total}
+      snapshot:{month:selected,card:{id:card.id,name:card.name,owner_user_id:card.owner_user_id},reconciliation:opening||null,new_transactions:tx,total:total}
     };
     var r=await sb.from("finance_card_statements").upsert(row,{onConflict:"card_id,reference_month"}).select("*").single();
     if(r.error){console.error(r.error);toast("Não foi possível fechar a fatura.");return}
@@ -1145,11 +1145,72 @@
     btn.disabled=false;btn.textContent="Salvar orçamento";await refreshAll({skipSync:true});
   };
 
+  async function fetchAllFinanceRows(table){
+    var out=[],from=0,size=1000;
+    while(true){
+      var r=await sb.from(table).select("*").eq("household_id",state.household.id).range(from,from+size-1);
+      if(r.error)throw r.error;
+      var rows=r.data||[];out=out.concat(rows);if(rows.length<size)break;from+=size;
+    }
+    return out;
+  }
+  function downloadJsonFile(name,data){
+    var blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(url)},3000);
+  }
+  async function downloadFullBackup(){
+    if(!navigator.onLine){toast("Conecte à internet para gerar um backup completo.");return}
+    var btn=$("backupDownloadBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="Gerando backup...";
+    try{
+      await syncOfflineQueue(true);
+      var names=["finance_transactions","finance_recurring","finance_cards","finance_card_statements","finance_card_month_opening","finance_budgets","finance_month_closures"];
+      var results=await Promise.all(names.map(fetchAllFinanceRows)),tables={};
+      names.forEach(function(n,i){tables[n]=results[i]});
+      var backup={format:"nosso-controle-backup",version:1,generated_at:new Date().toISOString(),household:{id:state.household.id,name:state.household.name},members:state.members,tables:tables};
+      downloadJsonFile("Nosso-Controle-backup-"+new Date().toISOString().slice(0,10)+".json",backup);
+      toast("💾 Backup completo baixado.");
+    }catch(err){console.error(err);toast("Não foi possível gerar o backup.")}
+    finally{btn.disabled=false;btn.textContent=old}
+  }
+  async function upsertBackupRows(table,rows,onConflict){
+    if(!rows||!rows.length)return;
+    for(var i=0;i<rows.length;i+=200){
+      var part=rows.slice(i,i+200);
+      var r=await sb.from(table).upsert(part,{onConflict:onConflict});if(r.error)throw r.error;
+    }
+  }
+  async function restoreFullBackup(file){
+    if(!navigator.onLine){toast("Conecte à internet para restaurar o backup.");return}
+    if(state.membership.role!=="owner"){toast("Somente o administrador pode restaurar um backup.");return}
+    var data;
+    try{data=JSON.parse(await file.text())}catch(err){toast("Arquivo de backup inválido.");return}
+    if(!data||data.format!=="nosso-controle-backup"||!data.tables){toast("Este arquivo não é um backup do Nosso Controle.");return}
+    if(!data.household||data.household.id!==state.household.id){toast("Este backup pertence a outra família.");return}
+    var tables=data.tables;
+    var allRows=[].concat(tables.finance_transactions||[],tables.finance_recurring||[],tables.finance_cards||[],tables.finance_card_statements||[],tables.finance_card_month_opening||[],tables.finance_budgets||[],tables.finance_month_closures||[]);
+    if(allRows.some(function(r){return r.household_id!==state.household.id})){toast("Backup recusado: dados de outra família encontrados.");return}
+    if(!confirm("Restaurar este backup? Os dados do arquivo serão mesclados com os atuais. Registros com o mesmo identificador serão atualizados."))return;
+    toast("Restaurando backup...");
+    try{
+      await upsertBackupRows("finance_cards",tables.finance_cards||[],"id");
+      await upsertBackupRows("finance_recurring",tables.finance_recurring||[],"id");
+      await upsertBackupRows("finance_budgets",tables.finance_budgets||[],"household_id,category");
+      await upsertBackupRows("finance_card_month_opening",tables.finance_card_month_opening||[],"card_id,reference_month");
+      await upsertBackupRows("finance_card_statements",tables.finance_card_statements||[],"card_id,reference_month");
+      await upsertBackupRows("finance_transactions",tables.finance_transactions||[],"id");
+      await upsertBackupRows("finance_month_closures",tables.finance_month_closures||[],"household_id,reference_month");
+      toast("✅ Backup restaurado com sucesso.");await refreshAll({skipSync:true});
+    }catch(err){console.error(err);toast("Falha ao restaurar o backup. Nenhum dado é apagado automaticamente.")}
+  }
+  $("backupDownloadBtn").onclick=downloadFullBackup;
+  $("backupRestoreInput").onchange=async function(){var file=this.files&&this.files[0];if(file)await restoreFullBackup(file);this.value=""};
+
   function renderSettings(){
     $("inviteCode").textContent=state.household.invite_code;
     $("membersList").innerHTML=state.members.map(function(m){return '<div class="member"><div><strong>'+esc(m.display_name)+'</strong><div class="muted" style="font-size:12px">'+(m.role==="owner"?"Administrador":"Membro")+'</div></div><span>'+ (m.user_id===state.user.id?"Você":"") +'</span></div>'}).join("");
     $("rotateInvite").classList.toggle("hidden",state.membership.role!=="owner");
     $("familyAccessCard").classList.toggle("hidden",state.membership.role!=="owner");
+    var restoreInput=$("backupRestoreInput");if(restoreInput&&restoreInput.parentElement)restoreInput.parentElement.classList.toggle("hidden",state.membership.role!=="owner");
   }
 
   document.addEventListener("click",async function(e){
@@ -1439,7 +1500,7 @@
     var p=(value||currentMonth()).split("-"), d=new Date(Number(p[0]),Number(p[1])-1,1);
     return d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}).replace(/^./,function(x){return x.toUpperCase()});
   }
-  function metricsFrom(t){
+  function metricsFrom(t,forceFamily){
     t=t||[];var expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0,byPerson={};
     state.members.forEach(function(m){byPerson[m.user_id]={name:m.display_name,expense:0,income:0}});
     t.forEach(function(x){
@@ -1450,7 +1511,7 @@
       else{expExpected+=a;byPerson[pid].expense+=a;if(x.status==="paid")expPaid+=a;else if(x.status==="planned")debt+=a;if(x.expense_type==="fixed")fixed+=a;else variable+=a}
     });
     var allowedPeople={};t.forEach(function(x){allowedPeople[x.person_user_id||x.created_by]=true});
-    var useFamily=state.viewPerson==="family";
+    var useFamily=!!forceFamily||state.viewPerson==="family";
     state.cardOpenings.forEach(function(o){
       var card=state.cards.find(function(c){return c.id===o.card_id});if(!card)return;
       if(!useFamily&&card.owner_user_id!==state.viewPerson)return;
@@ -1461,7 +1522,7 @@
     });
     return {expExpected:expExpected,incExpected:incExpected,expPaid:expPaid,incReceived:incReceived,debt:debt,fixed:fixed,variable:variable,realBalance:incReceived-expPaid,expectedBalance:incExpected-expExpected,commitment:incExpected>0?expExpected/incExpected*100:0,byPerson:byPerson};
   }
-  function getMonthlyMetrics(){return metricsFrom(state.transactions)}
+  function getMonthlyMetrics(){return metricsFrom(state.transactions,true)}
 
   async function generatePremiumPdf(){
     var btn=$("pdfBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="Gerando PDF...";
