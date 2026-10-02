@@ -42,10 +42,15 @@ const service=JSON.parse(raw);
 if(!admin.apps.length)admin.initializeApp({credential:admin.credential.cert(service)});
 const db=admin.firestore();
 
-const [tripsSnap,salesSnap]=await Promise.all([
+const [tripsSnap,salesSnap,pushOwnerSnap,activePushSnap]=await Promise.all([
   db.collection('trips').limit(1000).get(),
-  db.collection('sales').limit(5000).get()
+  db.collection('sales').limit(5000).get(),
+  db.collection('settings').doc('push_device_owner').get(),
+  db.collection('push_devices').where('active','==',true).limit(100).get()
 ]);
+const ownerPushTokens=pushOwnerSnap.exists&&Array.isArray(pushOwnerSnap.data()?.tokens)?pushOwnerSnap.data().tokens.filter(x=>String(x||'').length>50):[];
+const activePushTokens=new Set([...ownerPushTokens,...activePushSnap.docs.map(d=>d.data()?.token).filter(Boolean)]);
+if(!activePushTokens.size)note('warn','no_push_device_registered');
 const trips=tripsSnap.docs.map(d=>({id:d.id,ref:d.ref,...d.data()}));
 const sales=salesSnap.docs.map(d=>({id:d.id,ref:d.ref,...d.data()}));
 const tripMap=new Map(trips.map(t=>[t.id,t]));
@@ -129,7 +134,7 @@ for(const [key,ids] of salesIdentity.entries())if(ids.length>1)note('error','dup
 const summary=issues.reduce((a,x)=>(a[x.severity]=(a[x.severity]||0)+1,a),{});
 console.log(JSON.stringify({
   ok:!issues.some(x=>x.severity==='error'),
-  counts:{trips:trips.length,sales:sales.length,reservations:reservations.length},
+  counts:{trips:trips.length,sales:sales.length,reservations:reservations.length,push_devices:activePushTokens.size},
   summary,
   issues
 },null,2));
