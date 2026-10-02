@@ -384,11 +384,26 @@
           <div><label>Dono do cartão</label><select id="cardOwner" class="field" required></select></div>
           <div><label>Bandeira</label><input id="cardBrand" class="field" placeholder="Ex.: Visa"></div>
           <div><label>Limite</label><input id="cardLimit" class="field" inputmode="decimal" placeholder="0,00"></div>
+          <div><label>Valor atual da fatura deste mês</label><input id="cardCurrentInvoice" class="field" inputmode="decimal" placeholder="0,00"><div class="field-helper">Informe o valor que já está na fatura agora. Novas compras lançadas pelo app serão somadas depois.</div></div>
           <div><label class="required">Dia de fechamento</label><input id="cardClosingDay" class="field" type="number" min="1" max="31" value="30" required></div>
           <div><label class="required">Dia de vencimento</label><input id="cardDueDay" class="field" type="number" min="1" max="31" value="10" required></div>
         </div>
         <div id="cardMsg" class="msg"></div>
         <button class="btn btn-primary btn-block" style="margin-top:14px">Salvar cartão</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="cardInvoiceModal" class="modal hidden">
+    <div class="sheet">
+      <div class="sheet-head"><div><h2 style="margin:0">Valor da fatura</h2><small id="cardInvoiceSubtitle" class="muted">Atualize o valor atual deste mês</small></div><button class="close" data-close="cardInvoiceModal">×</button></div>
+      <form id="cardInvoiceForm">
+        <input id="cardInvoiceCardId" type="hidden">
+        <label class="required">Valor que já está na fatura</label>
+        <input id="cardInvoiceAmount" class="field" inputmode="decimal" required placeholder="0,00">
+        <div class="field-helper">Este é o valor acumulado antes das novas compras registradas pelo Nosso Controle.</div>
+        <div id="cardInvoiceMsg" class="msg"></div>
+        <button class="btn btn-primary btn-block" style="margin-top:14px">Salvar valor da fatura</button>
       </form>
     </div>
   </div>
@@ -413,7 +428,7 @@
   var SUPABASE_URL = "https://dvblpobtfjtjypsjcjpy.supabase.co";
   var SUPABASE_KEY = "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz";
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], cards:[], cardStatements:[], budgets:[], annualTransactions:[], currentClosure:null, viewPerson:"family", filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
+  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], cards:[], cardStatements:[], cardOpenings:[], budgets:[], annualTransactions:[], currentClosure:null, viewPerson:"family", filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
   var expenseCategories = ["Moradia","Mercado","Alimentação","Transporte","Combustível","Saúde","Educação","Lazer","Assinaturas","Cartão","Compras","Pets","Viagem","Impostos","Outros"];
   var incomeCategories = ["Salário","Renda extra","Turismo","Reembolso","Venda","Investimentos","Outros"];
 
@@ -464,14 +479,14 @@
     if(!state.user||!state.household)return;
     try{
       await localPut("cache",{key:"profile:"+state.user.id,household:state.household,membership:state.membership,members:state.members,month:$("monthPicker").value||currentMonth(),saved_at:Date.now()});
-      await localPut("cache",{key:monthCacheKey($("monthPicker").value||currentMonth()),transactions:state.transactions,recurring:state.recurring,members:state.members,cards:state.cards,cardStatements:state.cardStatements,budgets:state.budgets,annualTransactions:state.annualTransactions,currentClosure:state.currentClosure,saved_at:Date.now()});
+      await localPut("cache",{key:monthCacheKey($("monthPicker").value||currentMonth()),transactions:state.transactions,recurring:state.recurring,members:state.members,cards:state.cards,cardStatements:state.cardStatements,cardOpenings:state.cardOpenings,budgets:state.budgets,annualTransactions:state.annualTransactions,currentClosure:state.currentClosure,saved_at:Date.now()});
     }catch(e){console.warn("cache",e)}
   }
   async function restoreMonthSnapshot(month){
     try{
       var snap=await localGet("cache",monthCacheKey(month||$("monthPicker").value||currentMonth()));
       if(!snap)return false;
-      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];state.cards=snap.cards||[];state.cardStatements=snap.cardStatements||[];state.budgets=snap.budgets||[];state.annualTransactions=snap.annualTransactions||[];state.currentClosure=snap.currentClosure||null;renderAll();await updateSyncStatus();return true;
+      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];state.cards=snap.cards||[];state.cardStatements=snap.cardStatements||[];state.cardOpenings=snap.cardOpenings||[];state.budgets=snap.budgets||[];state.annualTransactions=snap.annualTransactions||[];state.currentClosure=snap.currentClosure||null;renderAll();await updateSyncStatus();return true;
     }catch(e){return false}
   }
   async function restoreOfflineProfile(){
@@ -742,11 +757,12 @@
         sb.from("finance_month_closures").select("*").eq("household_id",state.household.id).eq("reference_month",month).maybeSingle(),
         sb.from("finance_cards").select("*").eq("household_id",state.household.id).eq("active",true).order("created_at"),
         sb.from("finance_card_statements").select("*").eq("household_id",state.household.id).eq("reference_month",month),
+        sb.from("finance_card_month_opening").select("*").eq("household_id",state.household.id).eq("reference_month",month),
         sb.from("finance_budgets").select("*").eq("household_id",state.household.id).eq("active",true).order("category"),
         sb.from("finance_transactions").select("reference_month,kind,amount,status,person_user_id,created_by").eq("household_id",state.household.id).gte("reference_month",yearStart).lt("reference_month",nextYear)
       ]);
-      var tx=results[0],rec=results[1],mem=results[2],closure=results[3],cards=results[4],statements=results[5],budgets=results[6],annual=results[7];
-      var all=[tx,rec,mem,closure,cards,statements,budgets,annual],firstError=all.find(function(x){return x&&x.error});
+      var tx=results[0],rec=results[1],mem=results[2],closure=results[3],cards=results[4],statements=results[5],openings=results[6],budgets=results[7],annual=results[8];
+      var all=[tx,rec,mem,closure,cards,statements,openings,budgets,annual],firstError=all.find(function(x){return x&&x.error});
       if(firstError)throw firstError.error;
       state.transactions=tx.data||[];
       state.recurring=rec.data||[];
@@ -754,6 +770,7 @@
       state.currentClosure=closure.data||null;
       state.cards=cards.data||[];
       state.cardStatements=statements.data||[];
+      state.cardOpenings=openings.data||[];
       state.budgets=budgets.data||[];
       state.annualTransactions=annual.data||[];
       renderAll();state.lastSync=new Date();await persistOfflineSnapshot();await updateSyncStatus();
@@ -801,11 +818,12 @@
     if(!cards.length){root.innerHTML='<div class="empty">Cadastre um cartão para acompanhar limite e fatura.</div>';return}
     root.innerHTML=cards.map(function(card){
       var tx=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id});
-      var total=tx.reduce(function(s,x){return s+Number(x.amount||0)},0);
+      var opening=state.cardOpenings.find(function(o){return o.card_id===card.id}),openingAmount=Number(opening&&opening.opening_amount||0);
+      var newPurchases=tx.reduce(function(s,x){return s+Number(x.amount||0)},0),total=openingAmount+newPurchases;
       var limit=Number(card.limit_amount||0),pct=limit>0?Math.min(100,total/limit*100):0;
       var st=state.cardStatements.find(function(s){return s.card_id===card.id});
       var closed=st&&st.status==="closed";
-      return '<div class="finance-card-item"><div class="finance-card-top"><div><div class="finance-card-name">'+esc(card.name)+'</div><div class="finance-card-meta">'+esc(memberName(card.owner_user_id))+' • fecha dia '+card.closing_day+' • vence dia '+card.due_day+(card.brand?' • '+esc(card.brand):'')+'</div></div><div style="text-align:right"><div class="finance-card-total">'+money(total)+'</div><span class="chip '+(closed?'closed-badge':'open-badge')+'">'+(closed?'Fatura fechada':'Fatura aberta')+'</span></div></div>'+(limit>0?'<div class="progress-track"><span style="width:'+pct+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% do limite de '+money(limit)+'</div>':'')+'<div class="card-actions no-print">'+(closed?'<button class="btn btn-ghost btn-sm" data-card-reopen="'+card.id+'">↩ Reabrir fatura</button>':'<button class="btn btn-primary btn-sm" data-card-close="'+card.id+'">🔒 Fechar fatura</button>')+'<button class="btn btn-ghost btn-sm" data-card-delete="'+card.id+'">Desativar</button></div></div>';
+      return '<div class="finance-card-item"><div class="finance-card-top"><div><div class="finance-card-name">'+esc(card.name)+'</div><div class="finance-card-meta">'+esc(memberName(card.owner_user_id))+' • fecha dia '+card.closing_day+' • vence dia '+card.due_day+(card.brand?' • '+esc(card.brand):'')+'</div></div><div style="text-align:right"><div class="finance-card-total">'+money(total)+'</div><span class="chip '+(closed?'closed-badge':'open-badge')+'">'+(closed?'Fatura fechada':'Fatura aberta')+'</span></div></div>'+(limit>0?'<div class="progress-track"><span style="width:'+pct+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% do limite de '+money(limit)+'</div>':'')+'<div class="finance-card-meta">Fatura do mês: <strong>'+money(total)+'</strong>'+(openingAmount>0?' • valor informado: '+money(openingAmount):'')+(newPurchases>0?' • novas compras: '+money(newPurchases):'')+'</div><div class="card-actions no-print"><button class="btn btn-ghost btn-sm" data-card-invoice="'+card.id+'">💰 Atualizar fatura</button>'+(closed?'<button class="btn btn-ghost btn-sm" data-card-reopen="'+card.id+'">↩ Reabrir fatura</button>':'<button class="btn btn-primary btn-sm" data-card-close="'+card.id+'">🔒 Fechar fatura</button>')+'<button class="btn btn-ghost btn-sm" data-card-delete="'+card.id+'">Desativar</button></div></div>';
     }).join("");
   }
   function renderBudgets(){
@@ -825,7 +843,7 @@
     if(m.expectedBalance<0)list.push({level:"danger",icon:"⚠️",title:"Projeção negativa",text:"Faltam "+money(Math.abs(m.expectedBalance))+" para cobrir todos os gastos previstos."});
     var spend=expenseByCategory(getVisibleTransactions());
     state.budgets.forEach(function(b){var used=Number(spend[b.category]||0),lim=Number(b.monthly_limit||0);if(lim&&used>=lim*.8)list.push({level:used>=lim?"danger":"attention",icon:"🎯",title:b.category+(used>=lim?" estourou o limite":" perto do limite"),text:money(used)+" de "+money(lim)+" utilizados."})});
-    state.cards.forEach(function(card){var total=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0),st=state.cardStatements.find(function(s){return s.card_id===card.id});if(total>0&&(!st||st.status!=="closed"))list.push({level:"attention",icon:"💳",title:"Fatura aberta • "+card.name,text:money(total)+" em compras no mês. Fechamento dia "+card.closing_day+"."})});
+    state.cards.forEach(function(card){var opening=state.cardOpenings.find(function(o){return o.card_id===card.id}),total=Number(opening&&opening.opening_amount||0)+state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0),st=state.cardStatements.find(function(s){return s.card_id===card.id});if(total>0&&(!st||st.status!=="closed"))list.push({level:"attention",icon:"💳",title:"Fatura aberta • "+card.name,text:money(total)+" em compras no mês. Fechamento dia "+card.closing_day+"."})});
     if(!navigator.onLine)list.push({level:"attention",icon:"📴",title:"Modo offline",text:"Os lançamentos ficam salvos neste aparelho e sincronizam quando a internet voltar."});
     $("alertCount").textContent=list.length+" alerta"+(list.length===1?"":"s");
     root.innerHTML=list.length?list.map(function(a){return '<div class="alert-item '+a.level+'"><div class="alert-icon">'+a.icon+'</div><div class="alert-body"><strong>'+esc(a.title)+'</strong><small>'+esc(a.text)+'</small></div></div>'}).join(""):'<div class="empty">✅ Tudo em ordem neste mês.</div>';
@@ -878,7 +896,7 @@
     await refreshAll({skipSync:true});
     var m=getMonthlyMetrics(),selected=$("monthPicker").value||currentMonth();
     var openCardNames=state.cards.filter(function(card){
-      var total=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0);
+      var opening=state.cardOpenings.find(function(o){return o.card_id===card.id}),total=Number(opening&&opening.opening_amount||0)+state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0);
       var st=state.cardStatements.find(function(s){return s.card_id===card.id});
       return total>0&&(!st||st.status!=="closed");
     }).map(function(card){return card.name});
@@ -1016,9 +1034,9 @@
     if(!navigator.onLine){toast("Conecte à internet para fechar a fatura.");return}
     var card=state.cards.find(function(x){return x.id===cardId});if(!card)return;
     var selected=$("monthPicker").value||currentMonth(),ref=monthStart(selected);
-    var tx=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===cardId});
-    var total=tx.reduce(function(s,x){return s+Number(x.amount||0)},0);
-    if(!tx.length){toast("Este cartão não tem compras neste mês.");return}
+    var tx=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===cardId}),opening=state.cardOpenings.find(function(o){return o.card_id===cardId});
+    var total=Number(opening&&opening.opening_amount||0)+tx.reduce(function(s,x){return s+Number(x.amount||0)},0);
+    if(total<=0){toast("Este cartão não tem valor de fatura neste mês.");return}
     if(!confirm("Fechar a fatura de "+card.name+" em "+money(total)+"?"))return;
     var row={
       household_id:state.household.id,card_id:cardId,reference_month:ref,status:"closed",
@@ -1046,7 +1064,7 @@
   $("cardForm").onsubmit=async function(e){
     e.preventDefault();
     if(!navigator.onLine){msg("cardMsg","Conecte à internet para salvar o cartão.","error");return}
-    var name=$("cardName").value.trim(),owner=$("cardOwner").value,limit=numBR($("cardLimit").value)||0,closing=Number($("cardClosingDay").value),due=Number($("cardDueDay").value);
+    var name=$("cardName").value.trim(),owner=$("cardOwner").value,limit=numBR($("cardLimit").value)||0,currentInvoice=numBR($("cardCurrentInvoice").value)||0,closing=Number($("cardClosingDay").value),due=Number($("cardDueDay").value);
     if(!name){msg("cardMsg","Informe o nome do cartão.","error");return}
     if(!owner){msg("cardMsg","Selecione o dono do cartão.","error");return}
     if(!(closing>=1&&closing<=31&&due>=1&&due<=31)){msg("cardMsg","Confira os dias de fechamento e vencimento.","error");return}
@@ -1054,8 +1072,24 @@
     var row={household_id:state.household.id,created_by:state.user.id,owner_user_id:owner,name:name,brand:$("cardBrand").value.trim()||null,limit_amount:limit,closing_day:closing,due_day:due,active:true,updated_at:new Date().toISOString()};
     var r=await sb.from("finance_cards").insert(row).select("*").single();
     if(r.error){console.error(r.error);msg("cardMsg","Não foi possível salvar o cartão.","error");btn.disabled=false;btn.textContent="Salvar cartão";return}
-    hide("cardModal");toast("💳 Cartão "+name+" cadastrado.");
+    if(currentInvoice>0){
+      var ref=monthStart($("monthPicker").value||currentMonth());
+      var or=await sb.from("finance_card_month_opening").upsert({household_id:state.household.id,card_id:r.data.id,reference_month:ref,opening_amount:currentInvoice,created_by:state.user.id,updated_at:new Date().toISOString()},{onConflict:"card_id,reference_month"});
+      if(or.error)console.error(or.error);
+    }
+    hide("cardModal");toast("💳 Cartão "+name+" cadastrado. Fatura: "+money(currentInvoice));
     btn.disabled=false;btn.textContent="Salvar cartão";await refreshAll({skipSync:true});
+  };
+
+  $("cardInvoiceForm").onsubmit=async function(e){
+    e.preventDefault();if(!navigator.onLine){msg("cardInvoiceMsg","Conecte à internet para atualizar a fatura.","error");return}
+    var cardId=$("cardInvoiceCardId").value,amount=numBR($("cardInvoiceAmount").value);
+    if(amount<0||!cardId){msg("cardInvoiceMsg","Informe um valor válido.","error");return}
+    var ref=monthStart($("monthPicker").value||currentMonth());
+    var row={household_id:state.household.id,card_id:cardId,reference_month:ref,opening_amount:amount,created_by:state.user.id,updated_at:new Date().toISOString()};
+    var r=await sb.from("finance_card_month_opening").upsert(row,{onConflict:"card_id,reference_month"}).select("*").single();
+    if(r.error){console.error(r.error);msg("cardInvoiceMsg","Não foi possível salvar o valor da fatura.","error");return}
+    hide("cardInvoiceModal");toast("💰 Valor da fatura atualizado: "+money(amount));await refreshAll({skipSync:true});
   };
 
   $("budgetForm").onsubmit=async function(e){
@@ -1080,6 +1114,13 @@
 
   document.addEventListener("click",async function(e){
     var pv=e.target.closest("[data-person-view]");if(pv){state.viewPerson=pv.dataset.personView;renderAll();return}
+    var ci=e.target.closest("[data-card-invoice]");if(ci){
+      var card=state.cards.find(function(x){return x.id===ci.dataset.cardInvoice});if(!card)return;
+      var opening=state.cardOpenings.find(function(o){return o.card_id===card.id});
+      $("cardInvoiceCardId").value=card.id;$("cardInvoiceSubtitle").textContent=card.name+" • "+monthLabel($("monthPicker").value||currentMonth());
+      $("cardInvoiceAmount").value=opening?Number(opening.opening_amount||0).toFixed(2).replace(".",","):"";
+      msg("cardInvoiceMsg","");show("cardInvoiceModal");return
+    }
     var cc=e.target.closest("[data-card-close]");if(cc){await closeCardStatement(cc.dataset.cardClose);return}
     var cr=e.target.closest("[data-card-reopen]");if(cr){await reopenCardStatement(cr.dataset.cardReopen);return}
     var cd=e.target.closest("[data-card-delete]");if(cd){
@@ -1302,6 +1343,16 @@
       if(!byPerson[pid])byPerson[pid]={name:memberName(pid),expense:0,income:0};
       if(x.kind==="income"){incExpected+=a;byPerson[pid].income+=a;if(x.status==="received")incReceived+=a}
       else{expExpected+=a;byPerson[pid].expense+=a;if(x.status==="paid")expPaid+=a;else if(x.status==="planned")debt+=a;if(x.expense_type==="fixed")fixed+=a;else variable+=a}
+    });
+    var allowedPeople={};t.forEach(function(x){allowedPeople[x.person_user_id||x.created_by]=true});
+    var useFamily=state.viewPerson==="family";
+    state.cardOpenings.forEach(function(o){
+      var card=state.cards.find(function(c){return c.id===o.card_id});if(!card)return;
+      if(!useFamily&&card.owner_user_id!==state.viewPerson)return;
+      var a=Number(o.opening_amount||0);if(!a)return;
+      expExpected+=a;debt+=a;variable+=a;
+      if(!byPerson[card.owner_user_id])byPerson[card.owner_user_id]={name:memberName(card.owner_user_id),expense:0,income:0};
+      byPerson[card.owner_user_id].expense+=a;
     });
     return {expExpected:expExpected,incExpected:incExpected,expPaid:expPaid,incReceived:incReceived,debt:debt,fixed:fixed,variable:variable,realBalance:incReceived-expPaid,expectedBalance:incExpected-expExpected,commitment:incExpected>0?expExpected/incExpected*100:0,byPerson:byPerson};
   }
