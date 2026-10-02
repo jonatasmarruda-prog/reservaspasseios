@@ -66,15 +66,18 @@ window.focusTripChecklist=()=>focusSelector('.checkListV7');
 function checkinParticipants(tripId){
   if(typeof state==='undefined'||!tripId)return[];
   const out=[],seen=new Set();
+  const normalName=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  const normalEmail=v=>String(v||'').trim().toLowerCase();
   (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
-    const raw=Array.isArray(r.participants)&&r.participants.length?r.participants:[{full_name:r.responsible_name||'',cpf:r.responsible_cpf||''}];
+    const raw=Array.isArray(r.participants)&&r.participants.length?r.participants:[{full_name:r.responsible_name||'',email:r.email||'',cpf:r.responsible_cpf||''}];
     raw.forEach((p,i)=>{
       const name=String(p?.full_name||r.responsible_name||'Participante').trim()||'Participante';
-      const cpfNum=digits(p?.cpf||'');
-      const key=cpfNum||`${r.id}-${i}`;
-      if(seen.has(key))return;
-      seen.add(key);
-      out.push({tripId,key,name,cpf:cpfNum,present:!!state.dayOps?.[key]?.present});
+      const email=normalEmail(p?.email||r.email||''),cpfNum=digits(p?.cpf||'');
+      const identity=email&&normalName(name)?`${email}|${normalName(name)}`:(cpfNum||`${r.id}-${i}`);
+      if(seen.has(identity))return;
+      seen.add(identity);
+      const legacyKey=cpfNum||'';
+      out.push({tripId,key:identity,name,cpf:cpfNum,present:!!(state.dayOps?.[identity]?.present||(legacyKey&&state.dayOps?.[legacyKey]?.present))});
     });
   });
   return out;
