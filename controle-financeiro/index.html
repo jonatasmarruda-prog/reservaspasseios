@@ -387,7 +387,7 @@
   var SUPABASE_URL = "https://dvblpobtfjtjypsjcjpy.supabase.co";
   var SUPABASE_KEY = "sb_publishable_GcAzTPw3G_zPrB_ox9BQuQ_JfWZoqXz";
   var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], currentClosure:null, filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
+  var state = { user:null, household:null, membership:null, members:[], transactions:[], recurring:[], cards:[], cardStatements:[], budgets:[], annualTransactions:[], currentClosure:null, viewPerson:"family", filter:"all", ocrText:"", ocrCandidates:[], deferredInstall:null, charts:{}, syncTimer:null, lastSync:null, syncing:false };
   var expenseCategories = ["Moradia","Mercado","Alimentação","Transporte","Combustível","Saúde","Educação","Lazer","Assinaturas","Cartão","Compras","Pets","Viagem","Impostos","Outros"];
   var incomeCategories = ["Salário","Renda extra","Turismo","Reembolso","Venda","Investimentos","Outros"];
 
@@ -438,14 +438,14 @@
     if(!state.user||!state.household)return;
     try{
       await localPut("cache",{key:"profile:"+state.user.id,household:state.household,membership:state.membership,members:state.members,month:$("monthPicker").value||currentMonth(),saved_at:Date.now()});
-      await localPut("cache",{key:monthCacheKey($("monthPicker").value||currentMonth()),transactions:state.transactions,recurring:state.recurring,members:state.members,saved_at:Date.now()});
+      await localPut("cache",{key:monthCacheKey($("monthPicker").value||currentMonth()),transactions:state.transactions,recurring:state.recurring,members:state.members,cards:state.cards,cardStatements:state.cardStatements,budgets:state.budgets,annualTransactions:state.annualTransactions,currentClosure:state.currentClosure,saved_at:Date.now()});
     }catch(e){console.warn("cache",e)}
   }
   async function restoreMonthSnapshot(month){
     try{
       var snap=await localGet("cache",monthCacheKey(month||$("monthPicker").value||currentMonth()));
       if(!snap)return false;
-      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];state.currentClosure=null;renderAll();await updateSyncStatus();return true;
+      state.transactions=snap.transactions||[];state.recurring=snap.recurring||[];state.members=snap.members||state.members||[];state.cards=snap.cards||[];state.cardStatements=snap.cardStatements||[];state.budgets=snap.budgets||[];state.annualTransactions=snap.annualTransactions||[];state.currentClosure=snap.currentClosure||null;renderAll();await updateSyncStatus();return true;
     }catch(e){return false}
   }
   async function restoreOfflineProfile(){
@@ -636,7 +636,7 @@
     localStorage.removeItem("finance_pending_name"); await boot();
   };
   $("setupLogout").onclick=logout; $("logoutBtn").onclick=logout;
-  async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null}; location.reload(); }
+  async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],cards:[],cardStatements:[],budgets:[],annualTransactions:[],currentClosure:null,viewPerson:"family",filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null,syncing:false}; location.reload(); }
 
   function fillCategory(selectId, kind){
     var arr=kind==="income"?incomeCategories:expenseCategories; var s=$(selectId); var old=s.value; s.innerHTML=arr.map(function(x){return '<option>'+esc(x)+'</option>'}).join(""); if(arr.indexOf(old)>=0)s.value=old;
