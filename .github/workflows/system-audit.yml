@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'automation/system-audit.mjs'
+      - 'automation/inspect-integrity-details.mjs'
       - '.github/workflows/system-audit.yml'
 
 permissions:
@@ -37,3 +38,9 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node automation/system-audit.mjs
+
+      - name: Detalhar vínculos inconsistentes
+        if: always()
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/inspect-integrity-details.mjs
