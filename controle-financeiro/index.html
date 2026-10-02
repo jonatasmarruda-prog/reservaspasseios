@@ -275,6 +275,11 @@
             <h3>Quem tem acesso</h3>
             <div id="membersList"></div>
           </div>
+          <div id="familyAccessCard" class="card wide hidden">
+            <h3>👤 Criar acesso da família</h3>
+            <p class="muted">Crie o acesso de um membro diretamente, sem depender do e-mail de confirmação. A pessoa já entra vinculada a esta família.</p>
+            <button id="openFamilyAccessBtn" class="btn btn-primary btn-sm">+ Criar acesso de membro</button>
+          </div>
           <div class="card wide">
             <h3>Como instalar</h3>
             <p class="muted">No Android/Chrome, toque em “Instalar” quando aparecer. Se não aparecer, use o menu do navegador e escolha “Adicionar à tela inicial”.</p>
@@ -297,6 +302,27 @@
   </section>
 
   <div id="appToast" class="app-toast hidden"></div>
+
+  <div id="familyAccessModal" class="modal hidden">
+    <div class="sheet">
+      <div class="sheet-head"><div><h2 style="margin:0">Criar acesso da família</h2><small class="muted">A conta já será confirmada e vinculada à família</small></div><button class="close" data-close="familyAccessModal">×</button></div>
+      <form id="familyAccessForm">
+        <div class="form-grid">
+          <div class="wide"><label class="required">Nome</label><input id="familyAccessName" class="field" required value="Neyla" autocomplete="name"></div>
+          <div class="wide"><label class="required">E-mail</label><input id="familyAccessEmail" class="field" type="email" required value="neyla.martins11@gmail.com" autocomplete="email"></div>
+          <div class="wide"><label class="required">Senha inicial</label>
+            <div class="password-wrap">
+              <input id="familyAccessPassword" class="field" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+              <button id="toggleFamilyAccessPassword" class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha">👁️</button>
+            </div>
+            <div class="field-helper">Defina aqui a senha que ela usará para entrar no celular dela. Não envie essa senha por mensagem pública.</div>
+          </div>
+        </div>
+        <div id="familyAccessMsg" class="msg"></div>
+        <button id="familyAccessSubmit" class="btn btn-primary btn-block" style="margin-top:14px">Criar acesso e vincular</button>
+      </form>
+    </div>
+  </div>
 
   <div id="transactionModal" class="modal hidden">
     <div class="sheet">
@@ -542,6 +568,7 @@
   }
   wirePasswordToggle("toggleNewPassword","newPassword");
   wirePasswordToggle("toggleConfirmPassword","confirmNewPassword");
+  wirePasswordToggle("toggleFamilyAccessPassword","familyAccessPassword");
 
   function setAuthMode(mode){
     var signup=mode==="signup"; $("tabLogin").classList.toggle("active",!signup); $("tabSignup").classList.toggle("active",signup); $("nameWrap").classList.toggle("hidden",!signup); $("authSubmit").textContent=signup?"Criar acesso":"Entrar"; $("authPassword").autocomplete=signup?"new-password":"current-password"; $("authForm").dataset.mode=mode; msg("authMsg","");
@@ -557,7 +584,7 @@
     try{
       var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:"https://controle-familiar-jonatas.web.app/"});
       if(r.error) throw r.error;
-      msg("authMsg","Enviei a recuperação de senha para seu e-mail. Verifique também Spam e Lixeira.","ok");
+      msg("authMsg","Se existir uma conta com este e-mail e o envio estiver disponível, você receberá a recuperação. Verifique também Spam e Lixeira.","ok");
     }catch(err){
       msg("authMsg","Não consegui enviar a recuperação agora. Tente novamente em alguns minutos.","error");
       console.error(err);
@@ -598,6 +625,7 @@
       if(/invalid login credentials/i.test(text)) text="E-mail ou senha incorretos. Se você já criou acesso, use “Esqueci minha senha”.";
       else if(/email not confirmed/i.test(text)) text="Seu e-mail ainda não foi confirmado.";
       else if(/user already registered|already been registered/i.test(text)) text="Este e-mail já possui acesso. Entre com a senha ou use “Esqueci minha senha”.";
+      else if(/rate limit|email rate limit|over_email_send_rate_limit/i.test(text)) text="O envio de e-mail está temporariamente limitado. Se você vai entrar em uma família existente, peça ao administrador para criar seu acesso em Ajustes.";
       msg("authMsg",text||"Não foi possível entrar.","error");
     }
   };
@@ -641,6 +669,42 @@
     if(r.error){msg("setupMsg","Código inválido ou não foi possível entrar.","error");return}
     localStorage.removeItem("finance_pending_name"); await boot();
   };
+  $("openFamilyAccessBtn").onclick=function(){
+    $("familyAccessForm").reset();
+    $("familyAccessName").value="Neyla";
+    $("familyAccessEmail").value="neyla.martins11@gmail.com";
+    msg("familyAccessMsg","");
+    show("familyAccessModal");
+  };
+  $("familyAccessForm").onsubmit=async function(e){
+    e.preventDefault();
+    if(state.membership.role!=="owner"){msg("familyAccessMsg","Somente o administrador da família pode criar acessos.","error");return}
+    var name=$("familyAccessName").value.trim(),email=$("familyAccessEmail").value.trim().toLowerCase(),password=$("familyAccessPassword").value;
+    if(name.length<2){msg("familyAccessMsg","Informe o nome.","error");return}
+    if(password.length<8){msg("familyAccessMsg","A senha precisa ter pelo menos 8 caracteres.","error");return}
+    var btn=$("familyAccessSubmit");btn.disabled=true;btn.textContent="Criando acesso...";
+    msg("familyAccessMsg","Criando conta confirmada e vinculando à família...","");
+    try{
+      var out=await sb.functions.invoke("finance-create-family-user",{body:{household_id:state.household.id,display_name:name,email:email,password:password}});
+      if(out.error)throw out.error;
+      if(!out.data||!out.data.ok){
+        var code=out.data&&out.data.error||"";
+        if(code==="ACCOUNT_EXISTS")throw new Error("Este e-mail já possui uma conta.");
+        if(code==="OWNER_ONLY")throw new Error("Somente o administrador da família pode fazer isso.");
+        throw new Error("Não foi possível criar o acesso.");
+      }
+      $("familyAccessPassword").value="";
+      hide("familyAccessModal");
+      toast("✅ Acesso de "+name+" criado. Ela já pode entrar no celular.");
+      await refreshAll();
+    }catch(err){
+      console.error(err);
+      var text=String(err&&err.message||"");
+      if(/non-2xx|edge function/i.test(text))text="Não foi possível criar o acesso agora. Atualize a página e tente novamente.";
+      msg("familyAccessMsg",text||"Não foi possível criar o acesso.","error");
+    }finally{btn.disabled=false;btn.textContent="Criar acesso e vincular"}
+  };
+
   $("setupLogout").onclick=logout; $("logoutBtn").onclick=logout;
   async function logout(){ if(state.syncTimer)clearInterval(state.syncTimer); await sb.auth.signOut(); state={user:null,household:null,membership:null,members:[],transactions:[],recurring:[],cards:[],cardStatements:[],budgets:[],annualTransactions:[],currentClosure:null,viewPerson:"family",filter:"all",ocrText:"",ocrCandidates:[],deferredInstall:state.deferredInstall,charts:{},syncTimer:null,lastSync:null,syncing:false}; location.reload(); }
 
@@ -929,6 +993,7 @@
     $("inviteCode").textContent=state.household.invite_code;
     $("membersList").innerHTML=state.members.map(function(m){return '<div class="member"><div><strong>'+esc(m.display_name)+'</strong><div class="muted" style="font-size:12px">'+(m.role==="owner"?"Administrador":"Membro")+'</div></div><span>'+ (m.user_id===state.user.id?"Você":"") +'</span></div>'}).join("");
     $("rotateInvite").classList.toggle("hidden",state.membership.role!=="owner");
+    $("familyAccessCard").classList.toggle("hidden",state.membership.role!=="owner");
   }
 
   document.addEventListener("click",async function(e){
