@@ -10,13 +10,29 @@ const clean=v=>String(v??'').trim(),norm=v=>clean(v).normalize('NFD').replace(/[
 const num=v=>Math.max(0,Number(v||0)||0),active=v=>!['cancelled','canceled','cancelado','cancelada','deleted','refunded','inactive','inativo','inativa'].includes(norm(v));
 const identity=(name,email)=>{const n=norm(name),e=mail(email);return n&&e?e+'|'+n:''};
 const today=new Intl.DateTimeFormat('en-CA',{timeZone:TZ,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+const DEFAULT_POLICY=`POLÍTICA DE CANCELAMENTO
+
+• Direito de arrependimento: quando aplicável pela legislação, será respeitado o prazo legal.
+• Cancelamento com 7 dias ou mais de antecedência: 90% de reembolso ou 100% de crédito para outro passeio.
+• Entre 6 e 3 dias de antecedência: 50% de reembolso ou 70% de crédito.
+• Com menos de 72 horas: o reembolso pode não ser possível devido a custos já contratados e comprometidos.
+• A transferência da vaga para outra pessoa poderá ser aceita mediante comunicação prévia.
+• O não comparecimento no horário/local informado caracteriza no-show.
+• Se o passeio for cancelado pela organização por segurança, clima, força maior ou motivo operacional, serão informadas as opções disponíveis.
+• Custos de terceiros já pagos e não reembolsáveis poderão ser descontados quando aplicável.
+
+Ao concluir a reserva, o participante declara que teve acesso e concorda com esta política.`;
 
 const allSales=(await db.collection('sales').limit(5000).get()).docs.map(d=>({id:d.id,...d.data()}));
 const trips=(await db.collection('trips').limit(1000).get()).docs.map(d=>({id:d.id,ref:d.ref,...d.data()}));
-let checked=0,repaired=0,identityConflicts=0;
+let checked=0,repaired=0,identityConflicts=0,policiesBackfilled=0;
 
 for(const t of trips){
   if(!active(t.status)||String(t.trip_date||'').slice(0,10)<today)continue;
+  if(!clean(t.cancellation_policy)){
+    await t.ref.set({cancellation_policy:DEFAULT_POLICY,policy_backfilled_at:FV.serverTimestamp(),updated_at:FV.serverTimestamp()},{merge:true});
+    t.cancellation_policy=DEFAULT_POLICY;policiesBackfilled++;
+  }
   const rs=await t.ref.collection('reservations').limit(3000).get();
   for(const d of rs.docs){
     const r={id:d.id,...d.data()};if(!active(r.status)||norm(r.registration_status)!=='completed')continue;
@@ -57,4 +73,4 @@ for(const t of trips){
     repaired++;
   }
 }
-console.log(`Reparo futuro: cadastros conferidos=${checked}, vendas reconstruídas=${repaired}, conflitos de identidade ignorados=${identityConflicts}`);
+console.log(`Reparo futuro: cadastros conferidos=${checked}, vendas reconstruídas=${repaired}, conflitos de identidade ignorados=${identityConflicts}, políticas preenchidas=${policiesBackfilled}`);
