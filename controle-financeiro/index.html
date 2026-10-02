@@ -38,6 +38,7 @@
     .filters{display:flex;gap:8px;overflow:auto;padding-bottom:3px}.filters button{white-space:nowrap}.page-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}.page-title h2{margin:0}
     .install-banner{background:#ecfeff;border:1px solid #a5f3fc;border-radius:16px;padding:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}.install-banner strong{display:block}.install-banner small{color:#0f766e}
     .danger-zone{border-color:#fecaca;background:#fff7f7}
+    .password-wrap{position:relative}.password-wrap .field{padding-right:52px}.password-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;background:transparent;border-radius:10px;font-size:20px;cursor:pointer;color:var(--muted)}.password-eye:active{background:#eef2f7}.forgot-link{display:block;margin-top:9px;margin-left:auto;border:0;background:transparent;color:#0f766e;font-weight:800;font-size:13px;cursor:pointer;padding:4px 0}.forgot-link:hover{text-decoration:underline}
     .quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}.quick-action{border:1px solid var(--line);background:#fff;border-radius:16px;padding:13px;text-align:left;box-shadow:0 5px 14px rgba(15,23,42,.04)}.quick-action b{display:block;margin-top:5px}.quick-action small{color:var(--muted)}
     .pro-summary{grid-template-columns:repeat(6,1fr)}.stat .mini{font-size:11px;color:var(--muted);margin-top:5px}.analysis-card{background:linear-gradient(135deg,#0f172a,#134e4a);color:#fff;border:0}.analysis-card .muted{color:#cbd5e1}.analysis-main{font-size:18px;font-weight:900;line-height:1.35}.analysis-tags{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}.analysis-tag{font-size:12px;font-weight:800;padding:7px 9px;border-radius:999px;background:rgba(255,255,255,.12)}
     .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}.chart-card{min-height:310px}.chart-wrap{position:relative;height:245px}.chart-wide{grid-column:1/-1}.people-split{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.person-card{background:#f8fafc;border:1px solid var(--line);border-radius:14px;padding:12px}.person-card strong{display:block;font-size:18px;margin-top:4px}
@@ -66,8 +67,12 @@
         <label>E-mail</label>
         <input id="authEmail" class="field" type="email" autocomplete="email" required placeholder="voce@email.com">
         <label>Senha</label>
-        <input id="authPassword" class="field" type="password" autocomplete="current-password" required minlength="6" placeholder="Mínimo 6 caracteres">
-        <button id="authSubmit" class="btn btn-primary btn-block" style="margin-top:18px">Entrar</button>
+        <div class="password-wrap">
+          <input id="authPassword" class="field" type="password" autocomplete="current-password" required minlength="6" placeholder="Mínimo 6 caracteres">
+          <button id="toggleAuthPassword" class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha">👁️</button>
+        </div>
+        <button id="forgotPasswordBtn" class="forgot-link" type="button">Esqueci minha senha</button>
+        <button id="authSubmit" class="btn btn-primary btn-block" style="margin-top:14px">Entrar</button>
         <div id="authMsg" class="msg"></div>
       </form>
     </div>
@@ -300,6 +305,27 @@
 
   $("tabLogin").onclick=function(){setAuthMode("login")};
   $("tabSignup").onclick=function(){setAuthMode("signup")};
+  $("toggleAuthPassword").onclick=function(){
+    var input=$("authPassword"), showing=input.type==="text";
+    input.type=showing?"password":"text";
+    this.textContent=showing?"👁️":"🙈";
+    this.setAttribute("aria-label",showing?"Mostrar senha":"Ocultar senha");
+    this.title=showing?"Mostrar senha":"Ocultar senha";
+  };
+  $("forgotPasswordBtn").onclick=async function(){
+    var email=$("authEmail").value.trim();
+    if(!email){msg("authMsg","Digite seu e-mail primeiro e toque novamente em Esqueci minha senha.","error");$("authEmail").focus();return}
+    this.disabled=true; msg("authMsg","Enviando recuperação de senha...","");
+    try{
+      var r=await sb.auth.resetPasswordForEmail(email,{redirectTo:"https://controle-familiar-jonatas.web.app/"});
+      if(r.error) throw r.error;
+      msg("authMsg","Enviei a recuperação de senha para seu e-mail. Verifique também Spam e Lixeira.","ok");
+    }catch(err){
+      msg("authMsg","Não consegui enviar a recuperação agora. Tente novamente em alguns minutos.","error");
+      console.error(err);
+    }
+    this.disabled=false;
+  };
   setAuthMode("login");
 
   $("authForm").onsubmit=async function(e){
@@ -316,7 +342,13 @@
         var login=await sb.auth.signInWithPassword({email:email,password:password}); if(login.error) throw login.error;
       }
       await boot();
-    }catch(err){msg("authMsg",err.message||"Não foi possível entrar.","error")}
+    }catch(err){
+      var text=String(err&&err.message||"");
+      if(/invalid login credentials/i.test(text)) text="E-mail ou senha incorretos. Se você já criou acesso, use “Esqueci minha senha”.";
+      else if(/email not confirmed/i.test(text)) text="Seu e-mail ainda não foi confirmado.";
+      else if(/user already registered|already been registered/i.test(text)) text="Este e-mail já possui acesso. Entre com a senha ou use “Esqueci minha senha”.";
+      msg("authMsg",text||"Não foi possível entrar.","error");
+    }
   };
 
   async function boot(){
