@@ -963,48 +963,45 @@
   $("reopenMonthBtn").onclick=reopenSelectedMonth;
 
   function renderDashboard(){
-    var displayT=getVisibleTransactions(),t=displayT.filter(function(x){return !isCardTxCoveredByReconciliation(x)}), expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0;
-    var byPerson={}, cats={}, daily={};
-    state.members.forEach(function(m){byPerson[m.user_id]={name:m.display_name,expense:0,income:0}});
+    var displayT=getVisibleTransactions(), t=displayT.filter(function(x){return !isCardTxCoveredByReconciliation(x)});
+    var m=metricsFrom(displayT),cats={},daily={};
     t.forEach(function(x){
-      var a=Number(x.amount||0), pid=x.person_user_id||x.created_by;
-      if(!byPerson[pid])byPerson[pid]={name:memberName(pid),expense:0,income:0};
-      if(x.kind==="income"){
-        incExpected+=a; byPerson[pid].income+=a; if(x.status==="received")incReceived+=a;
-      }else{
-        expExpected+=a; byPerson[pid].expense+=a; cats[x.category]=(cats[x.category]||0)+a;
-        if(x.status==="paid")expPaid+=a; else if(x.status==="planned")debt+=a;
-        if(x.expense_type==="fixed")fixed+=a; else variable+=a;
-      }
-      var day=Number(String(x.transaction_date||"").slice(-2)); if(day){ if(!daily[day])daily[day]={income:0,expense:0}; if(x.kind==="income")daily[day].income+=a; else daily[day].expense+=a; }
+      var a=Number(x.amount||0);
+      if(x.kind==="expense")cats[x.category]=(cats[x.category]||0)+a;
+      var day=Number(String(x.transaction_date||"").slice(-2));
+      if(day){if(!daily[day])daily[day]={income:0,expense:0};if(x.kind==="income")daily[day].income+=a;else daily[day].expense+=a}
     });
-    var expectedBalance=incExpected-expExpected, realBalance=incReceived-expPaid, freeAfterDebt=realBalance-debt;
-    var commitment=incExpected>0?(expExpected/incExpected*100):0;
-    $("sIncomeReal").textContent=money(incReceived); $("sExpensePaid").textContent=money(expPaid); $("sDebtPending").textContent=money(debt);
-    $("sBalanceReal").textContent=money(realBalance); $("sBalanceReal").className="value "+(realBalance>=0?"good":"bad");
-    $("sBalanceExpected").textContent=money(expectedBalance); $("sBalanceExpected").className="value "+(expectedBalance>=0?"good":"bad");
-    $("sCommitment").textContent=Math.round(commitment)+"%"; $("sCommitment").className="value "+(commitment<=80?"good":commitment<=100?"":"bad");
+    state.cards.forEach(function(card){
+      if(state.viewPerson!=="family"&&card.owner_user_id!==state.viewPerson)return;
+      var p=cardInvoiceParts(card);
+      if(p.base>0)cats["Cartões reconciliados"]=(cats["Cartões reconciliados"]||0)+p.base;
+    });
 
-    var insight="", health=0, label="";
-    if(!t.length){insight="Cadastre os salários, contas fixas e os gastos do dia a dia. O sistema vai cruzar tudo automaticamente.";health=0;label="Sem dados";}
+    var expExpected=m.expExpected,incExpected=m.incExpected,expPaid=m.expPaid,incReceived=m.incReceived,debt=m.debt,fixed=m.fixed,variable=m.variable,byPerson=m.byPerson;
+    var expectedBalance=m.expectedBalance,realBalance=m.realBalance,freeAfterDebt=realBalance-debt,commitment=m.commitment;
+
+    $("sIncomeReal").textContent=money(incReceived);$("sExpensePaid").textContent=money(expPaid);$("sDebtPending").textContent=money(debt);
+    $("sBalanceReal").textContent=money(realBalance);$("sBalanceReal").className="value "+(realBalance>=0?"good":"bad");
+    $("sBalanceExpected").textContent=money(expectedBalance);$("sBalanceExpected").className="value "+(expectedBalance>=0?"good":"bad");
+    $("sCommitment").textContent=Math.round(commitment)+"%";$("sCommitment").className="value "+(commitment<=80?"good":commitment<=100?"":"bad");
+
+    var hasFinancialData=displayT.length||state.cardOpenings.some(function(o){
+      var card=state.cards.find(function(c){return c.id===o.card_id});
+      return card&&(state.viewPerson==="family"||card.owner_user_id===state.viewPerson)&&Number(o.opening_amount||0)>0;
+    });
+    var insight="",health=0,label="";
+    if(!hasFinancialData){insight="Cadastre os salários, contas fixas e os gastos do dia a dia. O sistema vai cruzar tudo automaticamente.";health=0;label="Sem dados";}
     else if(expectedBalance<0){insight="A projeção do mês está negativa em "+money(Math.abs(expectedBalance))+". Antes de novos gastos, vale priorizar as contas pendentes e reduzir despesas variáveis.";health=20;label="Atenção";}
     else if(commitment>85){insight="A maior parte da renda prevista já está comprometida. A sobra estimada é "+money(expectedBalance)+"; mantenha atenção aos gastos variáveis.";health=45;label="Apertado";}
     else if(debt>0){insight="Depois de considerar o que ainda falta pagar, o saldo livre de hoje fica em "+money(freeAfterDebt)+". A sobra projetada no fechamento é "+money(expectedBalance)+".";health=70;label="Controlado";}
-    else {insight="As contas cadastradas estão cobertas pela renda do mês. A sobra projetada é "+money(expectedBalance)+".";health=90;label="Saudável";}
-    $("financialInsight").textContent=insight; $("healthLabel").textContent=label; $("healthMeter").style.width=Math.max(0,Math.min(100,health))+"%";
+    else{insight="As contas cadastradas estão cobertas pela renda do mês. A sobra projetada é "+money(expectedBalance)+".";health=90;label="Saudável";}
+    $("financialInsight").textContent=insight;$("healthLabel").textContent=label;$("healthMeter").style.width=Math.max(0,Math.min(100,health))+"%";
     $("analysisTags").innerHTML='<span class="analysis-tag">Fixos: '+money(fixed)+'</span><span class="analysis-tag">Variáveis: '+money(variable)+'</span><span class="analysis-tag">Livre após pendências: '+money(freeAfterDebt)+'</span>';
 
-    var reconciledMetrics=metricsFrom(displayT);expExpected=reconciledMetrics.expExpected;incExpected=reconciledMetrics.incExpected;expPaid=reconciledMetrics.expPaid;incReceived=reconciledMetrics.incReceived;debt=reconciledMetrics.debt;fixed=reconciledMetrics.fixed;variable=reconciledMetrics.variable;byPerson=reconciledMetrics.byPerson;
-    expectedBalance=incExpected-expExpected;realBalance=incReceived-expPaid;freeAfterDebt=realBalance-debt;commitment=incExpected>0?(expExpected/incExpected*100):0;
-    $("sIncomeReal").textContent=money(incReceived); $("sExpensePaid").textContent=money(expPaid); $("sDebtPending").textContent=money(debt);
-    $("sBalanceReal").textContent=money(realBalance); $("sBalanceReal").className="value "+(realBalance>=0?"good":"bad");
-    $("sBalanceExpected").textContent=money(expectedBalance); $("sBalanceExpected").className="value "+(expectedBalance>=0?"good":"bad");
-    $("sCommitment").textContent=Math.round(commitment)+"%"; $("sCommitment").className="value "+(commitment<=80?"good":commitment<=100?"":"bad");
     $("dashboardList").innerHTML=renderTxItems(displayT.slice(0,8))||'<div class="empty">Nenhum lançamento neste mês.</div>';
     var totalExp=fixed+variable||1;
     $("categoryBars").innerHTML='<div class="bar-row"><div class="bar-top"><span>Fixos</span><strong>'+money(fixed)+'</strong></div><div class="bar"><span style="width:'+Math.max(fixed?4:0,fixed/totalExp*100)+'%"></span></div></div><div class="bar-row"><div class="bar-top"><span>Variáveis</span><strong>'+money(variable)+'</strong></div><div class="bar"><span style="width:'+Math.max(variable?4:0,variable/totalExp*100)+'%"></span></div></div>';
-    $("peopleSummary").innerHTML=Object.keys(byPerson).slice(0,2).map(function(id){var p=byPerson[id];return '<div class="person-card"><small class="muted">'+esc(p.name)+'</small><strong>'+money(p.expense)+'</strong><span class="muted" style="font-size:11px">gastos no mês</span></div>'}).join("");
-
+    $("peopleSummary").innerHTML=Object.keys(byPerson).slice(0,4).map(function(id){var p=byPerson[id];return '<div class="person-card"><small class="muted">'+esc(p.name)+'</small><strong>'+money(p.expense)+'</strong><span class="muted" style="font-size:11px">gastos no mês</span></div>'}).join("");
     renderCharts(cats,byPerson,daily);
   }
 
@@ -1189,6 +1186,7 @@
   });
 
   document.querySelectorAll(".filterBtn").forEach(function(b){b.onclick=function(){state.filter=b.dataset.filter;document.querySelectorAll(".filterBtn").forEach(function(x){x.className="btn btn-ghost btn-sm filterBtn"});b.className="btn btn-secondary btn-sm filterBtn";renderTransactions()}});
+  $("transactionSearch").oninput=function(){state.search=this.value;renderTransactions()};
   document.querySelectorAll(".navbtn").forEach(function(b){b.onclick=function(){var v=b.dataset.view;["Dashboard","Transactions","Recurring","Settings"].forEach(function(x){$("view"+x).classList.toggle("hidden",x!==v)});document.querySelectorAll(".navbtn").forEach(function(x){x.classList.toggle("active",x===b)});if(v==="Settings")renderSettings()}});
   $("monthPicker").onchange=refreshAll; $("topRefresh").onclick=refreshAll;
   $("openRecurringBtn").onclick=openRecurring;
