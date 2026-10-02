@@ -86,7 +86,10 @@ for(const r of reservations){
   const source=String(r.source||r.registration_source||'');
   if((source.includes('public_portal')||source.includes('direct_trip_link'))){
     const sid=clean(r.sale_id)||r.id;
-    if(!sales.some(s=>s.id===sid&&active(s.sale_status)))note('error','active_registration_without_active_sale',{reservation_id:r.id,trip_id:r.trip_id,sale_id:sid});
+    if(!sales.some(s=>s.id===sid&&active(s.sale_status))){
+      const trip=tripMap.get(r.trip_id),completed=norm(trip?.status)==='completed'||String(trip?.trip_date||'').slice(0,10)<new Intl.DateTimeFormat('en-CA',{timeZone:'America/Cuiaba',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      note(completed?'info':'error',completed?'legacy_completed_registration_without_sale':'active_registration_without_active_sale',{reservation_id:r.id,trip_id:r.trip_id,sale_id:sid});
+    }
   }
 }
 
