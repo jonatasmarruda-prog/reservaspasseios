@@ -49,6 +49,9 @@
     .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}.sync-pending{background:#fff7ed;color:#9a3412}.sync-offline{background:#fef2f2;color:#991b1b}
     .app-toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.25);font-size:13px;font-weight:800;max-width:calc(100% - 28px);text-align:center}
     .close-card{margin:14px 0;border:1px solid #cbd5e1;background:linear-gradient(135deg,#fff,#f8fafc)}.close-card.closed{border-color:#a7f3d0;background:#f0fdf4}.close-card.attention{border-color:#fed7aa;background:#fff7ed}.close-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.close-head h3{margin:0 0 4px}.close-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}.close-mini{background:rgba(255,255,255,.75);border:1px solid var(--line);border-radius:12px;padding:10px}.close-mini small{display:block;color:var(--muted);font-size:10px}.close-mini strong{display:block;margin-top:3px}.close-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}@media(max-width:760px){.close-grid{grid-template-columns:1fr 1fr}}
+    .person-filter{display:flex;gap:7px;overflow:auto;margin:0 0 14px;padding-bottom:2px}.person-filter button{white-space:nowrap;border:1px solid var(--line);background:#fff;color:#475569;border-radius:999px;padding:9px 13px;font-size:12px;font-weight:800}.person-filter button.active{background:#0f172a;color:#fff;border-color:#0f172a}
+    .premium-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0}.premium-wide{grid-column:1/-1}.finance-card-list,.budget-list,.alert-list{display:flex;flex-direction:column;gap:9px}.finance-card-item{border:1px solid var(--line);border-radius:16px;padding:13px;background:linear-gradient(145deg,#fff,#f8fafc)}.finance-card-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.finance-card-name{font-weight:900}.finance-card-meta{font-size:11px;color:var(--muted);margin-top:3px}.finance-card-total{font-size:18px;font-weight:900}.progress-track{height:8px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin-top:8px}.progress-track span{display:block;height:100%;background:linear-gradient(90deg,var(--brand),var(--brand2));border-radius:99px}.budget-row{border:1px solid var(--line);border-radius:14px;padding:11px}.budget-row.over{border-color:#fecaca;background:#fff7f7}.budget-row.warn{border-color:#fed7aa;background:#fff7ed}.budget-top{display:flex;justify-content:space-between;gap:10px;font-size:12px}.budget-top strong{font-size:13px}.alert-item{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:14px;padding:11px;background:#fff}.alert-item.attention{border-color:#fed7aa;background:#fff7ed}.alert-item.danger{border-color:#fecaca;background:#fff7f7}.alert-icon{font-size:20px}.alert-body strong{display:block;font-size:13px}.alert-body small{color:var(--muted);line-height:1.35}.annual-wrap{position:relative;height:280px}.card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.closed-badge{background:#d1fae5;color:#065f46}.open-badge{background:#fef3c7;color:#92400e}
+    .field-helper{font-size:11px;color:var(--muted);margin-top:5px}.required::after{content:" *";color:#b91c1c}
     @media(max-width:900px){.pro-summary{grid-template-columns:repeat(3,1fr)}.quick-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:760px){.summary,.pro-summary{grid-template-columns:1fr 1fr}.grid2,.settings-grid,.setup-grid,.chart-grid{grid-template-columns:1fr}.chart-wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stat .value{font-size:19px}.month-row{align-items:flex-end}.month-row .btn{display:none}.people-split{grid-template-columns:1fr 1fr}.quick-action{padding:11px}}
     @media(print){.topbar,.bottom,.fab,.no-print,.install-banner{display:none!important}.app{padding:0}.content{max-width:none}.card,.stat{box-shadow:none}.summary{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
@@ -57,7 +60,7 @@
 <body>
   <section id="authScreen" class="screen auth">
     <div class="auth-card">
-      <div class="logo">₿</div>
+      <div class="logo" aria-label="Nosso Controle">NC</div>
       <h1>Nosso Controle</h1>
       <p class="subtitle">Finanças da família, organizadas em um só lugar.</p>
       <div class="tabs">
@@ -162,6 +165,8 @@
           <button class="quick-action" data-open-income><span>💰</span><b>Nova receita</b><small>Salário ou entrada</small></button>
         </div>
 
+        <div id="personFilter" class="person-filter no-print"></div>
+
         <div class="summary pro-summary">
           <div class="stat"><div class="label">Entrou de verdade</div><div id="sIncomeReal" class="value good">R$ 0,00</div><div class="mini">receitas recebidas</div></div>
           <div class="stat"><div class="label">Saiu de verdade</div><div id="sExpensePaid" class="value bad">R$ 0,00</div><div class="mini">gastos pagos</div></div>
@@ -195,6 +200,25 @@
           <div class="close-actions no-print">
             <button id="closeMonthBtn" class="btn btn-primary btn-sm">🔒 Fechar este mês</button>
             <button id="reopenMonthBtn" class="btn btn-ghost btn-sm hidden">↩ Reabrir mês</button>
+          </div>
+        </div>
+
+        <div class="premium-grid">
+          <div class="card">
+            <div class="card-head"><div><h3>💳 Cartões e faturas</h3><small class="muted">Compras do mês, limite e fechamento</small></div><button id="openCardBtn" class="btn btn-primary btn-sm no-print">+ Cartão</button></div>
+            <div id="cardsList" class="finance-card-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><div><h3>🎯 Orçamentos</h3><small class="muted">Limites por categoria</small></div><button id="openBudgetBtn" class="btn btn-primary btn-sm no-print">+ Limite</button></div>
+            <div id="budgetsList" class="budget-list"></div>
+          </div>
+          <div class="card premium-wide">
+            <div class="card-head"><div><h3>🔔 Central financeira</h3><small class="muted">O que precisa da atenção de vocês</small></div><span id="alertCount" class="chip">0 alertas</span></div>
+            <div id="alertsList" class="alert-list"></div>
+          </div>
+          <div class="card premium-wide">
+            <div class="card-head"><div><h3>📈 Evolução anual</h3><small class="muted">Receitas, gastos e sobra mês a mês</small></div><span id="annualYear" class="chip"></span></div>
+            <div class="annual-wrap"><canvas id="annualChart"></canvas></div>
           </div>
         </div>
 
@@ -289,6 +313,7 @@
           <div><label>Data</label><input id="txDate" class="field" type="date" required></div>
           <div><label>Vencimento</label><input id="txDueDate" class="field" type="date"></div>
           <div><label>Forma de pagamento</label><select id="txMethod" class="field"><option value="">Não informado</option><option>Pix</option><option>Dinheiro</option><option>Débito</option><option>Crédito</option><option>Boleto</option><option>Transferência</option></select></div>
+          <div><label>Cartão</label><select id="txCard" class="field"><option value="">Nenhum / não é cartão</option></select><div class="field-helper">Se escolher um cartão, a compra entra automaticamente na fatura do mês.</div></div>
           <div><label>Parcela</label><div style="display:flex;gap:7px"><input id="txInstallmentCurrent" class="field" type="number" min="1" placeholder="1"><input id="txInstallmentTotal" class="field" type="number" min="1" placeholder="12"></div></div>
           <div class="wide"><label>Observação</label><textarea id="txNotes" class="field" rows="2" placeholder="Opcional"></textarea></div>
           <div class="wide"><label>📷 Foto/PDF do comprovante ou extrato</label><input id="txReceipt" class="field" type="file" accept="image/*,application/pdf" capture="environment">
@@ -320,6 +345,38 @@
         </div>
         <div id="recMsg" class="msg"></div>
         <button class="btn btn-primary btn-block" style="margin-top:14px">Salvar mensal</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="cardModal" class="modal hidden">
+    <div class="sheet">
+      <div class="sheet-head"><div><h2 style="margin:0">Novo cartão</h2><small class="muted">Controle de limite e fatura</small></div><button class="close" data-close="cardModal">×</button></div>
+      <form id="cardForm">
+        <div class="form-grid">
+          <div class="wide"><label class="required">Nome do cartão</label><input id="cardName" class="field" required placeholder="Ex.: Nubank, Inter, BB"></div>
+          <div><label>Dono do cartão</label><select id="cardOwner" class="field" required></select></div>
+          <div><label>Bandeira</label><input id="cardBrand" class="field" placeholder="Ex.: Visa"></div>
+          <div><label>Limite</label><input id="cardLimit" class="field" inputmode="decimal" placeholder="0,00"></div>
+          <div><label class="required">Dia de fechamento</label><input id="cardClosingDay" class="field" type="number" min="1" max="31" value="30" required></div>
+          <div><label class="required">Dia de vencimento</label><input id="cardDueDay" class="field" type="number" min="1" max="31" value="10" required></div>
+        </div>
+        <div id="cardMsg" class="msg"></div>
+        <button class="btn btn-primary btn-block" style="margin-top:14px">Salvar cartão</button>
+      </form>
+    </div>
+  </div>
+
+  <div id="budgetModal" class="modal hidden">
+    <div class="sheet">
+      <div class="sheet-head"><div><h2 style="margin:0">Orçamento mensal</h2><small class="muted">Defina quanto vocês querem gastar por categoria</small></div><button class="close" data-close="budgetModal">×</button></div>
+      <form id="budgetForm">
+        <div class="form-grid">
+          <div><label class="required">Categoria</label><select id="budgetCategory" class="field" required></select></div>
+          <div><label class="required">Limite mensal</label><input id="budgetAmount" class="field" inputmode="decimal" required placeholder="0,00"></div>
+        </div>
+        <div id="budgetMsg" class="msg"></div>
+        <button class="btn btn-primary btn-block" style="margin-top:14px">Salvar orçamento</button>
       </form>
     </div>
   </div>
