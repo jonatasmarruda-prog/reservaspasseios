@@ -74,7 +74,18 @@ function paymentEntries(s){
   return d&&amount>0?[{date:d,amount,method:payKind(s.payment_method)}]:[];
 }
 function activeSeats(tripId){
-  return (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').reduce((a,r)=>a+n(r.seats),0);
+  const seen=new Set();let total=0;
+  const nameKey=v=>norm(v).replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim(),emailKey=v=>String(v||'').trim().toLowerCase();
+  (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
+    const ps=Array.isArray(r.participants)&&r.participants.length?r.participants:[];
+    if(ps.length){
+      ps.forEach((p,i)=>{const name=p?.full_name||p?.name||r.responsible_name||'',email=emailKey(p?.email||r.email||''),cpf=String(p?.cpf||'').replace(/\D/g,''),key=email&&nameKey(name)?`${email}|${nameKey(name)}`:(cpf||`${r.id}:${i}`);if(seen.has(key))return;seen.add(key);total++});
+      return;
+    }
+    const seats=Math.max(1,Math.round(n(r.seats)||1)),name=r.responsible_name||'',email=emailKey(r.email||''),cpf=String(r.responsible_cpf||'').replace(/\D/g,''),key=email&&nameKey(name)?`${email}|${nameKey(name)}`:(cpf||'');
+    if(seats===1&&key){if(!seen.has(key)){seen.add(key);total++}}else total+=seats;
+  });
+  return total;
 }
 function expensePaid(e){return !['pending','open','unpaid','to_pay','payable'].includes(String(e?.payment_status||e?.status||'').toLowerCase())}
 function expenseMode(e){
