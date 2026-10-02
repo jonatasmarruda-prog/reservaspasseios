@@ -10,6 +10,10 @@ on:
     branches: [main]
     paths:
       - 'automation/send-paid-welcome-emails.mjs'
+      - 'automation/dedupe-participants-by-email-name.mjs'
+      - 'automation/reconcile-orphan-portal-sales.mjs'
+      - 'automation/repair-future-orphan-sales.mjs'
+      - 'automation/repair-recent-orphan-reservations.mjs'
       - 'automation/backfill-link-registration-source.mjs'
       - 'public/admin-reservation-sync-v35.js'
       - 'public/admin-email-controls.js'
