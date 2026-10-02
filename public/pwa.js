@@ -126,17 +126,38 @@
   }
   window.testAdminNotification=testNotification;
 
-  function injectNotificationControls(){
+  async function injectNotificationControls(){
     if(!location.pathname.startsWith('/admin'))return;
     const content=document.getElementById('content');if(!content||document.getElementById('mobileNotificationStatus'))return;
     const panel=content.querySelector('.panel');if(!panel)return;
-    const permission=!('Notification' in window)?'indisponível':Notification.permission==='granted'?'ativada':Notification.permission==='denied'?'bloqueada':'não ativada';
+    const permission=!('Notification' in window)?'indisponível':Notification.permission==='granted'?'permissão concedida':Notification.permission==='denied'?'bloqueada':'não ativada';
     const installed=window.isTrilheirosInstalled?.()?'App instalado':'Navegador';
-    const box=document.createElement('div');box.id='mobileNotificationStatus';box.style.cssText='margin:16px 20px;padding:15px 16px;border-radius:16px;background:#edf7f2;border:1px solid #cfe5da;display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap';
-    box.innerHTML=`<div><b style="display:block;color:#073226">📱 Alertas personalizados no celular</b><small style="display:block;margin-top:5px;color:#5f746b">Status: ${permission} • ${installed}. Alertas: novas reservas, cancelamentos e pagamentos atualizados.</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="mobileNotifyEnable">Ativar notificações</button><button class="btn primary" id="mobileNotifyTest">Testar agora</button></div>`;
+    const box=document.createElement('div');box.id='mobileNotificationStatus';box.style.cssText='margin:16px 20px;padding:15px 16px;border-radius:16px;background:#fff8df;border:1px solid #ead49a;display:flex;gap:14px;justify-content:space-between;align-items:center;flex-wrap:wrap';
+    box.innerHTML=`<div><b style="display:block;color:#073226">📱 Alertas personalizados no celular</b><small id="mobilePushStatusText" style="display:block;margin-top:5px;color:#5f746b">Status: ${permission} • ${installed} • verificando registro do aparelho...</small></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" id="mobileNotifyEnable">Ativar / registrar</button><button class="btn primary" id="mobileNotifyTest">Testar agora</button></div>`;
     panel.querySelector('.panelHead')?.after(box);
-    document.getElementById('mobileNotifyEnable')?.addEventListener('click',requestNotifications);
+    document.getElementById('mobileNotifyEnable')?.addEventListener('click',async()=>{await requestNotifications();setTimeout(()=>window.registerTrilheirosPush?.(true),300);setTimeout(refreshMobilePushStatus,1800)});
     document.getElementById('mobileNotifyTest')?.addEventListener('click',testNotification);
+    async function refreshMobilePushStatus(){
+      const label=document.getElementById('mobilePushStatusText');if(!label)return;
+      let registered=false;
+      try{
+        if(typeof db!=='undefined'&&typeof auth!=='undefined'&&auth?.currentUser&&!auth.currentUser.isAnonymous){
+          const snap=await db.collection('settings').doc('push_device_owner').get();
+          registered=!!(snap.exists&&Array.isArray(snap.data()?.tokens)&&snap.data().tokens.some(t=>String(t||'').length>50));
+        }
+      }catch(_){}
+      const permitted='Notification' in window&&Notification.permission==='granted';
+      if(permitted&&registered){
+        label.textContent=`Status: ativo neste sistema • ${installed}. Alertas de reservas, cancelamentos e pagamentos podem chegar com o painel fechado.`;
+        box.style.background='#edf7f2';box.style.borderColor='#cfe5da';
+      }else if(permitted){
+        label.textContent=`Status: permissão concedida, mas este aparelho ainda não está registrado no servidor • ${installed}. Toque em “Ativar / registrar”.`;
+      }else{
+        label.textContent=`Status: ${permission} • ${installed}. Ative para receber alertas com o painel fechado.`;
+      }
+    }
+    await refreshMobilePushStatus();
+    window.addEventListener('trilheiros:push-ready',refreshMobilePushStatus,{once:true});
   }
 
   function enhanceNotificationScreen(){
