@@ -47,6 +47,7 @@
     .detected-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}.detected-row{display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:11px;padding:9px}.detected-row span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.detected-row strong{font-size:12px}.mode-note{font-size:12px;color:var(--muted);margin-top:6px}
     .nature-fixed{background:#dbeafe;color:#1e40af}.nature-variable{background:#f3e8ff;color:#7e22ce}.person-chip{background:#ecfeff;color:#155e75}.health-meter{height:10px;background:rgba(255,255,255,.16);border-radius:99px;overflow:hidden;margin-top:10px}.health-meter span{display:block;height:100%;background:#fff;border-radius:99px}
     .sync-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:#fff;color:var(--muted);font-size:11px;font-weight:800}.sync-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.12)}.pdf-btn{background:linear-gradient(135deg,#0f172a,#0f766e)!important;color:#fff!important;border:0!important}.sync-pending{background:#fff7ed;color:#9a3412}.sync-offline{background:#fef2f2;color:#991b1b}
+    .app-toast{position:fixed;left:50%;bottom:92px;transform:translateX(-50%);z-index:9999;background:#0f172a;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 12px 30px rgba(15,23,42,.25);font-size:13px;font-weight:800;max-width:calc(100% - 28px);text-align:center}
     @media(max-width:900px){.pro-summary{grid-template-columns:repeat(3,1fr)}.quick-grid{grid-template-columns:repeat(2,1fr)}}
     @media(max-width:760px){.summary,.pro-summary{grid-template-columns:1fr 1fr}.grid2,.settings-grid,.setup-grid,.chart-grid{grid-template-columns:1fr}.chart-wide{grid-column:auto}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stat .value{font-size:19px}.month-row{align-items:flex-end}.month-row .btn{display:none}.people-split{grid-template-columns:1fr 1fr}.quick-action{padding:11px}}
     @media(print){.topbar,.bottom,.fab,.no-print,.install-banner{display:none!important}.app{padding:0}.content{max-width:none}.card,.stat{box-shadow:none}.summary{grid-template-columns:repeat(4,1fr)}body{background:#fff}}
@@ -155,7 +156,7 @@
 
         <div class="quick-grid no-print">
           <button class="quick-action" data-open-transaction><span>🧾</span><b>Gasto do mês</b><small>Preencher manualmente</small></button>
-          <button class="quick-action" data-photo-entry><span>📷</span><b>Ler comprovante</b><small>Foto ou extrato</small></button>
+          <button class="quick-action" data-photo-entry><span>📷</span><b>Tirar foto</b><small>Lê e lança automaticamente</small></button>
           <button class="quick-action" data-open-recurring><span>🔁</span><b>Gasto fixo</b><small>Repete todo mês</small></button>
           <button class="quick-action" data-open-income><span>💰</span><b>Nova receita</b><small>Salário ou entrada</small></button>
         </div>
@@ -250,6 +251,8 @@
     </div></nav>
   </section>
 
+  <div id="appToast" class="app-toast hidden"></div>
+
   <div id="transactionModal" class="modal hidden">
     <div class="sheet">
       <div class="sheet-head"><div><h2 style="margin:0">Novo lançamento</h2><small class="muted">Manual ou pela foto do comprovante</small></div><button class="close" data-close="transactionModal">×</button></div>
@@ -268,9 +271,9 @@
           <div><label>Parcela</label><div style="display:flex;gap:7px"><input id="txInstallmentCurrent" class="field" type="number" min="1" placeholder="1"><input id="txInstallmentTotal" class="field" type="number" min="1" placeholder="12"></div></div>
           <div class="wide"><label>Observação</label><textarea id="txNotes" class="field" rows="2" placeholder="Opcional"></textarea></div>
           <div class="wide"><label>📷 Foto/PDF do comprovante ou extrato</label><input id="txReceipt" class="field" type="file" accept="image/*,application/pdf" capture="environment">
-            <div class="mode-note">A leitura automática nunca salva sozinha: confira o valor ou selecione os gastos detectados antes de importar.</div>
+            <div class="mode-note">Ao tirar a foto, o sistema tenta identificar e lançar automaticamente. Se algo vier errado, você pode editar depois.</div>
             <div id="ocrBox" class="ocr-box hidden">
-              <div class="section-actions"><button id="ocrBtn" type="button" class="btn btn-ghost btn-sm">🔎 Ler imagem</button><button id="importBatchBtn" type="button" class="btn btn-primary btn-sm hidden">Importar gastos selecionados</button></div>
+              <div class="section-actions"><button id="ocrBtn" type="button" class="btn btn-ghost btn-sm">🔄 Ler novamente</button><button id="importBatchBtn" type="button" class="btn btn-primary btn-sm hidden">Importar gastos selecionados</button></div>
               <div id="ocrProgress" class="ocr-progress"></div><div id="ocrCandidates" class="detected-list"></div><div id="ocrText" class="ocr-text"></div>
             </div>
           </div>
@@ -321,6 +324,11 @@
   function msg(id,text,type){ var e=$(id); e.textContent=text||""; e.className="msg "+(type||""); }
   function show(id){ $(id).classList.remove("hidden"); }
   function hide(id){ $(id).classList.add("hidden"); }
+  function toast(text){
+    var el=$("appToast"); if(!el)return;
+    el.textContent=text; el.classList.remove("hidden");
+    clearTimeout(toast._timer); toast._timer=setTimeout(function(){el.classList.add("hidden")},3200);
+  }
 
   var LOCAL_DB_NAME="nosso-controle-offline-v1", LOCAL_DB_VERSION=1;
   function localDb(){
@@ -723,30 +731,91 @@
     state.ocrText=""; state.ocrCandidates=[]; hide("ocrBox"); hide("importBatchBtn"); $("ocrText").textContent=""; $("ocrCandidates").innerHTML=""; $("ocrProgress").textContent=""; msg("txMsg",""); show("transactionModal");
   }
 
-  $("txReceipt").onchange=function(){ if(this.files&&this.files[0]&&this.files[0].type.indexOf("image/")===0)show("ocrBox");else hide("ocrBox"); };
-  $("ocrBtn").onclick=async function(){
-    var file=$("txReceipt").files[0]; if(!file)return;
-    if(file.type.indexOf("image/")!==0){$("ocrProgress").textContent="Para leitura automática, envie uma imagem. O PDF pode ser anexado normalmente.";return}
-    $("ocrBtn").disabled=true; $("ocrProgress").textContent="Lendo imagem...";
-    try{
-      var worker=await Tesseract.createWorker("por",1,{logger:function(m){if(m.progress)$("ocrProgress").textContent=(m.status||"Processando")+" "+Math.round(m.progress*100)+"%"}});
-      var result=await worker.recognize(file); await worker.terminate(); state.ocrText=result.data.text||""; $("ocrText").textContent=state.ocrText;
-      var candidate=extractReceiptValue(state.ocrText); var date=extractReceiptDate(state.ocrText); state.ocrCandidates=extractExpenseLines(state.ocrText);
-      if(candidate)$("txAmount").value=candidate.toFixed(2).replace(".",",");
-      if(date)$("txDate").value=date;
-      if(!$("txTitle").value){var merchant=extractMerchant(state.ocrText);if(merchant)$("txTitle").value=merchant}
-      renderOcrCandidates();
-      if(state.ocrCandidates.length>=2){
-        $("ocrProgress").textContent="Encontrei "+state.ocrCandidates.length+" possíveis gastos. Confira a lista e importe somente os corretos.";
-        show("importBatchBtn");
-      }else if(candidate){
-        $("ocrProgress").textContent="Valor sugerido: "+money(candidate)+". Confira antes de salvar.";
-      }else{
-        $("ocrProgress").textContent="Texto lido. Não encontrei um total com segurança; confira e preencha manualmente.";
-      }
-    }catch(err){$("ocrProgress").textContent="Não consegui ler automaticamente. Você ainda pode anexar o comprovante e preencher manualmente."}
-    $("ocrBtn").disabled=false;
+  $("txReceipt").onchange=async function(){
+    var file=this.files&&this.files[0];
+    if(!file)return;
+    if(file.type.indexOf("image/")!==0){
+      show("ocrBox");
+      $("ocrProgress").textContent="PDF anexado. Preencha o valor manualmente.";
+      return;
+    }
+    show("ocrBox");
+    await processReceiptPhoto(file,true);
   };
+
+  $("ocrBtn").onclick=async function(){
+    var file=$("txReceipt").files[0]; if(file)await processReceiptPhoto(file,false);
+  };
+
+  function inferExpenseCategory(text){
+    var s=String(text||"").toLowerCase();
+    if(/posto|combust|gasolina|etanol|diesel|shell|ipiranga|petrobras/.test(s))return "Combustível";
+    if(/supermerc|mercado|atacad|assai|big master|carrefour|fort|comper|hortifruti/.test(s))return "Mercado";
+    if(/restaurante|lanch|pizza|hamburg|ifood|padaria|cafe|sorvet|churrasc/.test(s))return "Alimentação";
+    if(/farm[aá]cia|drogaria|hospital|clinica|laboratorio|exame|saude/.test(s))return "Saúde";
+    if(/uber|99 |taxi|estacion|pedagio|passagem/.test(s))return "Transporte";
+    if(/escola|faculdade|curso|livraria|papelaria/.test(s))return "Educação";
+    if(/cinema|show|parque|lazer|ingresso/.test(s))return "Lazer";
+    if(/energia|energisa|agua|internet|telefone|aluguel|condominio/.test(s))return "Moradia";
+    if(/pet|veterin|ração|racao/.test(s))return "Pets";
+    if(/hotel|pousada|aereo|aéreo|viagem/.test(s))return "Viagem";
+    return "Outros";
+  }
+  function inferPaymentMethod(text){
+    var s=String(text||"").toLowerCase();
+    if(/pix/.test(s))return "Pix";
+    if(/d[eé]bito/.test(s))return "Débito";
+    if(/cr[eé]dito|visa|mastercard|elo|amex/.test(s))return "Crédito";
+    if(/dinheiro|troco/.test(s))return "Dinheiro";
+    return "";
+  }
+  async function processReceiptPhoto(file,autoSave){
+    $("ocrBtn").disabled=true;
+    $("ocrProgress").textContent="Lendo foto...";
+    $("ocrCandidates").innerHTML="";
+    hide("importBatchBtn");
+    try{
+      var worker=await Tesseract.createWorker("por",1,{logger:function(m){
+        if(m.progress)$("ocrProgress").textContent="Lendo foto "+Math.round(m.progress*100)+"%";
+      }});
+      var result=await worker.recognize(file); await worker.terminate();
+      state.ocrText=result.data.text||""; $("ocrText").textContent=state.ocrText;
+      var amount=extractReceiptValue(state.ocrText),date=extractReceiptDate(state.ocrText)||today(),merchant=extractMerchant(state.ocrText)||"Gasto por foto";
+      var category=inferExpenseCategory(state.ocrText),method=inferPaymentMethod(state.ocrText);
+      $("txAmount").value=amount?amount.toFixed(2).replace(".",","):"";
+      $("txDate").value=date; $("txTitle").value=merchant; $("txCategory").value=category; $("txMethod").value=method;
+      if(amount&&autoSave){
+        $("ocrProgress").textContent="Gasto identificado: "+money(amount)+". Salvando...";
+        await savePhotoExpense({amount:amount,date:date,title:merchant,category:category,method:method,file:file});
+        return;
+      }
+      if(amount){
+        $("ocrProgress").textContent="Identifiquei "+money(amount)+". Você pode corrigir e salvar.";
+      }else{
+        $("ocrProgress").textContent="Não encontrei o valor com segurança. Confira a foto ou preencha o valor manualmente.";
+      }
+    }catch(err){
+      console.warn(err);
+      $("ocrProgress").textContent="Não consegui ler esta foto. Você pode preencher o valor manualmente.";
+    }finally{$("ocrBtn").disabled=false}
+  }
+  async function savePhotoExpense(info){
+    var month=info.date.slice(0,7),syncId=newSyncId();
+    var row={
+      household_id:state.household.id,created_by:state.user.id,person_user_id:$("txPerson").value||state.user.id,
+      reference_month:monthStart(month),kind:"expense",title:info.title,category:info.category,amount:info.amount,
+      transaction_date:info.date,due_date:null,status:"paid",payment_method:info.method||null,
+      installment_current:null,installment_total:null,notes:"Lançado automaticamente por foto",
+      receipt_ocr_text:state.ocrText||null,expense_type:"variable",entry_source:"receipt",client_sync_id:syncId
+    };
+    await queueOperation("tx_insert",row,null,info.file);
+    state.transactions.unshift(Object.assign({},row,{id:"local-"+syncId,_pending:true,created_at:new Date().toISOString()}));
+    $("monthPicker").value=month;
+    hide("transactionModal");
+    renderAll(); await persistOfflineSnapshot();
+    toast("📷 Gasto lançado automaticamente: "+money(info.amount));
+    if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();
+  }
 
   function renderOcrCandidates(){
     $("ocrCandidates").innerHTML=state.ocrCandidates.map(function(x,i){
