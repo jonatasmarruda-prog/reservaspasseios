@@ -451,6 +451,9 @@
   function currentMonth(){ return new Date().toISOString().slice(0,7); }
   function monthStart(m){ return m+"-01"; }
   function dayDate(month, day){ var p=month.split("-"); var y=Number(p[0]),mo=Number(p[1]); var last=new Date(y,mo,0).getDate(); return month+"-"+String(Math.min(Number(day),last)).padStart(2,"0"); }
+  function addMonthsToMonth(month,offset){var p=month.split("-"),d=new Date(Number(p[0]),Number(p[1])-1+offset,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")}
+  function statementMonthFor(card,dateStr){var month=dateStr.slice(0,7);if(!card)return month;var day=Number(dateStr.slice(-2));return day>Number(card.closing_day||31)?addMonthsToMonth(month,1):month}
+  function splitInstallmentAmounts(total,n){var cents=Math.round(Number(total)*100),base=Math.floor(cents/n),rest=cents-base*n;return Array.from({length:n},function(_,i){return (base+(i<rest?1:0))/100})}
   function msg(id,text,type){ var e=$(id); e.textContent=text||""; e.className="msg "+(type||""); }
   function show(id){ $(id).classList.remove("hidden"); }
   function hide(id){ $(id).classList.add("hidden"); }
@@ -558,6 +561,8 @@
           }else if(op.type==="rec_insert"){
             var rex=await sb.from("finance_recurring").select("id").eq("client_sync_id",op.payload.client_sync_id).maybeSingle();if(rex.error)throw rex.error;
             if(!rex.data){var ri=await sb.from("finance_recurring").insert(op.payload);if(ri.error)throw ri.error}ok=true;
+          }else if(op.type==="rec_update"){
+            var ruq=sb.from("finance_recurring").update(op.payload);ruq=op.target.kind==="sync"?ruq.eq("client_sync_id",op.target.value):ruq.eq("id",op.target.value);var rur=await ruq;if(rur.error)throw rur.error;ok=true;
           }else if(op.type==="rec_delete"){
             var rdq=sb.from("finance_recurring").delete();rdq=op.target.kind==="sync"?rdq.eq("client_sync_id",op.target.value):rdq.eq("id",op.target.value);var rdr=await rdq;if(rdr.error)throw rdr.error;ok=true;
           }
@@ -1027,8 +1032,8 @@
       var person=memberName(x.person_user_id||x.created_by);
       var nature=x.kind==="expense"?(x.expense_type==="fixed"?"Fixo":"Variável"):"Receita";
       var natureClass=x.expense_type==="fixed"?"nature-fixed":"nature-variable";
-      var pending=x._pending?'<span class="chip sync-pending">Aguardando sincronização</span>':'';
-      return '<div class="item"><div class="item-icon">'+txIcon(x)+'</div><div class="item-main"><div class="item-title">'+esc(x.title)+'</div><div class="item-sub">'+esc(x.category)+' • '+esc(x.transaction_date)+' <span class="chip person-chip">'+esc(person)+'</span> <span class="chip '+natureClass+'">'+nature+'</span> <span class="chip '+esc(x.status)+'">'+status+'</span> '+pending+'</div></div><div class="item-value '+cls+'">'+sign+money(x.amount)+'</div>'+receipt+'<button class="btn btn-ghost btn-sm" data-edit="'+esc(x.id)+'">✏️</button><button class="btn btn-ghost btn-sm" data-toggle="'+esc(x.id)+'">'+(x.status==="planned"?"✓":"↩")+'</button><button class="btn btn-ghost btn-sm" data-delete="'+esc(x.id)+'">⋯</button></div>';
+      var pending=x._pending?'<span class="chip sync-pending">Aguardando sincronização</span>':'',installment=Number(x.installment_total||0)>1?'<span class="chip">'+(x.installment_current||1)+'/'+x.installment_total+'</span>':'';
+      return '<div class="item"><div class="item-icon">'+txIcon(x)+'</div><div class="item-main"><div class="item-title">'+esc(x.title)+'</div><div class="item-sub">'+esc(x.category)+' • '+esc(x.transaction_date)+' <span class="chip person-chip">'+esc(person)+'</span> <span class="chip '+natureClass+'">'+nature+'</span> <span class="chip '+esc(x.status)+'">'+status+'</span> '+installment+' '+pending+'</div></div><div class="item-value '+cls+'">'+sign+money(x.amount)+'</div>'+receipt+'<button class="btn btn-ghost btn-sm" data-edit="'+esc(x.id)+'">✏️</button><button class="btn btn-ghost btn-sm" data-toggle="'+esc(x.id)+'">'+(x.status==="planned"?"✓":"↩")+'</button><button class="btn btn-ghost btn-sm" data-delete="'+esc(x.id)+'">⋯</button></div>';
     }).join("");
   }
 
@@ -1179,6 +1184,8 @@
     var oi=e.target.closest("[data-open-income]"); if(oi){openTransaction("income");return}
     var or=e.target.closest("[data-open-recurring]"); if(or){openRecurring();return}
     var c=e.target.closest("[data-close]"); if(c){hide(c.dataset.close);return}
+    var ed=e.target.closest("[data-edit]");if(ed){openTransaction(null,ed.dataset.edit);return}
+    var re=e.target.closest("[data-rec-edit]");if(re){openRecurring(re.dataset.recEdit);return}
     var d=e.target.closest("[data-delete]"); if(d){ if(confirm("Excluir este lançamento?")){var dx=state.transactions.find(function(a){return a.id===d.dataset.delete});if(dx){await queueOperation("tx_delete",null,{kind:dx.client_sync_id?"sync":"id",value:dx.client_sync_id||dx.id});state.transactions=state.transactions.filter(function(a){return a.id!==dx.id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}} return}
     var rd=e.target.closest("[data-rec-delete]"); if(rd){ if(confirm("Excluir este recorrente? Os lançamentos já gerados não serão apagados.")){var rx=state.recurring.find(function(a){return a.id===rd.dataset.recDelete});if(rx){await queueOperation("rec_delete",null,{kind:rx.client_sync_id?"sync":"id",value:rx.client_sync_id||rx.id});state.recurring=state.recurring.filter(function(a){return a.id!==rx.id});state.transactions=state.transactions.filter(function(a){return a._projection_for!==rx.client_sync_id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}} return}
     var tg=e.target.closest("[data-toggle]"); if(tg){var x=state.transactions.find(function(a){return a.id===tg.dataset.toggle});if(x){var ns=x.status==="planned"?(x.kind==="income"?"received":"paid"):"planned";x.status=ns;x._pending=true;await queueOperation("tx_update",{status:ns},{kind:x.client_sync_id?"sync":"id",value:x.client_sync_id||x.id});renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true)}return}
@@ -1189,14 +1196,39 @@
   $("transactionSearch").oninput=function(){state.search=this.value;renderTransactions()};
   document.querySelectorAll(".navbtn").forEach(function(b){b.onclick=function(){var v=b.dataset.view;["Dashboard","Transactions","Recurring","Settings"].forEach(function(x){$("view"+x).classList.toggle("hidden",x!==v)});document.querySelectorAll(".navbtn").forEach(function(x){x.classList.toggle("active",x===b)});if(v==="Settings")renderSettings()}});
   $("monthPicker").onchange=refreshAll; $("topRefresh").onclick=refreshAll;
-  $("openRecurringBtn").onclick=openRecurring;
-  function openRecurring(){
-    $("recurringForm").reset(); $("recDay").value=10; fillCategory("recCategory","expense"); updatePeopleSelects(); if($("recPerson")&&state.user)$("recPerson").value=state.user.id; msg("recMsg",""); show("recurringModal");
+  $("openRecurringBtn").onclick=function(){openRecurring()};
+  function openRecurring(editId){
+    $("recurringForm").reset();$("recDay").value=10;fillCategory("recCategory","expense");updatePeopleSelects();msg("recMsg","");
+    state.recEditId=editId||null;$("recEditId").value=editId||"";
+    $("recModalTitle").textContent=editId?"Editar mensal":"Novo gasto fixo / receita mensal";
+    if(editId){
+      var r=state.recurring.find(function(x){return x.id===editId});if(!r)return;
+      $("recKind").value=r.kind;$("recKind").onchange();$("recPerson").value=r.person_user_id||r.created_by;
+      $("recDay").value=r.due_day;$("recAmount").value=Number(r.amount||0).toFixed(2).replace(".",",");
+      $("recTitle").value=r.title;$("recCategory").value=r.category;$("recMethod").value=r.payment_method||"";
+    }else if($("recPerson")&&state.user)$("recPerson").value=state.user.id;
+    show("recurringModal");
   }
 
-  function openTransaction(kind){
-    $("transactionForm").reset(); $("txKind").value=kind||"expense"; $("txKind").onchange(); $("txDate").value=today(); $("txExpenseType").value="variable"; updatePeopleSelects(); updateCardSelect(); if($("txPerson")&&state.user)$("txPerson").value=state.user.id; if($("txCard"))$("txCard").value="";
-    state.ocrText=""; state.ocrCandidates=[]; hide("ocrBox"); hide("importBatchBtn"); $("ocrText").textContent=""; $("ocrCandidates").innerHTML=""; $("ocrProgress").textContent=""; msg("txMsg",""); show("transactionModal");
+  function openTransaction(kind,editId){
+    $("transactionForm").reset();state.txEditId=editId||null;$("txEditId").value=editId||"";
+    $("txModalTitle").textContent=editId?"Editar lançamento":"Novo lançamento";
+    $("txModalSubtitle").textContent="Manual ou pela foto do comprovante";
+    $("txInstallmentTotal").disabled=false;
+    $("txKind").value=kind||"expense";$("txKind").onchange();$("txDate").value=today();$("txExpenseType").value="variable";$("txInstallmentTotal").value=1;
+    updatePeopleSelects();updateCardSelect();if($("txPerson")&&state.user)$("txPerson").value=state.user.id;if($("txCard"))$("txCard").value="";
+    state.ocrText="";state.ocrCandidates=[];hide("ocrBox");hide("importBatchBtn");$("ocrText").textContent="";$("ocrCandidates").innerHTML="";$("ocrProgress").textContent="";msg("txMsg","");
+    if(editId){
+      var x=state.transactions.find(function(a){return a.id===editId});if(!x)return;
+      $("txKind").value=x.kind;$("txKind").onchange();$("txPerson").value=x.person_user_id||x.created_by;$("txStatus").value=x.status;
+      if(x.kind==="expense")$("txExpenseType").value=x.expense_type||"variable";
+      $("txTitle").value=x.title;$("txAmount").value=Number(x.amount||0).toFixed(2).replace(".",",");$("txCategory").value=x.category;
+      $("txDate").value=x.transaction_date||today();$("txDueDate").value=x.due_date||"";$("txMethod").value=x.payment_method||"";$("txCard").value=x.card_id||"";
+      $("txInstallmentCurrent").value=x.installment_current||1;$("txInstallmentTotal").value=x.installment_total||1;$("txNotes").value=x.notes||"";
+      state.ocrText=x.receipt_ocr_text||"";
+      if(Number(x.installment_total||1)>1){$("txInstallmentTotal").disabled=true;$("txModalSubtitle").textContent="Editando somente a parcela "+(x.installment_current||1)+"/"+x.installment_total}
+    }
+    show("transactionModal");
   }
 
   $("txReceipt").onchange=async function(){
@@ -1321,22 +1353,58 @@
   $("transactionForm").onsubmit=async function(e){
     e.preventDefault();msg("txMsg","Salvando no celular...","");
     var amount=numBR($("txAmount").value);if(!amount||amount<=0){msg("txMsg","Informe um valor válido.","error");return}
-    var kind=$("txKind").value,status=$("txStatus").value,month=($("txDate").value||today()).slice(0,7),syncId=newSyncId(),cardId=kind==="expense"?($("txCard").value||null):null;
-    if(state.currentClosure&&state.currentClosure.status==="closed"&&($("monthPicker").value||currentMonth())===month){msg("txMsg","Este mês está fechado. Reabra o mês antes de lançar.","error");return}
-    var method=cardId?"Crédito":($("txMethod").value||null);
-    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("txPerson").value||state.user.id,reference_month:monthStart(month),kind:kind,title:$("txTitle").value.trim(),category:$("txCategory").value,amount:amount,transaction_date:$("txDate").value,due_date:$("txDueDate").value||null,status:status,payment_method:method,card_id:cardId,card_statement_month:cardId?monthStart(month):null,installment_current:Number($("txInstallmentCurrent").value)||null,installment_total:Number($("txInstallmentTotal").value)||null,notes:$("txNotes").value.trim()||null,receipt_ocr_text:state.ocrText||null,expense_type:kind==="expense"?$("txExpenseType").value:null,entry_source:$("txReceipt").files[0]?"receipt":"manual",client_sync_id:syncId};
-    var file=$("txReceipt").files[0]||null;
+    var editId=$("txEditId").value||null,existing=editId?state.transactions.find(function(x){return x.id===editId}):null;
+    var kind=$("txKind").value,status=$("txStatus").value,date=$("txDate").value||today(),person=$("txPerson").value||state.user.id,cardId=kind==="expense"?($("txCard").value||null):null;
+    var card=cardId?state.cards.find(function(x){return x.id===cardId}):null,method=cardId?"Crédito":($("txMethod").value||null);
+    var accountingMonth=cardId?statementMonthFor(card,date):date.slice(0,7);
+    if(state.currentClosure&&state.currentClosure.status==="closed"&&($("monthPicker").value||currentMonth())===accountingMonth){msg("txMsg","Este mês está fechado. Reabra o mês antes de alterar.","error");return}
+    var common={person_user_id:person,reference_month:monthStart(accountingMonth),kind:kind,title:$("txTitle").value.trim(),category:$("txCategory").value,amount:amount,transaction_date:date,due_date:$("txDueDate").value||null,status:status,payment_method:method,card_id:cardId,card_statement_month:cardId?monthStart(accountingMonth):null,notes:$("txNotes").value.trim()||null,receipt_ocr_text:state.ocrText||null,expense_type:kind==="expense"?$("txExpenseType").value:null};
+
+    if(editId&&existing){
+      var payload=Object.assign({},common,{installment_current:existing.installment_current||null,installment_total:existing.installment_total||null,installment_group_id:existing.installment_group_id||null,entry_source:existing.entry_source||"manual",updated_at:new Date().toISOString()});
+      await queueOperation("tx_update",payload,{kind:existing.client_sync_id?"sync":"id",value:existing.client_sync_id||existing.id});
+      Object.assign(existing,payload,{_pending:true});hide("transactionModal");renderAll();await persistOfflineSnapshot();if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();return;
+    }
+
+    var installmentTotal=Math.max(1,Math.min(120,Number($("txInstallmentTotal").value)||1)),file=$("txReceipt").files[0]||null;
+    if(kind!=="expense")installmentTotal=1;
+    if(installmentTotal>1){
+      var firstMonth=card?statementMonthFor(card,date):date.slice(0,7),amounts=splitInstallmentAmounts(amount,installmentTotal),groupId=newSyncId(),rows=[];
+      for(var i=0;i<installmentTotal;i++){
+        var im=addMonthsToMonth(firstMonth,i),sid=newSyncId(),txDate=i===0?date:dayDate(im,card?card.due_day:Number(date.slice(-2)));
+        rows.push(Object.assign({household_id:state.household.id,created_by:state.user.id,client_sync_id:sid,installment_group_id:groupId,installment_current:i+1,installment_total:installmentTotal,entry_source:file?"receipt":"manual"},common,{
+          reference_month:monthStart(im),card_statement_month:cardId?monthStart(im):null,transaction_date:txDate,due_date:card?dayDate(im,card.due_day):($("txDueDate").value||null),amount:amounts[i],status:i===0?status:"planned",title:$("txTitle").value.trim()
+        }));
+      }
+      await queueOperation("tx_batch_insert",rows,null,file);
+      var selectedMonth=$("monthPicker").value||currentMonth();
+      rows.filter(function(r){return String(r.reference_month).slice(0,7)===selectedMonth}).reverse().forEach(function(row){state.transactions.unshift(Object.assign({},row,{id:"local-"+row.client_sync_id,_pending:true,created_at:new Date().toISOString()}))});
+      hide("transactionModal");renderAll();await persistOfflineSnapshot();toast("💳 Compra dividida em "+installmentTotal+"x. Total: "+money(amount));if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();return;
+    }
+
+    var syncId=newSyncId(),row=Object.assign({household_id:state.household.id,created_by:state.user.id,client_sync_id:syncId,installment_current:null,installment_total:null,installment_group_id:null,entry_source:file?"receipt":"manual"},common);
     await queueOperation("tx_insert",row,null,file);
     var localRow=Object.assign({},row,{id:"local-"+syncId,_pending:true,created_at:new Date().toISOString()});state.transactions.unshift(localRow);
-    hide("transactionModal");$("monthPicker").value=month;renderAll();await persistOfflineSnapshot();
+    hide("transactionModal");$("monthPicker").value=accountingMonth;renderAll();await persistOfflineSnapshot();
     if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();
   };
 
   $("recurringForm").onsubmit=async function(e){
     e.preventDefault();msg("recMsg","Salvando no celular...","");
     var amount=numBR($("recAmount").value);if(!amount){msg("recMsg","Informe um valor válido.","error");return}
-    var kind=$("recKind").value,syncId=newSyncId();
-    var row={household_id:state.household.id,created_by:state.user.id,person_user_id:$("recPerson").value||state.user.id,kind:kind,title:$("recTitle").value.trim(),category:$("recCategory").value,amount:amount,due_day:Number($("recDay").value),payment_method:$("recMethod").value||null,start_month:monthStart($("monthPicker").value||currentMonth()),expense_type:kind==="expense"?"fixed":null,client_sync_id:syncId};
+    var editId=$("recEditId").value||null,existing=editId?state.recurring.find(function(x){return x.id===editId}):null,kind=$("recKind").value;
+    var payload={person_user_id:$("recPerson").value||state.user.id,kind:kind,title:$("recTitle").value.trim(),category:$("recCategory").value,amount:amount,due_day:Number($("recDay").value),payment_method:$("recMethod").value||null,expense_type:kind==="expense"?"fixed":null,updated_at:new Date().toISOString()};
+    if(existing){
+      await queueOperation("rec_update",payload,{kind:existing.client_sync_id?"sync":"id",value:existing.client_sync_id||existing.id});
+      Object.assign(existing,payload,{_pending:true});
+      var linked=state.transactions.filter(function(x){return x.recurring_id===existing.id&&x.status==="planned"});
+      for(var li=0;li<linked.length;li++){
+        var lx=linked[li],ld=dayDate(String(lx.reference_month).slice(0,7),payload.due_day),lp={person_user_id:payload.person_user_id,kind:payload.kind,title:payload.title,category:payload.category,amount:payload.amount,transaction_date:ld,due_date:ld,payment_method:payload.payment_method,expense_type:payload.kind==="expense"?"fixed":null};
+        await queueOperation("tx_update",lp,{kind:lx.client_sync_id?"sync":"id",value:lx.client_sync_id||lx.id});Object.assign(lx,lp,{_pending:true});
+      }
+      hide("recurringModal");renderAll();await persistOfflineSnapshot();toast("Mensal atualizado.");if(navigator.onLine)await syncOfflineQueue(true);else await updateSyncStatus();return;
+    }
+    var syncId=newSyncId(),row=Object.assign({household_id:state.household.id,created_by:state.user.id,start_month:monthStart($("monthPicker").value||currentMonth()),client_sync_id:syncId},payload);delete row.updated_at;
     await queueOperation("rec_insert",row);
     state.recurring.unshift(Object.assign({},row,{id:"local-rec-"+syncId,_pending:true}));
     var month=$("monthPicker").value||currentMonth(),d=dayDate(month,row.due_day);
