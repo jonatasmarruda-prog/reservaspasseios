@@ -18,7 +18,26 @@ const PRESETS=[
 
 function notify(msg,type=''){try{return typeof toast==='function'?toast(msg,type):alert(msg)}catch(_){alert(msg)}}
 function close(sel){q(sel)?.remove()}
-function activeSeats(tripId){return (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').reduce((s,r)=>s+n(r.seats),0)}
+function activeSeats(tripId){
+  const seen=new Set();let total=0;
+  const nameKey=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim();
+  const emailKey=v=>String(v||'').trim().toLowerCase();
+  (state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled').forEach(r=>{
+    const ps=Array.isArray(r.participants)&&r.participants.length?r.participants:[];
+    if(ps.length){
+      ps.forEach((p,i)=>{
+        const name=String(p?.full_name||p?.name||r.responsible_name||''),email=emailKey(p?.email||r.email||''),cpf=String(p?.cpf||'').replace(/\D/g,'');
+        const key=email&&nameKey(name)?`${email}|${nameKey(name)}`:(cpf||`${r.id}:${i}`);
+        if(seen.has(key))return;seen.add(key);total++;
+      });
+      return;
+    }
+    const seats=Math.max(1,Math.round(n(r.seats)||1)),name=String(r.responsible_name||''),email=emailKey(r.email||''),cpf=String(r.responsible_cpf||'').replace(/\D/g,'');
+    const key=email&&nameKey(name)?`${email}|${nameKey(name)}`:(cpf||'');
+    if(seats===1&&key){if(!seen.has(key)){seen.add(key);total++}}else total+=seats;
+  });
+  return total;
+}
 function isPaid(e){return !['pending','open','unpaid','to_pay','payable'].includes(String(e?.payment_status||e?.status||'').toLowerCase())}
 function expenseAmount(e){
   const unit=n(e?.unit_amount||e?.amount);
