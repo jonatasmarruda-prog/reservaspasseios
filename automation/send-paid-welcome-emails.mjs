@@ -183,7 +183,7 @@ catch{salesSnap=await db.collection('sales').limit(1000).get()}
 
 for(const saleDoc of salesSnap.docs){
   const sale={id:saleDoc.id,...saleDoc.data()};
-  if(!saleFullyPaid(sale)||sale.welcome_email_sent_at||sale.welcome_email_status==='sent')continue;
+  if(!saleFullyPaid(sale)||sale.welcome_email_sent_at||sale.welcome_email_status==='sent'||String(sale.welcome_email_status||'').startsWith('suppressed_'))continue;
   const email=clean(sale.customer_email||sale.email).toLowerCase();
   if(!validEmail(email)){
     await saleDoc.ref.set({welcome_email_status:'skipped_no_email',welcome_email_checked_at:FieldValue.serverTimestamp()},{merge:true});
@@ -194,7 +194,7 @@ for(const saleDoc of salesSnap.docs){
   const resendAnchor=stampMs(sale.welcome_email_resend_requested_at);
   const paidAnchor=stampMs(sale.payment_completed_at);
   const anchor=String(resendAnchor||paidAnchor||'first');
-  const c=await claim({kind:'welcome_paid',sourceRef:saleDoc.ref,sourceType:'sale',anchor,email,validator:r=>saleFullyPaid(r)&&!(r.welcome_email_sent_at||r.welcome_email_status==='sent')});
+  const c=await claim({kind:'welcome_paid',sourceRef:saleDoc.ref,sourceType:'sale',anchor,email,validator:r=>saleFullyPaid(r)&&!(r.welcome_email_sent_at||r.welcome_email_status==='sent'||String(r.welcome_email_status||'').startsWith('suppressed_'))});
   if(!c.claimed)continue;
   try{
     const payload=await sendResend({to:email,...welcomeTemplate(sale,trip),key:`welcome-${c.id}`});
