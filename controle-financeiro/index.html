@@ -843,7 +843,7 @@
   $("reopenMonthBtn").onclick=reopenSelectedMonth;
 
   function renderDashboard(){
-    var t=state.transactions, expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0;
+    var t=getVisibleTransactions(), expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0;
     var byPerson={}, cats={}, daily={};
     state.members.forEach(function(m){byPerson[m.user_id]={name:m.display_name,expense:0,income:0}});
     t.forEach(function(x){
@@ -910,14 +910,15 @@
   }
 
   function renderTransactions(){
-    var list=state.transactions.slice();
+    var list=getVisibleTransactions().slice();
     if(state.filter==="expense"||state.filter==="income")list=list.filter(function(x){return x.kind===state.filter});
     if(state.filter==="planned")list=list.filter(function(x){return x.status==="planned"});
     $("transactionsList").innerHTML=renderTxItems(list)||'<div class="empty">Nada encontrado neste filtro.</div>';
   }
 
   function renderRecurring(){
-    $("recurringList").innerHTML=state.recurring.length?state.recurring.map(function(r){
+    var recurringVisible=state.recurring.filter(function(r){return state.viewPerson==="family"||(r.person_user_id||r.created_by)===state.viewPerson});
+    $("recurringList").innerHTML=recurringVisible.length?recurringVisible.map(function(r){
       var cls=r.kind==="income"?"income":"expense"; var sign=r.kind==="income"?"+":"-"; var person=memberName(r.person_user_id||r.created_by);
       return '<div class="item"><div class="item-icon">'+(r.kind==="income"?"💰":"🔁")+'</div><div class="item-main"><div class="item-title">'+esc(r.title)+'</div><div class="item-sub">Todo dia '+r.due_day+' • '+esc(r.category)+' <span class="chip person-chip">'+esc(person)+'</span> '+(r._pending?'<span class="chip sync-pending">Aguardando sincronização</span>':'')+'</div></div><div class="item-value '+cls+'">'+sign+money(r.amount)+'</div><button class="btn btn-ghost btn-sm" data-rec-delete="'+r.id+'">⋯</button></div>';
     }).join(""):'<div class="empty">Cadastre salários e contas fixas para o mês já começar projetado.</div>';
@@ -1121,8 +1122,8 @@
     var p=(value||currentMonth()).split("-"), d=new Date(Number(p[0]),Number(p[1])-1,1);
     return d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"}).replace(/^./,function(x){return x.toUpperCase()});
   }
-  function getMonthlyMetrics(){
-    var t=state.transactions, expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0,byPerson={};
+  function metricsFrom(t){
+    t=t||[];var expExpected=0,incExpected=0,expPaid=0,incReceived=0,debt=0,fixed=0,variable=0,byPerson={};
     state.members.forEach(function(m){byPerson[m.user_id]={name:m.display_name,expense:0,income:0}});
     t.forEach(function(x){
       var a=Number(x.amount||0),pid=x.person_user_id||x.created_by;
@@ -1132,6 +1133,8 @@
     });
     return {expExpected:expExpected,incExpected:incExpected,expPaid:expPaid,incReceived:incReceived,debt:debt,fixed:fixed,variable:variable,realBalance:incReceived-expPaid,expectedBalance:incExpected-expExpected,commitment:incExpected>0?expExpected/incExpected*100:0,byPerson:byPerson};
   }
+  function getMonthlyMetrics(){return metricsFrom(state.transactions)}
+
   async function generatePremiumPdf(){
     var btn=$("pdfBtn"),old=btn.textContent;btn.disabled=true;btn.textContent="Gerando PDF...";
     try{
