@@ -31,7 +31,7 @@ for(const t of trips){
     const participants=Array.isArray(r.participants)&&r.participants.length?r.participants:[{full_name:r.responsible_name||r.name||'',cpf:r.responsible_cpf||'',email:r.email||''}];
     const seats=Math.max(1,Math.round(num(r.seats)||participants.length||1));
     const paid=num(r.paid_amount),refunded=num(r.refunded_amount);
-    const total=Math.max(num(r.sale_total),paid,num(t.default_price)*seats);
+    const total=num(r.sale_total)>0?num(r.sale_total):Math.max(paid,num(t.default_price)*seats);
     const balance=Number.isFinite(Number(r.balance_due))?Math.max(0,Number(r.balance_due)):Math.max(0,total-paid);
     const pstatus=clean(r.payment_status)||((balance<=0.009&&paid>0)?'paid':paid>0?'partial':'pending');
     const source=clean(r.source||r.registration_source)||'direct_trip_link';
