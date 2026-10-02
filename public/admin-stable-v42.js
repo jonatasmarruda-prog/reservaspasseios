@@ -262,12 +262,16 @@ async function saleForReservation(r){
   try{const s=await db.collection('sales').doc(id).get();return s.exists?{id:s.id,...s.data()}:null}catch(_){return null}
 }
 async function reportPeople(tripId){
-  const out=[{key:'guide',name:GUIDE_NAME,type:GUIDE_ROLE}];
+  const out=[{key:'guide',name:GUIDE_NAME,type:GUIDE_ROLE}],seen=new Set();
+  const personKey=(name,emailValue,cpfValue,fallback)=>{
+    const nameKey=norm(name).replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim(),mail=String(emailValue||'').trim().toLowerCase(),cpf=String(cpfValue||'').replace(/\D/g,'');
+    return mail&&nameKey?`${mail}|${nameKey}`:(cpf||fallback);
+  };
   const rs=(state.reservations||[]).filter(r=>r.trip_id===tripId&&r.status!=='cancelled');
   for(const r of rs){
     const sale=await saleForReservation(r),type=optionOf(sale,r),ps=(r.participants||sale?.participants||[]).filter(p=>p?.full_name);
-    if(ps.length)ps.forEach((p,i)=>out.push({key:String(p.cpf||`${r.id}-${i}`).replace(/\D/g,'')||`${r.id}-${i}`,name:p.full_name,type}));
-    else if(r.responsible_name||sale?.customer_name)out.push({key:r.id,name:r.responsible_name||sale.customer_name,type});
+    if(ps.length)ps.forEach((p,i)=>{const key=personKey(p.full_name,p.email||r.email||sale?.customer_email,p.cpf,`${r.id}-${i}`);if(seen.has(key))return;seen.add(key);out.push({key,name:p.full_name,type})});
+    else if(r.responsible_name||sale?.customer_name){const name=r.responsible_name||sale.customer_name,key=personKey(name,r.email||sale?.customer_email,r.responsible_cpf||sale?.customer_cpf,r.id);if(!seen.has(key)){seen.add(key);out.push({key,name,type})}}
   }
   return out;
 }
