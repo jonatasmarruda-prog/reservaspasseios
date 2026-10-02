@@ -522,7 +522,13 @@
     s.innerHTML=state.members.map(function(m){return '<option value="'+esc(m.user_id)+'">'+esc(m.display_name)+(m.user_id===state.user.id?' (você)':'')+'</option>'}).join("");
     if(state.members.some(function(m){return m.user_id===current}))s.value=current;
   }
-  function updatePeopleSelects(){ fillPeople("txPerson"); fillPeople("recPerson"); }
+  function updatePeopleSelects(){ fillPeople("txPerson"); fillPeople("recPerson"); fillPeople("cardOwner"); updateCardSelect(); }
+  function updateCardSelect(){
+    var s=$("txCard"); if(!s)return;
+    var current=s.value;
+    s.innerHTML='<option value="">Nenhum / não é cartão</option>'+state.cards.map(function(card){return '<option value="'+esc(card.id)+'">'+esc(card.name)+' • '+esc(memberName(card.owner_user_id))+'</option>'}).join("");
+    if(state.cards.some(function(card){return card.id===current}))s.value=current;
+  }
 
   function wirePasswordToggle(buttonId,inputId){
     var b=$(buttonId); if(!b)return;
@@ -710,6 +716,66 @@
   }
 
   function renderAll(){ updatePeopleSelects(); renderPersonFilter(); renderDashboard(); renderTransactions(); renderRecurring(); renderSettings(); renderMonthClosure(); renderCards(); renderBudgets(); renderAlerts(); renderAnnualChart(); }
+
+  function getVisibleTransactions(){
+    if(state.viewPerson==="family")return state.transactions;
+    return state.transactions.filter(function(x){return (x.person_user_id||x.created_by)===state.viewPerson});
+  }
+  function renderPersonFilter(){
+    var root=$("personFilter");if(!root)return;
+    var items=[{id:"family",name:"👨‍👩‍👦 Família"}].concat(state.members.map(function(m){return {id:m.user_id,name:m.display_name}}));
+    root.innerHTML=items.map(function(item){return '<button type="button" data-person-view="'+esc(item.id)+'" class="'+(state.viewPerson===item.id?"active":"")+'">'+esc(item.name)+'</button>'}).join("");
+  }
+  function expenseByCategory(list){
+    var out={};(list||[]).forEach(function(x){if(x.kind==="expense")out[x.category]=(out[x.category]||0)+Number(x.amount||0)});return out;
+  }
+  function renderCards(){
+    var root=$("cardsList");if(!root)return;
+    var selected=$("monthPicker").value||currentMonth();
+    var cards=state.cards.filter(function(card){return state.viewPerson==="family"||card.owner_user_id===state.viewPerson});
+    if(!cards.length){root.innerHTML='<div class="empty">Cadastre um cartão para acompanhar limite e fatura.</div>';return}
+    root.innerHTML=cards.map(function(card){
+      var tx=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id});
+      var total=tx.reduce(function(s,x){return s+Number(x.amount||0)},0);
+      var limit=Number(card.limit_amount||0),pct=limit>0?Math.min(100,total/limit*100):0;
+      var st=state.cardStatements.find(function(s){return s.card_id===card.id});
+      var closed=st&&st.status==="closed";
+      return '<div class="finance-card-item"><div class="finance-card-top"><div><div class="finance-card-name">'+esc(card.name)+'</div><div class="finance-card-meta">'+esc(memberName(card.owner_user_id))+' • fecha dia '+card.closing_day+' • vence dia '+card.due_day+(card.brand?' • '+esc(card.brand):'')+'</div></div><div style="text-align:right"><div class="finance-card-total">'+money(total)+'</div><span class="chip '+(closed?'closed-badge':'open-badge')+'">'+(closed?'Fatura fechada':'Fatura aberta')+'</span></div></div>'+(limit>0?'<div class="progress-track"><span style="width:'+pct+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% do limite de '+money(limit)+'</div>':'')+'<div class="card-actions no-print">'+(closed?'<button class="btn btn-ghost btn-sm" data-card-reopen="'+card.id+'">↩ Reabrir fatura</button>':'<button class="btn btn-primary btn-sm" data-card-close="'+card.id+'">🔒 Fechar fatura</button>')+'<button class="btn btn-ghost btn-sm" data-card-delete="'+card.id+'">Desativar</button></div></div>';
+    }).join("");
+  }
+  function renderBudgets(){
+    var root=$("budgetsList");if(!root)return;
+    if(!state.budgets.length){root.innerHTML='<div class="empty">Defina limites para mercado, lazer, combustível e outras categorias.</div>';return}
+    var spend=expenseByCategory(getVisibleTransactions());
+    root.innerHTML=state.budgets.map(function(b){
+      var used=Number(spend[b.category]||0),limit=Number(b.monthly_limit||0),pct=limit?used/limit*100:0,cls=pct>=100?"over":pct>=80?"warn":"";
+      return '<div class="budget-row '+cls+'"><div class="budget-top"><span>'+esc(b.category)+'</span><strong>'+money(used)+' / '+money(limit)+'</strong></div><div class="progress-track"><span style="width:'+Math.min(100,pct)+'%"></span></div><div class="finance-card-meta">'+Math.round(pct)+'% utilizado</div></div>';
+    }).join("");
+  }
+  function renderAlerts(){
+    var root=$("alertsList");if(!root)return;
+    var list=[],m=metricsFrom(getVisibleTransactions()),selected=$("monthPicker").value||currentMonth();
+    if(selected===previousMonthValue()&&new Date().getDate()>=4&&(!state.currentClosure||state.currentClosure.status!=="closed"))list.push({level:"attention",icon:"📅",title:"Fechamento pendente",text:"Confira salários, contas e faturas e feche "+monthLabel(selected)+"."});
+    if(m.debt>0)list.push({level:"attention",icon:"⏳",title:"Contas pendentes",text:money(m.debt)+" ainda estão previstos ou a pagar neste mês."});
+    if(m.expectedBalance<0)list.push({level:"danger",icon:"⚠️",title:"Projeção negativa",text:"Faltam "+money(Math.abs(m.expectedBalance))+" para cobrir todos os gastos previstos."});
+    var spend=expenseByCategory(getVisibleTransactions());
+    state.budgets.forEach(function(b){var used=Number(spend[b.category]||0),lim=Number(b.monthly_limit||0);if(lim&&used>=lim*.8)list.push({level:used>=lim?"danger":"attention",icon:"🎯",title:b.category+(used>=lim?" estourou o limite":" perto do limite"),text:money(used)+" de "+money(lim)+" utilizados."})});
+    state.cards.forEach(function(card){var total=state.transactions.filter(function(x){return x.kind==="expense"&&x.card_id===card.id}).reduce(function(s,x){return s+Number(x.amount||0)},0),st=state.cardStatements.find(function(s){return s.card_id===card.id});if(total>0&&(!st||st.status!=="closed"))list.push({level:"attention",icon:"💳",title:"Fatura aberta • "+card.name,text:money(total)+" em compras no mês. Fechamento dia "+card.closing_day+"."})});
+    if(!navigator.onLine)list.push({level:"attention",icon:"📴",title:"Modo offline",text:"Os lançamentos ficam salvos neste aparelho e sincronizam quando a internet voltar."});
+    $("alertCount").textContent=list.length+" alerta"+(list.length===1?"":"s");
+    root.innerHTML=list.length?list.map(function(a){return '<div class="alert-item '+a.level+'"><div class="alert-icon">'+a.icon+'</div><div class="alert-body"><strong>'+esc(a.title)+'</strong><small>'+esc(a.text)+'</small></div></div>'}).join(""):'<div class="empty">✅ Tudo em ordem neste mês.</div>';
+  }
+  function renderAnnualChart(){
+    if(typeof Chart==="undefined"||!$("annualChart"))return;
+    if(state.charts.annual){try{state.charts.annual.destroy()}catch(e){}}
+    var selected=$("monthPicker").value||currentMonth(),year=selected.slice(0,4),months=Array.from({length:12},function(_,i){return String(i+1).padStart(2,"0")});
+    var rows=state.annualTransactions.filter(function(x){return state.viewPerson==="family"||(x.person_user_id||x.created_by)===state.viewPerson});
+    var inc=months.map(function(mm){return rows.filter(function(x){return String(x.reference_month||"").slice(0,7)===year+"-"+mm&&x.kind==="income"}).reduce(function(s,x){return s+Number(x.amount||0)},0)});
+    var exp=months.map(function(mm){return rows.filter(function(x){return String(x.reference_month||"").slice(0,7)===year+"-"+mm&&x.kind==="expense"}).reduce(function(s,x){return s+Number(x.amount||0)},0)});
+    var bal=months.map(function(_,i){return inc[i]-exp[i]});
+    $("annualYear").textContent=year;
+    state.charts.annual=new Chart($("annualChart"),{type:"bar",data:{labels:["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"],datasets:[{label:"Receitas",data:inc,borderRadius:5},{label:"Gastos",data:exp,borderRadius:5},{label:"Sobra",data:bal,type:"line",tension:.3}]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:"index",intersect:false},plugins:{legend:{position:"bottom"},tooltip:{callbacks:{label:function(ctx){return ctx.dataset.label+": "+money(ctx.raw)}}}},scales:{y:{beginAtZero:true,ticks:{callback:function(v){return "R$ "+Number(v).toLocaleString("pt-BR")}}}}}});
+  }
 
   function previousMonthValue(){
     var d=new Date();d.setDate(1);d.setMonth(d.getMonth()-1);
