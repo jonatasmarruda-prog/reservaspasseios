@@ -7,6 +7,7 @@ on:
     paths:
       - 'automation/system-audit.mjs'
       - 'automation/inspect-integrity-details.mjs'
+      - 'automation/inspect-trip-finance-aggregate.mjs'
       - '.github/workflows/system-audit.yml'
 
 permissions:
@@ -44,3 +45,9 @@ jobs:
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node automation/inspect-integrity-details.mjs
+
+      - name: Conferir agregados financeiros
+        if: always()
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/inspect-trip-finance-aggregate.mjs
