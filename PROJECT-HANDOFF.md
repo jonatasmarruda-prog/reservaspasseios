@@ -71,12 +71,12 @@ Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem v
 - Build do shell: `20260911-stable-admin1`. HTML não é armazenado e JS/CSS sempre revalidam; o Service Worker usa network-first para arquivos de aplicação.
 
 ## Cadastro único de participantes — 01/10/2026
-- Regra operacional: dentro do mesmo passeio, o mesmo CPF representa um único participante. O preenchimento pelo Canva e depois pelo link deve completar o cadastro existente, nunca gerar uma segunda pessoa/vaga.
-- O check-in operacional já deduplica participantes pelo CPF antes de contar nomes.
+- Regra operacional: dentro do mesmo passeio, nome normalizado + e-mail são a identidade principal para evitar duplicidade. Se a mesma pessoa aparecer pelo Canva/portal e pelo link direto, o segundo fluxo deve completar o cadastro existente, nunca gerar uma segunda pessoa/vaga. CPF permanece como dado complementar e apoio de verificação/perfil.
+- Check-in, relatórios e cálculos de quantidade/custos por pessoa usam nome + e-mail como chave principal, com CPF como fallback e ID da reserva como último recurso.
 - O e-mail de confirmação de cadastro informa que a vaga está reservada no sistema e inclui botão para a página pública da política de cancelamento do passeio.
 - O lembrete de 3 dias inclui novamente a política de cancelamento. Participantes adicionais com e-mail próprio também entram na régua de 3 dias, 1 dia e pós-passeio, sem repetir o mesmo endereço.
 - A política pública é exibida em `/politica/<tripId>` e continua acessível independentemente do formulário de cadastro.
-- Canva/portal e link direto passam a usar CPF como identificador principal do participante, com e-mail individual por participante.
+- Canva/portal e link direto usam nome + e-mail como identificador operacional principal no mesmo passeio; cada participante mantém e-mail individual e o CPF continua armazenado como informação complementar.
 - O portal agora coleta nome, CPF e e-mail de cada pessoa da reserva.
 - O link `/cadastro/<tripId>` também coleta CPF, nome e e-mail de cada participante.
 - Cada novo cadastro grava `registration_email_status: pending`; o motor de e-mail envia confirmação individual para cada e-mail único da lista de participantes.
@@ -84,11 +84,14 @@ Não incluir Functions ou Firestore Rules nesse deploy sem autorização e sem v
 - No mesmo aparelho, os dados do participante ficam reaproveitáveis localmente: ao digitar novamente o CPF em outro passeio, nome/e-mail conhecidos podem ser preenchidos automaticamente.
 - Cadastro feito somente pelo link do grupo também cria uma venda pendente no controle financeiro, usando o preço padrão do passeio até conferência/ajuste; não é marcado como pago automaticamente.
 - O link direto pergunta também a forma de pagamento usada. As opções são configuradas por passeio (`payment_methods`) e podem ser PIX, PIX parcelado e/ou cartão. Se já existir uma venda vinda do Canva/portal, a forma de pagamento financeira existente é preservada; a resposta do link serve para completar/conferir o cadastro sem duplicar a venda.
-- Foi preparada a camada global `functions/participant-unification.js` com `participantProfileApi` e `unifiedRegistrationApi`. Ela faz deduplicação por CPF dentro do mesmo passeio, preserva venda/pagamento existente, não desconta vaga novamente quando encontra o mesmo participante e mantém perfis protegidos no servidor.
+- Foi preparada a camada global `functions/participant-unification.js` com `participantProfileApi` e `unifiedRegistrationApi`. A unificação do mesmo passeio prioriza nome + e-mail, preserva venda/pagamento existente e não desconta vaga novamente; CPF continua sendo usado para o perfil protegido/reaproveitamento autorizado.
 - O front-end possui fallback compatível: se essas Functions não estiverem disponíveis, a reserva continua funcionando pelo Firestore atual. No mesmo aparelho, uma venda do portal pode ser reconhecida pelo link direto sem ocupar outra vaga.
 - Se o passeio estiver lotado, o link direto continua abrindo para permitir que uma pessoa que já possui vaga complete seu cadastro; somente uma nova vaga é bloqueada.
 - Bloqueio atual de infraestrutura: o deploy das duas novas Functions está impedido porque `cloudbuild.googleapis.com` está desativada e a credencial de CI não possui permissão para habilitar APIs. O código passou no `node --check`; quando Cloud Build for habilitada no projeto `trilheiros-reservas`, o workflow `Publicar notificações e e-mail imediato` já está preparado para publicar `participantProfileApi` e `unifiedRegistrationApi`.
 - Nunca expor perfil de participante diretamente em uma coleção pública do Firestore. O reaproveitamento global deve continuar passando pela API protegida; CPF sozinho não pode liberar e-mail/telefone de terceiros.
+- Auditoria de 02/10/2026: duas vendas ausentes do Salto das Nuvens foram reconstruídas a partir das reservas pagas já existentes, sem alterar vagas; depois do reparo o passeio ficou com 6 reservas ativas, 6 vendas ativas e R$ 4.110,00 de pagamentos em ambos os lados.
+- Oito registros antigos da Chapada dos Guimarães permanecem somente como cadastros históricos: o fechamento oficial está travado em R$ 4.327,00 e recriar vendas para esses registros duplicaria o financeiro. A auditoria os classifica como legado informativo, não como erro operacional.
+- `automation/system-audit.mjs` + `.github/workflows/system-audit.yml` validam sintaxe, vínculos, lotação, pagamentos, políticas, duplicidades e saúde do push sem alterar dados.
 
 ## Cadastro direto por link do passeio
 Links no formato `https://trilheiros-reservas.web.app/cadastro/<tripId>` usam `public/cadastro.html`.
@@ -96,10 +99,9 @@ Links no formato `https://trilheiros-reservas.web.app/cadastro/<tripId>` usam `p
 O formulário atual:
 - carrega exatamente o passeio indicado pelo `tripId`;
 - mostra nome do passeio, data, local e vagas com destaque;
-- coleta nome completo, e-mail e quantidade de participantes;
-- NÃO solicita CPF;
-- para 1 pessoa, não repete o nome;
-- para 2 ou mais, solicita apenas o nome dos acompanhantes a partir de `Participante 2`;
+- coleta CPF, nome completo, e-mail, quantidade de participantes e forma de pagamento informada;
+- para 1 pessoa, usa os dados do responsável como participante principal;
+- para 2 ou mais, solicita CPF, nome e e-mail dos demais participantes;
 - exige aceite da política de cancelamento;
 - grava em `trips/{tripId}/reservations/{uid}`;
 - grava `trip_id`, `trip_name`, `trip_date`, `participants`, `registration_status: completed`, `status: active`, `registration_source: direct_trip_link` e `source: direct_trip_link`;
