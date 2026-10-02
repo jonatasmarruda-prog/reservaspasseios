@@ -1,0 +1,39 @@
+name: Auditoria completa do sistema
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'automation/system-audit.mjs'
+      - '.github/workflows/system-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validar sintaxe de todos os JavaScript principais
+        run: |
+          set -e
+          find public automation functions -type f \( -name '*.js' -o -name '*.mjs' \) -print0 | while IFS= read -r -d '' f; do
+            node --check "$f"
+          done
+          node - <<'NODE'
+          const fs=require('fs');
+          for(const f of ['firebase.json','firestore.indexes.json','automation/package.json','functions/package.json'])JSON.parse(fs.readFileSync(f,'utf8'));
+          console.log('JSON principal válido');
+          NODE
+      - name: Instalar dependências da auditoria
+        run: npm install --prefix automation --no-audit --no-fund
+      - name: Auditar banco e integridade
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/system-audit.mjs
