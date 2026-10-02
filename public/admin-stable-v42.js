@@ -17,6 +17,7 @@ const GUIDE_NAME='Jonatas Marques de Arruda';
 const GUIDE_ROLE='GUIA DE TURISMO';
 const LOGO='https://trilheiros-reservas.web.app/assets/trilheiros-logo-email.png?v=20260925-hosted1';
 let pendingLoading=false,financeLoading=false;
+let pendingLiveUnsub=null,pendingLiveTimer=null;
 state.financeMonthV42=state.financeMonthV42||state.financeMonthV41||monthNow();
 
 function norm(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()}
@@ -189,6 +190,21 @@ async function mountPending(){
       if(tag.includes('pagamento')||el.dataset.v32Payment==='1')el.style.display='none';
     });
   }finally{pendingLoading=false}
+}
+function ensurePendingLive(){
+  if(typeof db==='undefined')return;
+  if(state.tab!=='pending'){
+    if(pendingLiveUnsub){try{pendingLiveUnsub()}catch(_){}pendingLiveUnsub=null}
+    return;
+  }
+  if(pendingLiveUnsub)return;
+  try{
+    pendingLiveUnsub=db.collection('sales').orderBy('created_at','desc').limit(500).onSnapshot(()=>{
+      if(state.tab!=='pending')return;
+      clearTimeout(pendingLiveTimer);
+      pendingLiveTimer=setTimeout(()=>mountPending().catch(()=>{}),250);
+    },err=>console.warn('V42 pending live',err));
+  }catch(err){console.warn('V42 pending live start',err)}
 }
 
 function monthFinance(sales,expenses,month){
@@ -370,7 +386,7 @@ function patchReports(){
 function patch(){
   if(!location.pathname.startsWith('/admin'))return;
   patchNewTrip();patchFinanceNav();patchReports();
-  if(state.tab==='pending')setTimeout(()=>mountPending().catch(()=>{}),50);
+  if(state.tab==='pending'){setTimeout(()=>mountPending().catch(()=>{}),50);setTimeout(ensurePendingLive,120)}else setTimeout(ensurePendingLive,120);
   if(state.tab==='finance')setTimeout(()=>mountFinanceDashboard().catch(()=>{}),150);
 }
 
