@@ -795,7 +795,7 @@
 
   document.addEventListener("click",async function(e){
     var b=e.target.closest("[data-open-transaction]"); if(b){openTransaction("expense");return}
-    var pi=e.target.closest("[data-photo-entry]"); if(pi){openTransaction("expense");setTimeout(function(){try{$("txReceipt").click()}catch(err){}},80);return}
+    var pi=e.target.closest("[data-photo-entry]"); if(pi){openTransaction("expense");try{$("txReceipt").click()}catch(err){}return}
     var oi=e.target.closest("[data-open-income]"); if(oi){openTransaction("income");return}
     var or=e.target.closest("[data-open-recurring]"); if(or){openRecurring();return}
     var c=e.target.closest("[data-close]"); if(c){hide(c.dataset.close);return}
