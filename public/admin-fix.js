@@ -200,7 +200,7 @@
   }
 
   async function peopleForPremiumReport(tripId){
-    const s=appState(),[ops,sales]=await Promise.all([getTripOps(tripId),getTripSales(tripId)]);
+    const s=appState(),[ops,sales]=await Promise.all([getTripOps(tripId),getTripSales(tripId)]),seen=new Set();
     const rows=[{
       key:'guide',name:GUIDE_NAME,type:GUIDE_ROLE,guide:true,email:'—',responsible:'—',
       room:ops.guide?.room||'—',vehicle:ops.guide?.vehicle||'—',seat:ops.guide?.seat||'—',
@@ -210,15 +210,18 @@
       const sale=sales.get(String(r.sale_id||''))||sales.get(String(r.id||''))||{};
       const participants=(Array.isArray(r.participants)&&r.participants.length?r.participants:Array.isArray(sale.participants)?sale.participants:[])
         .filter(p=>p?.full_name);
-      const list=participants.length?participants:[{full_name:r.responsible_name||sale.customer_name||'Participante',cpf:r.responsible_cpf||''}];
+      const list=participants.length?participants:[{full_name:r.responsible_name||sale.customer_name||'Participante',email:r.email||sale.customer_email||'',cpf:r.responsible_cpf||''}];
       const type=reservationOption(r,sale),method=PAY_LABEL[payKind(sale.payment_method||r.payment_method)]||'OUTRO';
       const rawStatus=String(sale.payment_status||r.payment_status||'').toLowerCase();
       const payStatus=STATUS_LABEL[rawStatus]||String(sale.payment_status||r.payment_status||'—').toUpperCase();
       list.forEach((p,i)=>{
         if(isGuideName(p.full_name))return;
-        const key=digits(p.cpf)||`${r.id}-${i}`,op=ops[key]||{};
+        const email=String(p.email||r.email||sale.customer_email||'').trim().toLowerCase(),nameKey=norm(p.full_name).replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim(),cpfKey=digits(p.cpf);
+        const identity=email&&nameKey?`${email}|${nameKey}`:(cpfKey||`${r.id}-${i}`);
+        if(seen.has(identity))return;seen.add(identity);
+        const op=ops[cpfKey]||ops[identity]||{};
         rows.push({
-          key,name:p.full_name||'Participante',type,guide:false,email:r.email||sale.customer_email||'—',
+          key:identity,name:p.full_name||'Participante',type,guide:false,email:email||'—',
           responsible:r.responsible_name||sale.customer_name||'—',room:op.room||'—',
           vehicle:op.vehicle||'—',seat:op.seat||'—',method,status:payStatus,reservation:r,sale
         });
