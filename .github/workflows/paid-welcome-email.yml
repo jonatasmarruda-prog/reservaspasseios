@@ -38,6 +38,11 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: node automation/repair-recent-orphan-reservations.mjs
 
+      - name: Recuperar reservas do Canva sem pendência vinculada
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node automation/reconcile-orphan-portal-sales.mjs
+
       - name: Unificar Canva e link pelo mesmo participante
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
