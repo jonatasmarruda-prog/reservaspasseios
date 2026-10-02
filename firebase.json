@@ -4,27 +4,150 @@
   },
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
     "rewrites": [
-      {"source": "/instagram/webhook", "function": {"functionId": "instagramWebhook", "region": "southamerica-east1"}},
-      {"source": "/api/instagram", "function": {"functionId": "instagramAdminApi", "region": "southamerica-east1"}},
-      {"source": "/reservas", "destination": "/reservar.html"},
-      {"source": "/reservar", "destination": "/reservar.html"},
-      {"source": "/cadastro/**", "destination": "/cadastro.html"},
-      {"source": "/politica/**", "destination": "/politica.html"},
-      {"source": "**", "destination": "/index.html"}
+      {
+        "source": "/instagram/webhook",
+        "function": {
+          "functionId": "instagramWebhook",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/instagram",
+        "function": {
+          "functionId": "instagramAdminApi",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/reservas",
+        "destination": "/reservar.html"
+      },
+      {
+        "source": "/reservar",
+        "destination": "/reservar.html"
+      },
+      {
+        "source": "/cadastro/**",
+        "destination": "/cadastro.html"
+      },
+      {
+        "source": "/politica/**",
+        "destination": "/politica.html"
+      },
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
     ],
     "headers": [
-      {"source": "/", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/admin", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/admin/**", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/index.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/cadastro.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/reservar.html", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]},
-      {"source": "/*.js", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
-      {"source": "/*.css", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
-      {"source": "/*.webmanifest", "headers": [{"key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate"}]},
-      {"source": "/sw.js", "headers": [{"key": "Cache-Control", "value": "no-cache, no-store, must-revalidate"}]}
+      {
+        "source": "/",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/admin",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/admin/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/cadastro.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/reservar.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/*.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/*.css",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/*.webmanifest",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, max-age=0, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/sw.js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ],
+    "redirects": [
+      {
+        "source": "/controle-financeiro",
+        "destination": "https://controle-familiar-jonatas.web.app",
+        "type": 302
+      },
+      {
+        "source": "/controle-financeiro/**",
+        "destination": "https://controle-familiar-jonatas.web.app",
+        "type": 302
+      }
     ]
   },
   "firestore": {
