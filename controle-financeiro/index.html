@@ -78,6 +78,28 @@
     </div>
   </section>
 
+  <section id="resetPasswordScreen" class="screen auth hidden">
+    <div class="auth-card">
+      <div class="logo">🔐</div>
+      <h1>Nova senha</h1>
+      <p class="subtitle">Crie uma nova senha para entrar no Nosso Controle.</p>
+      <form id="resetPasswordForm">
+        <label>Nova senha</label>
+        <div class="password-wrap">
+          <input id="newPassword" class="field" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres">
+          <button id="toggleNewPassword" class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha">👁️</button>
+        </div>
+        <label>Confirmar nova senha</label>
+        <div class="password-wrap">
+          <input id="confirmNewPassword" class="field" type="password" required minlength="6" autocomplete="new-password" placeholder="Digite novamente">
+          <button id="toggleConfirmPassword" class="password-eye" type="button" aria-label="Mostrar senha" title="Mostrar senha">👁️</button>
+        </div>
+        <button class="btn btn-primary btn-block" style="margin-top:16px">Salvar nova senha</button>
+        <div id="resetPasswordMsg" class="msg"></div>
+      </form>
+    </div>
+  </section>
+
   <section id="setupScreen" class="screen setup-wrap hidden">
     <div class="setup-card">
       <div class="brandline" style="margin-bottom:18px"><div class="mini-logo">NC</div><div><strong>Nosso Controle</strong><small>Primeiro acesso</small></div></div>
@@ -299,19 +321,26 @@
   }
   function updatePeopleSelects(){ fillPeople("txPerson"); fillPeople("recPerson"); }
 
+  function wirePasswordToggle(buttonId,inputId){
+    var b=$(buttonId); if(!b)return;
+    b.onclick=function(){
+      var input=$(inputId), showing=input.type==="text";
+      input.type=showing?"password":"text";
+      b.textContent=showing?"👁️":"🙈";
+      b.setAttribute("aria-label",showing?"Mostrar senha":"Ocultar senha");
+      b.title=showing?"Mostrar senha":"Ocultar senha";
+    };
+  }
+  wirePasswordToggle("toggleNewPassword","newPassword");
+  wirePasswordToggle("toggleConfirmPassword","confirmNewPassword");
+
   function setAuthMode(mode){
     var signup=mode==="signup"; $("tabLogin").classList.toggle("active",!signup); $("tabSignup").classList.toggle("active",signup); $("nameWrap").classList.toggle("hidden",!signup); $("authSubmit").textContent=signup?"Criar acesso":"Entrar"; $("authPassword").autocomplete=signup?"new-password":"current-password"; $("authForm").dataset.mode=mode; msg("authMsg","");
   }
 
   $("tabLogin").onclick=function(){setAuthMode("login")};
   $("tabSignup").onclick=function(){setAuthMode("signup")};
-  $("toggleAuthPassword").onclick=function(){
-    var input=$("authPassword"), showing=input.type==="text";
-    input.type=showing?"password":"text";
-    this.textContent=showing?"👁️":"🙈";
-    this.setAttribute("aria-label",showing?"Mostrar senha":"Ocultar senha");
-    this.title=showing?"Mostrar senha":"Ocultar senha";
-  };
+  wirePasswordToggle("toggleAuthPassword","authPassword");
   $("forgotPasswordBtn").onclick=async function(){
     var email=$("authEmail").value.trim();
     if(!email){msg("authMsg","Digite seu e-mail primeiro e toque novamente em Esqueci minha senha.","error");$("authEmail").focus();return}
@@ -327,6 +356,19 @@
     this.disabled=false;
   };
   setAuthMode("login");
+
+  $("resetPasswordForm").onsubmit=async function(e){
+    e.preventDefault();
+    var p1=$("newPassword").value, p2=$("confirmNewPassword").value;
+    if(p1.length<6){msg("resetPasswordMsg","A senha precisa ter pelo menos 6 caracteres.","error");return}
+    if(p1!==p2){msg("resetPasswordMsg","As senhas não são iguais.","error");return}
+    msg("resetPasswordMsg","Salvando nova senha...","");
+    var r=await sb.auth.updateUser({password:p1});
+    if(r.error){msg("resetPasswordMsg","Não foi possível alterar a senha. Solicite um novo link de recuperação.","error");return}
+    history.replaceState({},document.title,location.pathname);
+    msg("resetPasswordMsg","Senha alterada com sucesso. Entrando...","ok");
+    setTimeout(function(){hide("resetPasswordScreen");boot()},500);
+  };
 
   $("authForm").onsubmit=async function(e){
     e.preventDefault(); msg("authMsg","Entrando...","");
@@ -353,7 +395,10 @@
 
   async function boot(){
     var s=await sb.auth.getSession(); state.user=s.data.session?s.data.session.user:null;
-    if(!state.user){ show("authScreen"); hide("setupScreen"); hide("appScreen"); return; }
+    if(location.hash&&/type=recovery/.test(location.hash)&&state.user){
+      hide("authScreen"); hide("resetPasswordScreen"); hide("setupScreen"); hide("appScreen"); show("resetPasswordScreen"); return;
+    }
+    if(!state.user){ show("authScreen"); hide("resetPasswordScreen"); hide("setupScreen"); hide("appScreen"); return; }
     hide("authScreen");
     var membershipRes=await sb.from("finance_household_members").select("household_id,display_name,role").eq("user_id",state.user.id).limit(1);
     if(membershipRes.error){ console.error(membershipRes.error); }
@@ -659,7 +704,12 @@
   window.addEventListener("appinstalled",function(){hide("installBanner")});
   window.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"&&state.household)refreshAll()});
   if("serviceWorker" in navigator)window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(console.warn)});
-  sb.auth.onAuthStateChange(function(event,session){if(event==="SIGNED_OUT"){show("authScreen");hide("appScreen");hide("setupScreen")}});
+  sb.auth.onAuthStateChange(function(event,session){
+    if(event==="PASSWORD_RECOVERY"){
+      hide("authScreen"); hide("setupScreen"); hide("appScreen"); show("resetPasswordScreen"); return;
+    }
+    if(event==="SIGNED_OUT"){show("authScreen");hide("resetPasswordScreen");hide("appScreen");hide("setupScreen")}
+  });
   boot();
 })();
 </script>
